@@ -4,7 +4,7 @@ require "abstract_command"
 
 module Homebrew
   module Cmd
-    class PurgeQuarantine < AbstractCommand
+    class PurgeQuarantine < Homebrew::AbstractCommand
       cmd_args do
         description <<~EOS
           Remove macOS quarantine and provenance extended attributes from installed

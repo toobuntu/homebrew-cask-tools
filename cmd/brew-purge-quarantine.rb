@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "abstract_command"
+
 module Homebrew
   module Cmd
     class PurgeQuarantine < AbstractCommand
@@ -25,9 +27,7 @@ module Homebrew
         oh1 "Processing cask: #{token}"
 
         cask_dir = Pathname.new(HOMEBREW_CASKROOM)/token
-        unless cask_dir.directory?
-          odie "Cask #{token} is not installed"
-        end
+        odie "Cask #{token} is not installed" unless cask_dir.directory?
 
         app_bundles = Pathname.glob("#{cask_dir}/*/*.app")
 

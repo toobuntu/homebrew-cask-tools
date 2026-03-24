@@ -9,7 +9,7 @@ module Homebrew
     class PurgeQuarantine < AbstractCommand
       include SystemCommand::Mixin
       cmd_args do
-        usage_banner "`brew purge-quarantine` <cask> [<cask> ...]"
+        usage_banner "`purge-quarantine` <cask> [<cask> ...]"
         description <<~EOS
           Disables macOS's Gatekeeper for the named casks by removing the
           `com.apple.quarantine` and `com.apple.provenance` extended attributes
@@ -69,9 +69,9 @@ module Homebrew
           ohai "Removing quarantine from: #{resolved_path}"
 
           attrs_present.each do |attr|
-            removed = remove_xattr(token, resolved_path, attr)
-            gatekeeper_disabled = true if removed
-            verify_xattr_removed(resolved_path, attr) if removed
+            deleted = xattr_deleted?(token, resolved_path, attr)
+            gatekeeper_disabled = true if deleted
+            verify_xattr_removed(resolved_path, attr) if deleted
           end
         end
 
@@ -90,11 +90,12 @@ module Homebrew
         ].select { |attr| result.stdout.include?(attr) }
       end
 
-      # Removes +attr+ from +path+ recursively. Returns true on success.
+      # Removes +attr+ from +path+ recursively. Returns true if the attribute
+      # was successfully deleted.
       # xattrs_present checks only the bundle root via -l; sub-files inside the
       # bundle may still carry the attr, so a "No such" fallback is kept here.
       sig { params(token: String, path: Pathname, attr: String).returns(T::Boolean) }
-      def remove_xattr(token, path, attr)
+      def xattr_deleted?(token, path, attr)
         result = system_command "/usr/bin/xattr",
                                 args:         ["-d", "-r", attr, path.to_s],
                                 print_stderr: false
@@ -106,7 +107,8 @@ module Homebrew
           false
         else
           ofail "Failed to remove #{attr} from #{path}.\n" \
-                "Try running with sudo: sudo brew purge-quarantine #{token}"
+                "To remove manually, run:\n" \
+                "  sudo /usr/bin/xattr -d -r #{attr} #{path}"
           false
         end
       end

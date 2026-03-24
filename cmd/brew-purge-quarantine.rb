@@ -1,11 +1,5 @@
 # frozen_string_literal: true
 
-#: * `brew purge-quarantine` <cask> [<cask> ...]
-#:
-#:   Disables macOS's Gatekeeper for the named casks by removing the
-#:   `com.apple.quarantine` and `com.apple.provenance` extended attributes
-#:   from their installed `.app` bundles.
-
 require "abstract_command"
 require "system_command"
 

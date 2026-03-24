@@ -1,3 +1,4 @@
+# typed: strict
 # frozen_string_literal: true
 
 require "abstract_command"
@@ -18,6 +19,7 @@ module Homebrew
         named_args min: 1
       end
 
+      sig { override.void }
       def run
         args.named.each do |token|
           purge_quarantine_for_cask(token)
@@ -26,6 +28,7 @@ module Homebrew
 
       private
 
+      sig { params(token: String).void }
       def purge_quarantine_for_cask(token)
         cask_dir = Pathname.new(HOMEBREW_CASKROOM)/token
         unless cask_dir.directory?
@@ -43,8 +46,12 @@ module Homebrew
         gatekeeper_disabled = false
 
         app_bundles.each do |app_path|
-          resolved_path = nil
-          next unless resolve_realpath(app_path) { |rp| resolved_path = rp }
+          resolved_path = begin
+            app_path.realpath
+          rescue Errno::ENOENT => e
+            odebug "Could not resolve symlink for #{app_path}: #{e.message}"
+            next
+          end
 
           info_plist = resolved_path/"Contents"/"Info.plist"
           unless info_plist.exist?
@@ -71,7 +78,8 @@ module Homebrew
         opoo "macOS's Gatekeeper has been disabled for #{token}" if gatekeeper_disabled
       end
 
-      # Returns an array of the quarantine-related xattrs currently on +path+.
+      # Returns an array of the quarantine-related xattrs currently present on +path+.
+      sig { params(path: Pathname).returns(T::Array[String]) }
       def xattrs_present(path)
         result = system_command "/usr/bin/xattr",
                                 args:         ["-l", path.to_s],
@@ -85,6 +93,7 @@ module Homebrew
       # Removes +attr+ from +path+ recursively. Returns true on success.
       # xattrs_present checks only the bundle root via -l; sub-files inside the
       # bundle may still carry the attr, so a "No such" fallback is kept here.
+      sig { params(token: String, path: Pathname, attr: String).returns(T::Boolean) }
       def remove_xattr(token, path, attr)
         result = system_command "/usr/bin/xattr",
                                 args:         ["-d", "-r", attr, path.to_s],
@@ -102,24 +111,13 @@ module Homebrew
         end
       end
 
+      sig { params(path: Pathname, attr: String).void }
       def verify_xattr_removed(path, attr)
-        result = system_command "/usr/bin/xattr",
-                                args:         ["-l", path.to_s],
-                                print_stderr: false
-
-        if result.stdout.include?(attr)
+        if xattrs_present(path).include?(attr)
           ofail "#{attr} still present on #{path.basename} after removal attempt"
         else
           odebug "#{attr} successfully removed from #{path.basename}"
         end
-      end
-
-      def resolve_realpath(app_path)
-        yield app_path.realpath
-        true
-      rescue Errno::ENOENT => e
-        odebug "Could not resolve symlink for #{app_path}: #{e.message}"
-        false
       end
     end
   end

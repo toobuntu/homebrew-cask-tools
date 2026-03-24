@@ -8,6 +8,7 @@ module Homebrew
   module Cmd
     class PurgeQuarantine < AbstractCommand
       include SystemCommand::Mixin
+
       cmd_args do
         usage_banner "`purge-quarantine` <cask> [<cask> ...]"
         description <<~EOS
@@ -95,7 +96,7 @@ module Homebrew
       # xattrs_present checks only the bundle root via -l; sub-files inside the
       # bundle may still carry the attr, so a "No such" fallback is kept here.
       sig { params(token: String, path: Pathname, attr: String).returns(T::Boolean) }
-      def xattr_deleted?(token, path, attr)
+      def xattr_deleted?(_token, path, attr)
         result = system_command "/usr/bin/xattr",
                                 args:         ["-d", "-r", attr, path.to_s],
                                 print_stderr: false
@@ -104,13 +105,12 @@ module Homebrew
 
         if result.stderr.include?("No such")
           odebug "#{attr} not present on #{path.basename}"
-          false
         else
           ofail "Failed to remove #{attr} from #{path}.\n" \
-                "To remove manually, run:\n" \
-                "  sudo /usr/bin/xattr -d -r #{attr} #{path}"
-          false
+                "To remove manually, run:\n  " \
+                "sudo /usr/bin/xattr -d -r #{attr} #{path}"
         end
+        false
       end
 
       sig { params(path: Pathname, attr: String).void }

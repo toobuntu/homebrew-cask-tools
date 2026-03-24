@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # DEPRECATED: The QuarantinePurger class has been superseded by the
-# `brew purge-quarantine` external command in cmd/brew-purge-quarantine.rb.
+# `brew purge-quarantine` external command in cmd/purge-quarantine.rb.
 # This file is retained for backward compatibility only and will be removed
 # in a future release. Use `brew purge-quarantine <cask>` instead.
 

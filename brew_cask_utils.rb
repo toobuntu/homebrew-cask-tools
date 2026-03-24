@@ -48,7 +48,7 @@ class QuarantinePurger
       $stderr.puts "Removing quarantine from: #{real_path}"
       remove_xattr(real_path, QUARANTINE_ATTR)
       remove_xattr(real_path, PROVENANCE_ATTR)
-    rescue StandardError => e
+    rescue => e
       warn "Error processing #{app_path}: #{e.message}"
     end
   end

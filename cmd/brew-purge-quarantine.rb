@@ -1,10 +1,16 @@
 # frozen_string_literal: true
 
+#: * `brew purge-quarantine` <cask> [<cask> ...]
+#:
+#:   Remove macOS quarantine and provenance extended attributes from installed
+#:   cask app bundles. Useful for apps that were downloaded with Gatekeeper
+#:   quarantine flags that you have already verified as safe.
+
 require "abstract_command"
 
 module Homebrew
   module Cmd
-    class PurgeQuarantine < Homebrew::AbstractCommand
+    class PurgeQuarantine < ::Homebrew::AbstractCommand
       cmd_args do
         description <<~EOS
           Remove macOS quarantine and provenance extended attributes from installed

@@ -31,7 +31,7 @@ module Homebrew
 
       sig { params(token: String).void }
       def purge_quarantine_for_cask(token)
-        cask_dir = Pathname.new(HOMEBREW_CASKROOM)/token
+        cask_dir = HOMEBREW_CASKROOM/token
         unless cask_dir.directory?
           ofail "#{token} is not a Homebrew-installed cask (not found in #{HOMEBREW_CASKROOM})"
           return

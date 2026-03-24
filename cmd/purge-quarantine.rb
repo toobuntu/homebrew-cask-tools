@@ -80,11 +80,18 @@ module Homebrew
       end
 
       # Returns an array of the quarantine-related xattrs currently present on +path+.
+      # Returns an empty array and warns if the listing command itself fails.
       sig { params(path: Pathname).returns(T::Array[String]) }
       def xattrs_present(path)
         result = system_command "/usr/bin/xattr",
                                 args:         ["-l", path.to_s],
                                 print_stderr: false
+
+        unless result.exit_status.zero?
+          opoo "Could not list xattrs on #{path.basename}: #{result.stderr.chomp}"
+          return []
+        end
+
         [
           "com.apple.quarantine",
           "com.apple.provenance",

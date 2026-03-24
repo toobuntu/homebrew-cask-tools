@@ -79,7 +79,8 @@ module Homebrew
         opoo "macOS's Gatekeeper has been disabled for #{token}" if gatekeeper_disabled
       end
 
-      # Returns an array of the quarantine-related xattrs currently present on +path+.
+      # Returns an array of the quarantine-related xattrs currently present on
+      # the bundle root. Used as a fast pre-check before attempting removal.
       # Returns an empty array and warns if the listing command itself fails.
       sig { params(path: Pathname).returns(T::Array[String]) }
       def xattrs_present(path)
@@ -99,9 +100,8 @@ module Homebrew
       end
 
       # Removes +attr+ from +path+ recursively. Returns true if the attribute
-      # was successfully deleted.
-      # xattrs_present checks only the bundle root via -l; sub-files inside the
-      # bundle may still carry the attr, so a "No such" fallback is kept here.
+      # was successfully deleted (exit 0). On failure, distinguishes between
+      # "attribute absent" (odebug) and a permission error (ofail with sudo hint).
       sig { params(path: Pathname, attr: String).returns(T::Boolean) }
       def xattr_deleted?(path, attr)
         result = system_command "/usr/bin/xattr",
@@ -120,10 +120,15 @@ module Homebrew
         false
       end
 
+      # Verifies recursively (xattr -l -r) that +attr+ is absent from all files
+      # inside the bundle after a reported successful deletion.
       sig { params(path: Pathname, attr: String).void }
       def verify_xattr_removed(path, attr)
-        if xattrs_present(path).include?(attr)
-          ofail "#{attr} still present on #{path.basename} after removal attempt"
+        result = system_command "/usr/bin/xattr",
+                                args:         ["-l", "-r", path.to_s],
+                                print_stderr: false
+        if result.stdout.include?(attr)
+          ofail "#{attr} still present inside #{path.basename} after removal attempt"
         else
           odebug "#{attr} successfully removed from #{path.basename}"
         end

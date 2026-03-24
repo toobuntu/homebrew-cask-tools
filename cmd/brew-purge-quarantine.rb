@@ -10,7 +10,7 @@ require "abstract_command"
 
 module Homebrew
   module Cmd
-    class PurgeQuarantine < ::Homebrew::AbstractCommand
+    class PurgeQuarantine < AbstractCommand
       cmd_args do
         description <<~EOS
           Remove macOS quarantine and provenance extended attributes from installed
@@ -18,7 +18,7 @@ module Homebrew
           quarantine flags that you have already verified as safe.
         EOS
 
-        named_args :cask, min: 1
+        named_args :token, min: 1
       end
 
       def run

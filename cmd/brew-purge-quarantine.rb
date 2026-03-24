@@ -18,7 +18,7 @@ module Homebrew
           quarantine flags that you have already verified as safe.
         EOS
 
-        named_args :token, min: 1
+        named_args min: 1
       end
 
       def run
@@ -73,7 +73,7 @@ module Homebrew
 
         return if result.exit_status.zero?
 
-        if result.stderr.include?("No such attr")
+        if result.stderr.include?("No such")
           opoo "#{attr} not present on #{path.basename}"
         else
           ofail "Failed to remove #{attr} from #{path}.\n" \
@@ -87,7 +87,7 @@ module Homebrew
                                 print_stderr: false
 
         if result.stdout.include?(attr)
-          odebug "#{attr} still present on #{path} after removal attempt"
+          ofail "#{attr} still present on #{path} after removal attempt"
         else
           odebug "#{attr} successfully removed from #{path}"
         end

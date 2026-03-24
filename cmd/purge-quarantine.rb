@@ -37,7 +37,7 @@ module Homebrew
           return
         end
 
-        app_bundles = Pathname.glob("#{cask_dir}/*/*.app")
+        app_bundles = cask_dir.glob("*/*.app")
 
         if app_bundles.empty?
           opoo "No .app bundles found for #{token}"
@@ -70,7 +70,7 @@ module Homebrew
           ohai "Removing quarantine from: #{resolved_path}"
 
           attrs_present.each do |attr|
-            deleted = xattr_deleted?(token, resolved_path, attr)
+            deleted = xattr_deleted?(resolved_path, attr)
             gatekeeper_disabled = true if deleted
             verify_xattr_removed(resolved_path, attr) if deleted
           end
@@ -95,8 +95,8 @@ module Homebrew
       # was successfully deleted.
       # xattrs_present checks only the bundle root via -l; sub-files inside the
       # bundle may still carry the attr, so a "No such" fallback is kept here.
-      sig { params(token: String, path: Pathname, attr: String).returns(T::Boolean) }
-      def xattr_deleted?(_token, path, attr)
+      sig { params(path: Pathname, attr: String).returns(T::Boolean) }
+      def xattr_deleted?(path, attr)
         result = system_command "/usr/bin/xattr",
                                 args:         ["-d", "-r", attr, path.to_s],
                                 print_stderr: false

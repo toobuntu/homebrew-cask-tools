@@ -31,6 +31,8 @@ module Homebrew
 
       sig { params(token: String).void }
       def purge_quarantine_for_cask(token)
+        oh1 "Processing: #{token}"
+
         cask_dir = HOMEBREW_CASKROOM/token
         unless cask_dir.directory?
           ofail "#{token} is not a Homebrew-installed cask (not found in #{HOMEBREW_CASKROOM})"
@@ -45,6 +47,7 @@ module Homebrew
         end
 
         gatekeeper_disabled = false
+        attrs_found = false
 
         app_bundles.each do |app_path|
           resolved_path = begin
@@ -67,6 +70,7 @@ module Homebrew
             next
           end
 
+          attrs_found = true
           ohai "Removing quarantine from: #{resolved_path}"
 
           attrs_present.each do |attr|
@@ -76,7 +80,14 @@ module Homebrew
           end
         end
 
-        opoo "macOS's Gatekeeper has been disabled for #{token}" if gatekeeper_disabled
+        if gatekeeper_disabled
+          opoo "macOS's Gatekeeper has been disabled for #{token}"
+        elsif !attrs_found
+          # Already clean — exit 0 is correct (idempotent command), but surface a
+          # visible message so the user knows the command ran and found nothing to do.
+          ohai "No quarantine attributes found for #{token}"
+        end
+        # If attrs_found but !gatekeeper_disabled, xattr_deleted? already printed ofail.
       end
 
       # Returns the quarantine-related xattrs present anywhere inside the bundle

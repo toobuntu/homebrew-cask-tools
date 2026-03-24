@@ -79,13 +79,14 @@ module Homebrew
         opoo "macOS's Gatekeeper has been disabled for #{token}" if gatekeeper_disabled
       end
 
-      # Returns an array of the quarantine-related xattrs currently present on
-      # the bundle root. Used as a fast pre-check before attempting removal.
-      # Returns an empty array and warns if the listing command itself fails.
+      # Returns the quarantine-related xattrs present anywhere inside the bundle
+      # (recursive via -l -r). Used both as a pre-check before removal and by
+      # verify_xattr_removed after deletion. Returns [] and warns on listing
+      # failure so the caller can decide what to do.
       sig { params(path: Pathname).returns(T::Array[String]) }
       def xattrs_present(path)
         result = system_command "/usr/bin/xattr",
-                                args:         ["-l", path.to_s],
+                                args:         ["-l", "-r", path.to_s],
                                 print_stderr: false
 
         unless result.exit_status.zero?
@@ -120,14 +121,11 @@ module Homebrew
         false
       end
 
-      # Verifies recursively (xattr -l -r) that +attr+ is absent from all files
-      # inside the bundle after a reported successful deletion.
+      # Verifies recursively that +attr+ is absent from all files inside the
+      # bundle by reusing xattrs_present (which uses xattr -l -r).
       sig { params(path: Pathname, attr: String).void }
       def verify_xattr_removed(path, attr)
-        result = system_command "/usr/bin/xattr",
-                                args:         ["-l", "-r", path.to_s],
-                                print_stderr: false
-        if result.stdout.include?(attr)
+        if xattrs_present(path).include?(attr)
           ofail "#{attr} still present inside #{path.basename} after removal attempt"
         else
           odebug "#{attr} successfully removed from #{path.basename}"

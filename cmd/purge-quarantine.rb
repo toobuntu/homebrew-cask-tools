@@ -31,7 +31,7 @@ module Homebrew
 
       sig { params(token: String).void }
       def purge_quarantine_for_cask(token)
-        oh1 "Processing: #{token}"
+        oh1 "Processing: #{token}" unless args.quiet?
 
         cask_dir = HOMEBREW_CASKROOM/token
         unless cask_dir.directory?
@@ -42,7 +42,7 @@ module Homebrew
         app_bundles = cask_dir.glob("*/*.app")
 
         if app_bundles.empty?
-          opoo "No .app bundles found for #{token}"
+          opoo "No .app bundles found for #{token}" unless args.quiet?
           return
         end
 
@@ -71,7 +71,7 @@ module Homebrew
           end
 
           attrs_found = true
-          ohai "Removing quarantine from: #{resolved_path}"
+          ohai "Removing quarantine from: #{resolved_path}" unless args.quiet?
 
           attrs_present.each do |attr|
             deleted = xattr_deleted?(resolved_path, attr)
@@ -81,11 +81,11 @@ module Homebrew
         end
 
         if gatekeeper_disabled
-          opoo "macOS's Gatekeeper has been disabled for #{token}"
+          opoo "macOS's Gatekeeper has been disabled for #{token}" unless args.quiet?
         elsif !attrs_found
           # Already clean — exit 0 is correct (idempotent command), but surface a
           # visible message so the user knows the command ran and found nothing to do.
-          ohai "No quarantine attributes found for #{token}"
+          ohai "No quarantine attributes found for #{token}" unless args.quiet?
         end
         # If attrs_found but !gatekeeper_disabled, xattr_deleted? already printed ofail.
       end

@@ -115,7 +115,7 @@ module Homebrew
         else
           ofail "Failed to remove #{attr} from #{path}.\n" \
                 "To remove manually, run:\n  " \
-                "sudo /usr/bin/xattr -d -r #{attr} #{path}"
+                "sudo /usr/bin/xattr -d -r '#{attr}' '#{path}'"
         end
         false
       end

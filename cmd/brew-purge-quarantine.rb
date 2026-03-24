@@ -7,10 +7,12 @@
 #:   quarantine flags that you have already verified as safe.
 
 require "abstract_command"
+require "system_command"
 
 module Homebrew
   module Cmd
     class PurgeQuarantine < AbstractCommand
+      include Homebrew::SystemCommand::Mixin
       cmd_args do
         description <<~EOS
           Remove macOS quarantine and provenance extended attributes from installed

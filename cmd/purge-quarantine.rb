@@ -143,8 +143,8 @@ module Homebrew
         return [] if app_names.empty?
 
         app_names.flat_map do |name|
-          [Pathname(appdir)/name, Dir.home/"Applications"/name]
-        end.select(&:directory?)
+          [Pathname(appdir)/name, Pathname("/Applications")/name, Dir.home/"Applications"/name]
+        end.uniq.select(&:directory?)
       rescue => e
         odebug "Could not read cask metadata for #{token}: #{e.message}"
         []

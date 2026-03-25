@@ -104,9 +104,9 @@ module Homebrew
         require "cask/artifact/app"
         cask = T.unsafe(Cask::CaskLoader).load(token)
         T.unsafe(cask).artifacts
-                      .select { |a| T.unsafe(a).is_a?(Cask::Artifact::App) }
-                      .map { |a| Pathname(T.unsafe(a).target.to_s) }
-                      .select(&:directory?)
+         .select { |a| T.unsafe(a).is_a?(Cask::Artifact::App) }
+         .map { |a| Pathname(T.unsafe(a).target.to_s) }
+         .select(&:directory?)
       rescue => e
         odebug "Could not load cask definition for #{token}: #{e.message}"
         []

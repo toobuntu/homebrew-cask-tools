@@ -70,6 +70,8 @@ module Homebrew
             next
           end
 
+          odebug "Found on #{resolved_path.basename}: #{attrs_present.join(", ")}"
+
           attrs_found = true
           ohai "Removing quarantine from: #{resolved_path}" unless args.quiet?
 

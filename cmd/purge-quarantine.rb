@@ -102,9 +102,9 @@ module Homebrew
       def app_bundles_from_cask_definition(token)
         require "cask/cask_loader"
         require "cask/artifact/app"
-        cask = T.unsafe(Homebrew::Cask::CaskLoader).load(token)
+        cask = T.unsafe(Cask::CaskLoader).load(token)
         T.unsafe(cask).artifacts
-                      .select { |a| T.unsafe(a).is_a?(Homebrew::Cask::Artifact::App) }
+                      .select { |a| T.unsafe(a).is_a?(Cask::Artifact::App) }
                       .map { |a| Pathname(T.unsafe(a).target.to_s) }
                       .select(&:directory?)
       rescue => e

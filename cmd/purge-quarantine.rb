@@ -14,7 +14,8 @@ module Homebrew
         description <<~EOS
           Disables macOS's Gatekeeper for the named casks by removing the
           `com.apple.quarantine` and `com.apple.provenance` extended attributes
-          from their installed `.app` bundles.
+          from their installed macOS bundles (`.app`, `.component`, `.colorPicker`,
+          `.saver`, `.webplugin`, and other artifact types).
         EOS
 
         named_args min: 1
@@ -39,21 +40,21 @@ module Homebrew
           return
         end
 
-        app_bundles = app_bundles_for(token, cask_dir)
+        bundles = quarantinable_bundles_for(token, cask_dir)
 
-        if app_bundles.empty?
-          opoo "No .app bundles found for #{token}" unless args.quiet?
+        if bundles.empty?
+          opoo "No quarantinable bundles found for #{token}" unless args.quiet?
           return
         end
 
         gatekeeper_disabled = false
         attrs_found = false
 
-        app_bundles.each do |app_path|
+        bundles.each do |bundle_path|
           resolved_path = begin
-            app_path.realpath
+            bundle_path.realpath
           rescue Errno::ENOENT => e
-            odebug "Could not resolve symlink for #{app_path}: #{e.message}"
+            odebug "Could not resolve symlink for #{bundle_path}: #{e.message}"
             next
           end
 
@@ -90,21 +91,21 @@ module Homebrew
       end
 
       sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
-      def app_bundles_for(token, cask_dir)
-        bundles = cask_dir.glob("*/*.app")
+      def quarantinable_bundles_for(token, cask_dir)
+        bundles = cask_dir.glob("*/*").select(&:directory?)
         return bundles unless bundles.empty?
 
-        odebug "No .app bundles in Caskroom for #{token}; trying cask definition"
-        app_bundles_from_cask_definition(token)
+        odebug "No bundles in Caskroom for #{token}; trying cask definition"
+        bundles_from_cask_definition(token)
       end
 
       sig { params(token: String).returns(T::Array[Pathname]) }
-      def app_bundles_from_cask_definition(token)
+      def bundles_from_cask_definition(token)
         require "cask/cask_loader"
-        require "cask/artifact/app"
+        require "cask/artifact/moved"
         cask = T.unsafe(Cask::CaskLoader).load(token)
         T.unsafe(cask).artifacts
-         .select { |a| T.unsafe(a).is_a?(Cask::Artifact::App) }
+         .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Moved) }
          .map { |a| Pathname(T.unsafe(a).target.to_s) }
          .select(&:directory?)
       rescue => e

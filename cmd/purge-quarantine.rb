@@ -103,24 +103,34 @@ module Homebrew
         bundles_from_cask_metadata(token, cask_dir)
       end
 
-      sig { params(token: String).returns(T::Array[Pathname]) }
-      def bundles_from_cask_definition(token)
-        require "cask/cask_loader"
-        require "cask/artifact/moved"
-        cask = T.unsafe(Cask::CaskLoader).load(token)
-        T.unsafe(cask).artifacts
-         .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Moved) }
-         .map { |a| Pathname(T.unsafe(a).target.to_s) }
-         .select(&:directory?)
-      rescue => e
-        odebug "Could not load cask definition for #{token}: #{e.message}"
-        []
-      end
-
       BUNDLE_EXTENSIONS = T.let(
         %w[.app .component .colorpicker .saver .webplugin .vst .vst3 .dext .systemextension].freeze,
         T::Array[String],
       )
+
+      sig { params(token: String).returns(T::Array[Pathname]) }
+      def bundles_from_cask_definition(token)
+        require "cask/cask_loader"
+        require "cask/artifact/moved"
+        require "cask/artifact/uninstall"
+        cask = T.unsafe(Cask::CaskLoader).load(token)
+        artifacts = T.unsafe(cask).artifacts
+
+        moved = artifacts
+                .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Moved) }
+                .map { |a| Pathname(T.unsafe(a).target.to_s) }
+
+        uninstall_delete = artifacts
+                           .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Uninstall) }
+                           .flat_map { |a| Array(T.unsafe(a).directives[:delete]) }
+                           .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
+                           .map { |p| Pathname(p) }
+
+        (moved + uninstall_delete).uniq.select(&:directory?)
+      rescue => e
+        odebug "Could not load cask definition for #{token}: #{e.message}"
+        []
+      end
 
       sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
       def bundles_from_cask_metadata(token, cask_dir)

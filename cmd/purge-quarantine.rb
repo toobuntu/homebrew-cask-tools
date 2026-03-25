@@ -96,7 +96,11 @@ module Homebrew
         return bundles unless bundles.empty?
 
         odebug "No bundles in Caskroom for #{token}; trying cask definition"
-        bundles_from_cask_definition(token)
+        bundles = bundles_from_cask_definition(token)
+        return bundles unless bundles.empty?
+
+        odebug "No bundles from cask definition for #{token}; trying cask metadata"
+        bundles_from_cask_metadata(token, cask_dir)
       end
 
       sig { params(token: String).returns(T::Array[Pathname]) }
@@ -110,6 +114,39 @@ module Homebrew
          .select(&:directory?)
       rescue => e
         odebug "Could not load cask definition for #{token}: #{e.message}"
+        []
+      end
+
+      sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
+      def bundles_from_cask_metadata(token, cask_dir)
+        require "json"
+
+        metadata_dir = cask_dir/".metadata"
+        return [] unless metadata_dir.directory?
+
+        config_path = metadata_dir/"config.json"
+        appdir = if config_path.exist?
+          config = JSON.parse(config_path.read)
+          config.dig("explicit", "appdir") ||
+            config.dig("env", "appdir") ||
+            config.dig("default", "appdir") ||
+            "/Applications"
+        else
+          "/Applications"
+        end
+
+        json_files = metadata_dir.glob("*/**/Casks/#{token}.json")
+        return [] if json_files.empty?
+
+        data = JSON.parse(json_files.max_by(&:mtime).read)
+        app_names = Array(data["artifacts"]).flat_map { |a| Array(a["app"]) }
+        return [] if app_names.empty?
+
+        app_names.flat_map do |name|
+          [Pathname(appdir)/name, Dir.home/"Applications"/name]
+        end.select(&:directory?)
+      rescue => e
+        odebug "Could not read cask metadata for #{token}: #{e.message}"
         []
       end
 

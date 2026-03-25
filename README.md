@@ -52,11 +52,11 @@ brew purge-quarantine --debug some-app
 
 ### Security notice
 
-Removing quarantine bypasses macOS Gatekeeper for the affected app bundles.
-Only use this command with software you trust.
+Removing quarantine bypasses macOS's Gatekeeper for the affected apps.
+Please use this command only with software you trust.
 
 ---
 
 ## License
 
-[MIT](LICENSE)
+GPL-3.0-or-later and [BSD-2-Clause](LICENSE) Copyright 2006 Todd Schulman

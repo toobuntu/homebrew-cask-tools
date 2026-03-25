@@ -94,11 +94,22 @@ module Homebrew
         bundles = cask_dir.glob("*/*.app")
         return bundles unless bundles.empty?
 
-        # pkg-based casks install apps to system/user application directories rather than Caskroom.
-        odebug "No .app bundles in Caskroom for #{token}; searching application directories"
-        [HOMEBREW_APPLICATIONS_FOLDER, Pathname("~/Applications").expand_path]
-          .select(&:directory?)
-          .flat_map { |dir| dir.glob("*.app") }
+        odebug "No .app bundles in Caskroom for #{token}; trying cask definition"
+        app_bundles_from_cask_definition(token)
+      end
+
+      sig { params(token: String).returns(T::Array[Pathname]) }
+      def app_bundles_from_cask_definition(token)
+        require "cask/cask_loader"
+        require "cask/artifact/app"
+        cask = T.unsafe(Homebrew::Cask::CaskLoader).load(token)
+        T.unsafe(cask).artifacts
+                      .select { |a| T.unsafe(a).is_a?(Homebrew::Cask::Artifact::App) }
+                      .map { |a| Pathname(T.unsafe(a).target.to_s) }
+                      .select(&:directory?)
+      rescue => e
+        odebug "Could not load cask definition for #{token}: #{e.message}"
+        []
       end
 
       sig { params(path: Pathname).returns(T::Array[String]) }

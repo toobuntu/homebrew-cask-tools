@@ -39,7 +39,7 @@ module Homebrew
           return
         end
 
-        app_bundles = cask_dir.glob("*/*.app")
+        app_bundles = app_bundles_for(token, cask_dir)
 
         if app_bundles.empty?
           opoo "No .app bundles found for #{token}" unless args.quiet?
@@ -89,6 +89,18 @@ module Homebrew
         end
       end
 
+      sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
+      def app_bundles_for(token, cask_dir)
+        bundles = cask_dir.glob("*/*.app")
+        return bundles unless bundles.empty?
+
+        # pkg-based casks install apps to system/user application directories rather than Caskroom.
+        odebug "No .app bundles in Caskroom for #{token}; searching application directories"
+        [HOMEBREW_APPLICATIONS_FOLDER, Pathname("~/Applications").expand_path]
+          .select(&:directory?)
+          .flat_map { |dir| dir.glob("*.app") }
+      end
+
       sig { params(path: Pathname).returns(T::Array[String]) }
       def xattrs_present(path)
         result = system_command "/usr/bin/xattr",
@@ -117,9 +129,12 @@ module Homebrew
         if result.stderr.include?("No such")
           odebug "#{attr} not present on #{path.basename}"
         else
-          ofail "Failed to remove #{attr} from #{path}.\n" \
-                "To remove manually, run:\n  " \
-                "sudo /usr/bin/xattr -d -r '#{attr}' '#{path}'"
+          ofail <<~EOS
+            Failed to remove #{attr} from #{path}.
+            To remove manually, run:
+              /usr/bin/xattr -d -r '#{attr}' '#{path}'
+            Or try it with sudo.
+          EOS
         end
         false
       end

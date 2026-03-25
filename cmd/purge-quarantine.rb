@@ -117,6 +117,11 @@ module Homebrew
         []
       end
 
+      BUNDLE_EXTENSIONS = T.let(
+        %w[.app .component .colorpicker .saver .webplugin .vst .vst3 .dext .systemextension].freeze,
+        T::Array[String],
+      )
+
       sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
       def bundles_from_cask_metadata(token, cask_dir)
         require "json"
@@ -139,12 +144,23 @@ module Homebrew
         return [] if json_files.empty?
 
         data = JSON.parse(json_files.max_by(&:mtime).read)
-        app_names = Array(data["artifacts"]).flat_map { |a| Array(a["app"]) }
-        return [] if app_names.empty?
+        artifacts = Array(data["artifacts"])
 
-        app_names.flat_map do |name|
+        # Relative names from `app` stanzas — install to appdir
+        app_names = artifacts.flat_map { |a| Array(a["app"]) }
+        name_candidates = app_names.flat_map do |name|
           [Pathname(appdir)/name, Pathname("/Applications")/name, Dir.home/"Applications"/name]
-        end.uniq.select(&:directory?)
+        end
+
+        # Absolute paths from `uninstall.delete` entries (covers pkg-only casks)
+        uninstall_candidates = artifacts.flat_map { |a| Array(a["uninstall"]) }
+                                        .flat_map { |u| Array(u["delete"]) }
+                                        .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
+                                        .map { |p| Pathname(p) }
+
+        candidates = (name_candidates + uninstall_candidates).uniq
+        odebug "Metadata candidates for #{token}: #{candidates.map(&:to_s).join(", ")}"
+        candidates.select(&:directory?)
       rescue => e
         odebug "Could not read cask metadata for #{token}: #{e.message}"
         []

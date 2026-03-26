@@ -107,7 +107,11 @@ module Homebrew
       def quarantinable_bundles_for(token, cask_dir)
         # Tier 1: bundles staged inside Caskroom version directory. Covers all
         # standard casks (.app, .component, etc.) that unzip directly to Caskroom.
-        bundles = cask_dir.glob("*/*").select(&:directory?)
+        # Filter by Contents/Info.plist to exclude non-bundle dirs (.metadata, etc.)
+        # that would otherwise short-circuit the fallback tiers for pkg-based casks.
+        bundles = cask_dir.glob("*/*").select { |d|
+          d.directory? && (d/"Contents"/"Info.plist").exist?
+        }
         return bundles unless bundles.empty?
 
         # Tier 2: live cask definition via the Cask API (CaskLoader). Reads `app`

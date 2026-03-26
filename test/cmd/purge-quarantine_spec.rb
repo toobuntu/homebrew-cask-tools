@@ -42,6 +42,7 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
     it "returns bundles staged inside the Caskroom version directory" do
       bundle = cask_dir/"3.0"/"Some App.app"
       (bundle/"Contents").mkpath
+      FileUtils.touch(bundle/"Contents"/"Info.plist")
 
       expect(cmd.send(:quarantinable_bundles_for, "some-cask", cask_dir)).to include(bundle)
     end

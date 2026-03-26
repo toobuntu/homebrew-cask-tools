@@ -65,21 +65,17 @@ for src in "${CMD_SRC}" "${SPEC_SRC}"; do
   fi
 done
 
-# Refuse to overwrite existing files (e.g. a previous run that did not clean up).
-for dst in "${CMD_DST}" "${SPEC_DST}"; do
-  if [[ -e "${dst}" ]]; then
-    echo "Error: ${dst} already exists. Remove it and retry." >&2
-    exit 1
-  fi
-done
-
-# Hardlink files into the Homebrew repository.
-# Hardlinks are required because parallel_rspec calls File.stat on the matched
-# spec path relative to HOMEBREW_LIBRARY_PATH; symlinks that point outside that
-# tree are resolved but the relative stat fails with ENOENT.
+# Hardlink files into the Homebrew repository, clobbering any existing copies
+# from a previous run. Hardlinks are required because parallel_rspec calls
+# File.stat on the spec path relative to HOMEBREW_LIBRARY_PATH; symlinks that
+# point outside that tree fail with ENOENT.
 echo "==> Hardlinking files into Homebrew repository..." >&2
-ln "${CMD_SRC}"  "${CMD_DST}"
-ln "${SPEC_SRC}" "${SPEC_DST}"
+for pair in "${CMD_SRC}:${CMD_DST}" "${SPEC_SRC}:${SPEC_DST}"; do
+  src="${pair%%:*}"
+  dst="${pair##*:}"
+  [[ -e "${dst}" ]] && echo "==> (replacing existing ${dst##*/})" >&2
+  ln -f "${src}" "${dst}"
+done
 
 echo "==> Running: brew tests --only=cmd/purge-quarantine" >&2
 brew tests --only=cmd/purge-quarantine

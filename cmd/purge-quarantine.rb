@@ -325,6 +325,7 @@ module Homebrew
                                   print_stderr: false)
             next unless info.exit_status.zero?
 
+            # pkgutil --pkg-info output: "volume: /" and "location: <rel-path>"
             volume = info.stdout.match(/^volume: (.+)$/)&.[](1)&.strip || "/"
             location = info.stdout.match(/^location: (.+)$/)&.[](1)&.strip
             next unless location

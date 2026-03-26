@@ -275,7 +275,7 @@ module Homebrew
                                         .map { |p| Pathname(p) }
 
         candidates = (name_candidates + uninstall_candidates).uniq
-        odebug "Metadata candidates for #{token}: #{candidates.map(&:to_s).join(", ")}"
+        odebug "Metadata candidates for #{token}: #{candidates.empty? ? "(none)" : candidates.map(&:to_s).join(", ")}"
         candidates.select(&:directory?)
       rescue => e
         odebug "Could not read cask metadata for #{token}: #{e.message}"

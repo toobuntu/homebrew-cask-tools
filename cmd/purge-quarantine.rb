@@ -6,6 +6,7 @@ require "system_command"
 
 module Homebrew
   module Cmd
+    # Removes macOS quarantine and provenance xattrs from installed cask bundles.
     class PurgeQuarantine < AbstractCommand
       include SystemCommand::Mixin
 
@@ -20,6 +21,17 @@ module Homebrew
 
         named_args min: 1
       end
+
+      BUNDLE_EXTENSIONS = T.let(
+        %w[.app .component .colorpicker .saver .webplugin .vst .vst3 .dext .systemextension].freeze,
+        T::Array[String],
+      )
+
+      LSREGISTER_PATH = T.let(
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/" \
+        "LaunchServices.framework/Versions/A/Support/lsregister",
+        String,
+      )
 
       sig { override.void }
       def run
@@ -113,49 +125,39 @@ module Homebrew
         bundles = bundles_from_cask_metadata(token, cask_dir)
         return bundles unless bundles.empty?
 
-        # Tier 4: pkgutil BOM. Extracts the Bill of Materials from staged .pkg files
-        # in the Caskroom using `pkgutil --bom` + `lsbom -s`, identifies top-level
-        # bundle names, then searches common install dirs. Does not require the package
-        # to be registered with pkgutil, only that the .pkg file is still present.
-        odebug "No bundles from cask metadata for #{token}; trying pkgutil BOM"
-        bundles = bundles_from_pkgutil_bom(token, cask_dir)
+        # Candidate bundle names are used by the lsregister and mdfind tiers.
+        candidate_names = candidate_bundle_names(token, cask_dir)
+
+        # Tier 4: macOS Launch Services registry (lsregister). Scans the lsregister
+        # dump for `path:` entries whose basename matches a candidate bundle name.
+        # Promoted above pkgutil because macOS itself maintains this database and it
+        # records the actual installed location regardless of how the app was installed.
+        odebug "No bundles from cask metadata for #{token}; trying lsregister"
+        bundles = bundles_from_lsregister(candidate_names)
         return bundles unless bundles.empty?
 
         # Tier 5: pkgutil receipt database. Expands wildcard pkg identifier patterns
-        # from .metadata JSON via `pkgutil --pkgs`, resolves each registered pkg's
-        # install prefix, and filters its file list for bundle extensions. Requires
-        # the package to be registered with macOS (i.e., the receipt is present).
-        odebug "No bundles from pkgutil BOM for #{token}; trying pkgutil receipts"
+        # from .metadata JSON via `pkgutil --pkgs`, then filters the registered file
+        # list for bundle extensions and searches common install dirs. Requires the
+        # package to be registered with macOS (i.e., the receipt is present).
+        odebug "No bundles from lsregister for #{token}; trying pkgutil receipts"
         bundles = bundles_from_pkgutil_receipts(token, cask_dir)
         return bundles unless bundles.empty?
 
-        candidate_names = candidate_bundle_names(token, cask_dir)
-
-        # Tier 6: macOS Launch Services registry (lsregister). Scans the lsregister
-        # dump for `path:` entries whose basename matches a candidate bundle name.
-        # Authoritative because macOS itself maintains this database of all registered
-        # apps and bundles on the system.
-        odebug "No bundles from pkgutil receipts for #{token}; trying lsregister"
-        bundles = bundles_from_lsregister(candidate_names)
+        # Tier 6: pkgutil BOM. Extracts the Bill of Materials from staged .pkg files
+        # in the Caskroom using `pkgutil --bom` + `lsbom -s`, identifies top-level
+        # bundle names, then searches common install dirs. Does not require the package
+        # to be registered with pkgutil, only that the .pkg file is still present.
+        odebug "No bundles from pkgutil receipts for #{token}; trying pkgutil BOM"
+        bundles = bundles_from_pkgutil_bom(token, cask_dir)
         return bundles unless bundles.empty?
 
         # Tier 7: Spotlight / mdfind. Searches the Spotlight metadata index by bundle
         # name. A robust last resort that works as long as Spotlight has indexed the
         # install location.
-        odebug "No bundles from lsregister for #{token}; trying mdfind"
+        odebug "No bundles from pkgutil BOM for #{token}; trying mdfind"
         bundles_from_mdfind(candidate_names)
       end
-
-      BUNDLE_EXTENSIONS = T.let(
-        %w[.app .component .colorpicker .saver .webplugin .vst .vst3 .dext .systemextension].freeze,
-        T::Array[String],
-      )
-
-      LSREGISTER_PATH = T.let(
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/" \
-        "LaunchServices.framework/Versions/A/Support/lsregister",
-        String,
-      )
 
       sig { params(token: String).returns(T::Array[Pathname]) }
       def bundles_from_cask_definition(token)
@@ -191,7 +193,7 @@ module Homebrew
           appdir = config.dig("explicit", "appdir") ||
                    config.dig("env", "appdir") ||
                    config.dig("default", "appdir")
-          dirs.unshift(Pathname(appdir)) if appdir && !appdir.empty?
+          dirs.unshift(Pathname(appdir)) if appdir.present?
         end
         dirs.uniq
       rescue => e
@@ -271,7 +273,7 @@ module Homebrew
           next unless lsbom_result.exit_status.zero?
 
           names = lsbom_result.stdout.lines
-                              .map { |l| l.chomp.sub(%r{\A\./}, "") }
+                              .map { |l| l.chomp.delete_prefix("./") }
                               .reject { |p| p.include?("/") }
                               .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
                               .uniq
@@ -331,7 +333,9 @@ module Homebrew
                                 .map(&:chomp)
                                 .reject(&:empty?)
                                 .filter_map do |rel|
-                                  rel.split("/").find { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
+                                  rel.split("/").find do |p|
+                                    BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) }
+                                  end
                                 end
                                 .uniq
 

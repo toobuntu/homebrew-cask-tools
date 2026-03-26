@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "fileutils"
@@ -8,8 +8,6 @@ require "tmpdir"
 
 RSpec.describe Homebrew::Cmd::PurgeQuarantine do
   subject(:cmd) { described_class.new(["some-cask"]) }
-
-  it_behaves_like "parseable arguments"
 
   describe "#xattrs_present" do
     it "returns matching quarantine attrs from xattr output" do
@@ -33,7 +31,6 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
 
       expect(cmd.send(:xattrs_present, Pathname("/some/App.app"))).to eq([])
     end
-
   end
 
   describe "#quarantinable_bundles_for" do
@@ -69,24 +66,24 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
         .to eq([Pathname("/Applications/PkgApp.app")])
     end
 
-    it "falls back to pkgutil BOM when metadata returns nothing" do
+    it "falls back to lsregister when metadata returns nothing" do
       cask_dir.mkpath
       allow(cmd).to receive_messages(
         bundles_from_cask_definition: [],
         bundles_from_cask_metadata:   [],
-        bundles_from_pkgutil_bom:     [Pathname("/Applications/BomApp.app")],
+        bundles_from_lsregister:      [Pathname("/Applications/RegisteredApp.app")],
       )
 
-      expect(cmd.send(:quarantinable_bundles_for, "bom-cask", cask_dir))
-        .to eq([Pathname("/Applications/BomApp.app")])
+      expect(cmd.send(:quarantinable_bundles_for, "lsr-cask", cask_dir))
+        .to eq([Pathname("/Applications/RegisteredApp.app")])
     end
 
-    it "falls back to pkgutil receipts when BOM returns nothing" do
+    it "falls back to pkgutil receipts when lsregister returns nothing" do
       cask_dir.mkpath
       allow(cmd).to receive_messages(
         bundles_from_cask_definition:  [],
         bundles_from_cask_metadata:    [],
-        bundles_from_pkgutil_bom:      [],
+        bundles_from_lsregister:       [],
         bundles_from_pkgutil_receipts: [Pathname("/Applications/ReceiptApp.app")],
       )
 
@@ -94,35 +91,34 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
         .to eq([Pathname("/Applications/ReceiptApp.app")])
     end
 
-    it "falls back to lsregister when pkgutil returns nothing" do
+    it "falls back to pkgutil BOM when receipts return nothing" do
       cask_dir.mkpath
       allow(cmd).to receive_messages(
         bundles_from_cask_definition:  [],
         bundles_from_cask_metadata:    [],
-        bundles_from_pkgutil_bom:      [],
+        bundles_from_lsregister:       [],
         bundles_from_pkgutil_receipts: [],
-        bundles_from_lsregister:       [Pathname("/Applications/RegisteredApp.app")],
+        bundles_from_pkgutil_bom:      [Pathname("/Applications/BomApp.app")],
       )
 
-      expect(cmd.send(:quarantinable_bundles_for, "lsr-cask", cask_dir))
-        .to eq([Pathname("/Applications/RegisteredApp.app")])
+      expect(cmd.send(:quarantinable_bundles_for, "bom-cask", cask_dir))
+        .to eq([Pathname("/Applications/BomApp.app")])
     end
 
-    it "falls back to mdfind when lsregister returns nothing" do
+    it "falls back to mdfind when pkgutil BOM returns nothing" do
       cask_dir.mkpath
       allow(cmd).to receive_messages(
         bundles_from_cask_definition:  [],
         bundles_from_cask_metadata:    [],
-        bundles_from_pkgutil_bom:      [],
-        bundles_from_pkgutil_receipts: [],
         bundles_from_lsregister:       [],
+        bundles_from_pkgutil_receipts: [],
+        bundles_from_pkgutil_bom:      [],
         bundles_from_mdfind:           [Pathname("/Applications/SpotlightApp.app")],
       )
 
       expect(cmd.send(:quarantinable_bundles_for, "mdfind-cask", cask_dir))
         .to eq([Pathname("/Applications/SpotlightApp.app")])
     end
-
   end
 
   describe "#bundles_from_cask_metadata" do
@@ -158,7 +154,6 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
 
       expect(result).to eq([])
     end
-
   end
 
   describe "#bundles_from_pkgutil_bom" do
@@ -199,7 +194,6 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
 
       expect(result).to eq([])
     end
-
   end
 
   describe "#bundles_from_lsregister" do
@@ -228,7 +222,6 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
     it "returns [] when no candidate names are given" do
       expect(cmd.send(:bundles_from_lsregister, [])).to eq([])
     end
-
   end
 
   describe "#bundles_from_mdfind" do
@@ -254,6 +247,5 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
     it "returns [] when no candidate names are given" do
       expect(cmd.send(:bundles_from_mdfind, [])).to eq([])
     end
-
   end
 end

@@ -34,6 +34,8 @@ module Homebrew
         String,
       )
 
+      LSREGISTER_CACHE_TTL = T.let(300, Integer)
+
       sig { override.void }
       def run
         args.named.each do |token|
@@ -119,7 +121,7 @@ module Homebrew
         # Tier 2: live cask definition via the Cask API (CaskLoader). Reads `app`
         # and other Moved artifact targets plus uninstall.delete paths. Works for
         # pkg-based casks (e.g. adobe-acrobat-reader) when the cask is still tapped.
-        ohai "No bundles in Caskroom for #{token}; trying cask definition" if args.verbose?
+        ohai "Tier 1→Tier 2: no Caskroom bundles for #{token}; trying cask definition" if args.verbose?
         bundles = bundles_from_cask_definition(token)
         return bundles unless bundles.empty?
 
@@ -128,7 +130,7 @@ module Homebrew
         # because the API requires the cask to be present in a tapped repo whereas the
         # .metadata directory persists in the Caskroom even after a cask is removed
         # from all taps.
-        ohai "No bundles from cask definition for #{token}; trying cask metadata" if args.verbose?
+        ohai "Tier 2→Tier 3: no bundles from cask definition for #{token}; trying cask metadata" if args.verbose?
         bundles = bundles_from_cask_metadata(token, cask_dir)
         return bundles unless bundles.empty?
 
@@ -140,7 +142,7 @@ module Homebrew
         # dump for `path:` entries whose basename matches a candidate bundle name.
         # Promoted above pkgutil because macOS itself maintains this database and it
         # records the actual installed location regardless of how the app was installed.
-        ohai "No bundles from cask metadata for #{token}; trying lsregister" if args.verbose?
+        ohai "Tier 3→Tier 4: no bundles from cask metadata for #{token}; trying lsregister" if args.verbose?
         bundles = bundles_from_lsregister(candidate_names)
         return bundles unless bundles.empty?
 
@@ -148,7 +150,7 @@ module Homebrew
         # from .metadata JSON via `pkgutil --pkgs`, then filters the registered file
         # list for bundle extensions and searches common install dirs. Requires the
         # package to be registered with macOS (i.e., the receipt is present).
-        ohai "No bundles from lsregister for #{token}; trying pkgutil receipts" if args.verbose?
+        ohai "Tier 4→Tier 5: no bundles from lsregister for #{token}; trying pkgutil receipts" if args.verbose?
         bundles = bundles_from_pkgutil_receipts(token, cask_dir)
         return bundles unless bundles.empty?
 
@@ -156,14 +158,14 @@ module Homebrew
         # in the Caskroom using `pkgutil --bom` + `lsbom -s`, identifies top-level
         # bundle names, then searches common install dirs. Does not require the package
         # to be registered with pkgutil, only that the .pkg file is still present.
-        ohai "No bundles from pkgutil receipts for #{token}; trying pkgutil BOM" if args.verbose?
+        ohai "Tier 5→Tier 6: no bundles from pkgutil receipts for #{token}; trying pkgutil BOM" if args.verbose?
         bundles = bundles_from_pkgutil_bom(token, cask_dir)
         return bundles unless bundles.empty?
 
         # Tier 7: Spotlight / mdfind. Searches the Spotlight metadata index by bundle
         # name. A robust last resort that works as long as Spotlight has indexed the
         # install location.
-        ohai "No bundles from pkgutil BOM for #{token}; trying mdfind" if args.verbose?
+        ohai "Tier 6→Tier 7: no bundles from pkgutil BOM for #{token}; trying mdfind" if args.verbose?
         bundles_from_mdfind(candidate_names)
       end
 
@@ -178,14 +180,14 @@ module Homebrew
         moved = artifacts
                 .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Moved) }
                 .map { |a| Pathname(T.unsafe(a).target.to_s) }
-        odebug "Cask definition Moved targets for #{token}: #{moved.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
+        odebug "Tier 2: Cask definition Moved targets for #{token}: #{moved.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
 
         uninstall_delete = artifacts
                            .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Uninstall) }
                            .flat_map { |a| Array(T.unsafe(a).directives[:delete]) }
                            .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
                            .map { |p| Pathname(p) }
-        odebug "Cask definition uninstall.delete bundles for #{token}: #{uninstall_delete.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
+        odebug "Tier 2: Cask definition uninstall.delete bundles for #{token}: #{uninstall_delete.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
 
         (moved + uninstall_delete).uniq.select(&:directory?)
       rescue => e
@@ -275,7 +277,7 @@ module Homebrew
                                         .map { |p| Pathname(p) }
 
         candidates = (name_candidates + uninstall_candidates).uniq
-        odebug "Metadata candidates for #{token}: #{candidates.empty? ? "(none)" : candidates.map(&:to_s).join(", ")}"
+        odebug "Tier 3: Metadata candidates for #{token}: #{candidates.empty? ? "(none)" : candidates.map(&:to_s).join(", ")}"
         candidates.select(&:directory?)
       rescue => e
         odebug "Could not read cask metadata for #{token}: #{e.message}"
@@ -311,7 +313,7 @@ module Homebrew
                               .uniq
           next if names.empty?
 
-          odebug "BOM bundles in #{pkg_file.basename}: #{names.join(", ")}"
+          odebug "Tier 6: BOM bundles in #{pkg_file.basename}: #{names.join(", ")}"
           names.each do |name|
             dirs.each do |dir|
               candidate = dir/name
@@ -347,7 +349,7 @@ module Homebrew
           odebug "No pkgutil patterns in metadata for #{token}"
           return []
         end
-        odebug "pkgutil patterns for #{token}: #{pkg_patterns.join(", ")}"
+        odebug "Tier 5: pkgutil patterns for #{token}: #{pkg_patterns.join(", ")}"
 
         found = T.let([], T::Array[Pathname])
 
@@ -395,7 +397,7 @@ module Homebrew
               next
             end
 
-            odebug "pkgutil #{pkg_id}: prefix=#{prefix}, bundles=#{bundle_names.join(", ")}"
+            odebug "Tier 5: pkgutil #{pkg_id}: prefix=#{prefix}, bundles=#{bundle_names.join(", ")}"
 
             bundle_names.each do |name|
               # Try the receipt's recorded install prefix first (correct for plugins).
@@ -417,18 +419,37 @@ module Homebrew
         []
       end
 
+      sig { returns(T.nilable(String)) }
+      def lsregister_dump
+        cache_path = HOMEBREW_CACHE/"purge-quarantine"/"lsregister.dump"
+        if cache_path.exist? && (Time.now - cache_path.mtime) < LSREGISTER_CACHE_TTL
+          age_s = (Time.now - cache_path.mtime).round
+          odebug "Tier 4: using cached lsregister dump (#{age_s}s old, TTL #{LSREGISTER_CACHE_TTL}s)"
+          return cache_path.read
+        end
+
+        odebug "Tier 4: running lsregister -dump (may take ~20s); result will be cached for #{LSREGISTER_CACHE_TTL}s"
+        result = system_command(LSREGISTER_PATH, args: ["-dump"], print_stderr: false)
+        return nil unless result.exit_status.zero?
+
+        cache_path.dirname.mkpath
+        cache_path.write(result.stdout)
+        result.stdout
+      rescue => e
+        odebug "Tier 4: lsregister dump failed: #{e.message}"
+        nil
+      end
+
       sig { params(candidate_names: T::Array[String]).returns(T::Array[Pathname]) }
       def bundles_from_lsregister(candidate_names)
         return [] if candidate_names.empty?
 
-        result = system_command(LSREGISTER_PATH,
-                                args:         ["-dump"],
-                                print_stderr: false)
-        return [] unless result.exit_status.zero?
+        dump = lsregister_dump
+        return [] if dump.nil?
 
         found = T.let([], T::Array[Pathname])
 
-        result.stdout.lines.each do |line|
+        dump.lines.each do |line|
           next unless (m = line.match(/^\s*path:\s+(.+)$/))
 
           path = Pathname(m[1].strip)
@@ -441,7 +462,7 @@ module Homebrew
 
         found.uniq
       rescue => e
-        odebug "lsregister lookup failed: #{e.message}"
+        odebug "Tier 4: lsregister lookup failed: #{e.message}"
         []
       end
 
@@ -469,7 +490,7 @@ module Homebrew
 
         found.uniq
       rescue => e
-        odebug "mdfind lookup failed: #{e.message}"
+        odebug "Tier 7: mdfind lookup failed: #{e.message}"
         []
       end
 

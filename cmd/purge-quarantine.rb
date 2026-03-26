@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "abstract_command"
+require "shellwords"
 require "system_command"
 
 module Homebrew
@@ -441,7 +442,7 @@ module Homebrew
           ofail <<~EOS
             Failed to remove #{attr} from #{path}.
             To remove manually, run:
-              /usr/bin/xattr -d -r '#{attr}' '#{path}'
+              /usr/bin/xattr -d -r #{Shellwords.shellescape(attr)} #{Shellwords.shellescape(path.to_s)}
             Or try it with sudo.
           EOS
         end

@@ -45,15 +45,15 @@ trap cleanup EXIT INT TERM
 
 cat >&2 <<'WARNING'
 ╔══════════════════════════════════════════════════════════════════════╗
-║  WARNING: brew purge-quarantine tests are about to run.             ║
+║  WARNING: brew purge-quarantine tests are about to run.              ║
 ║                                                                      ║
 ║  The command and spec will be temporarily hardlinked into:           ║
 ║    $(brew --repo)/Library/Homebrew/cmd/                              ║
 ║    $(brew --repo)/Library/Homebrew/test/cmd/                         ║
 ║                                                                      ║
-║  Do NOT run brew update, brew upgrade, brew update-reset, or any    ║
-║  git operations inside the Homebrew repository until tests finish.  ║
-║  Doing so may remove the hardlinks and cause tests to fail.         ║
+║  Do NOT run brew update, brew upgrade, brew update-reset, or any     ║
+║  git operations inside the Homebrew repository until tests finish.   ║
+║  Doing so may remove the hardlinks and cause tests to fail.          ║
 ╚══════════════════════════════════════════════════════════════════════╝
 WARNING
 

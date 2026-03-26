@@ -92,15 +92,30 @@ module Homebrew
 
       sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
       def quarantinable_bundles_for(token, cask_dir)
+        # Tier 1: bundles staged inside Caskroom (covers standard .app casks).
         bundles = cask_dir.glob("*/*").select(&:directory?)
         return bundles unless bundles.empty?
 
+        # Tier 2: live cask definition — covers pkg-based casks whose app stanza
+        # or uninstall.delete block records the installed path. Requires the cask
+        # to still be present in a tapped repo.
         odebug "No bundles in Caskroom for #{token}; trying cask definition"
         bundles = bundles_from_cask_definition(token)
         return bundles unless bundles.empty?
 
+        # Tier 3: stored .metadata JSON — same data as tier 2 but read from the
+        # Caskroom filesystem so it works even after a cask is removed from all
+        # taps. Falls back to the Homebrew-configured appdir and ~/Applications.
         odebug "No bundles from cask definition for #{token}; trying cask metadata"
-        bundles_from_cask_metadata(token, cask_dir)
+        bundles = bundles_from_cask_metadata(token, cask_dir)
+        return bundles unless bundles.empty?
+
+        # Tier 4: pkgutil receipt database — expands wildcard pkg patterns from
+        # .metadata, maps each registered pkg ID to its install prefix, and
+        # filters the file list for macOS bundle paths. Authoritative for
+        # currently-installed pkg casks; unaffected by tap availability.
+        odebug "No bundles from cask metadata for #{token}; trying pkgutil"
+        bundles_from_pkgutil(token, cask_dir)
       end
 
       BUNDLE_EXTENSIONS = T.let(
@@ -173,6 +188,60 @@ module Homebrew
         candidates.select(&:directory?)
       rescue => e
         odebug "Could not read cask metadata for #{token}: #{e.message}"
+        []
+      end
+
+      sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
+      def bundles_from_pkgutil(token, cask_dir)
+        require "json"
+
+        metadata_dir = cask_dir/".metadata"
+        return [] unless metadata_dir.directory?
+
+        json_files = metadata_dir.glob("*/**/Casks/#{token}.json")
+        return [] if json_files.empty?
+
+        data = JSON.parse(json_files.max_by(&:mtime).read)
+        pkg_patterns = Array(data["artifacts"])
+                       .flat_map { |a| Array(a["uninstall"]) }
+                       .flat_map { |u| Array(u["pkgutil"]) }
+        return [] if pkg_patterns.empty?
+
+        found = T.let([], T::Array[Pathname])
+
+        pkg_patterns.each do |pattern|
+          pkg_ids = system_command("/usr/sbin/pkgutil",
+                                   args:         ["--pkgs=#{pattern}"],
+                                   print_stderr: false)
+          next unless pkg_ids.exit_status.zero?
+
+          pkg_ids.stdout.lines.map(&:chomp).reject(&:empty?).each do |pkg_id|
+            info = system_command("/usr/sbin/pkgutil",
+                                  args:         ["--pkg-info", pkg_id],
+                                  print_stderr: false)
+            next unless info.exit_status.zero?
+
+            volume   = info.stdout.match(/^volume: (.+)$/)&.captures&.first&.chomp || "/"
+            location = info.stdout.match(/^location: (.+)$/)&.captures&.first&.chomp || ""
+            prefix   = Pathname(volume)/location
+
+            files = system_command("/usr/sbin/pkgutil",
+                                   args:         ["--files", pkg_id],
+                                   print_stderr: false)
+            next unless files.exit_status.zero?
+
+            files.stdout.lines.map(&:chomp).reject(&:empty?).each do |rel|
+              next unless BUNDLE_EXTENSIONS.any? { |ext| rel.downcase.end_with?(ext) }
+
+              full = prefix/rel
+              found << full if full.directory?
+            end
+          end
+        end
+
+        found.uniq
+      rescue => e
+        odebug "pkgutil lookup failed for #{token}: #{e.message}"
         []
       end
 

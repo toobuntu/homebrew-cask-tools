@@ -1,6 +1,7 @@
 # typed: false
 # frozen_string_literal: true
 
+require "fileutils"
 require_relative "../../cmd/purge-quarantine"
 require "json"
 require "tmpdir"
@@ -36,75 +37,102 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
   end
 
   describe "#quarantinable_bundles_for" do
-    around do |example|
-      Dir.mktmpdir do |dir|
-        @tmpdir = Pathname(dir)
-        example.run
-      end
-    end
+    let(:tmpdir)   { Pathname(Dir.mktmpdir) }
+    let(:cask_dir) { tmpdir/"some-cask" }
+
+    after { FileUtils.rm_rf(tmpdir) }
 
     it "returns bundles staged inside the Caskroom version directory" do
-      cask_dir = @tmpdir/"some-cask"
-      bundle   = cask_dir/"3.0"/"Some App.app"
+      bundle = cask_dir/"3.0"/"Some App.app"
       (bundle/"Contents").mkpath
 
-      result = cmd.send(:quarantinable_bundles_for, "some-cask", cask_dir)
-
-      expect(result).to include(bundle)
+      expect(cmd.send(:quarantinable_bundles_for, "some-cask", cask_dir)).to include(bundle)
     end
 
     it "falls back to cask definition when Caskroom has no bundles" do
-      cask_dir = @tmpdir/"empty-cask"
       cask_dir.mkpath
       allow(cmd).to receive(:bundles_from_cask_definition)
         .and_return([Pathname("/Applications/MyApp.app")])
 
-      result = cmd.send(:quarantinable_bundles_for, "empty-cask", cask_dir)
-
-      expect(result).to eq([Pathname("/Applications/MyApp.app")])
+      expect(cmd.send(:quarantinable_bundles_for, "empty-cask", cask_dir))
+        .to eq([Pathname("/Applications/MyApp.app")])
     end
 
     it "falls back to cask metadata when cask definition returns nothing" do
-      cask_dir = @tmpdir/"pkg-cask"
       cask_dir.mkpath
       allow(cmd).to receive_messages(
         bundles_from_cask_definition: [],
         bundles_from_cask_metadata:   [Pathname("/Applications/PkgApp.app")],
       )
 
-      result = cmd.send(:quarantinable_bundles_for, "pkg-cask", cask_dir)
-
-      expect(result).to eq([Pathname("/Applications/PkgApp.app")])
+      expect(cmd.send(:quarantinable_bundles_for, "pkg-cask", cask_dir))
+        .to eq([Pathname("/Applications/PkgApp.app")])
     end
 
-    it "falls back to pkgutil when all previous tiers return nothing" do
-      cask_dir = @tmpdir/"receipt-cask"
+    it "falls back to pkgutil BOM when metadata returns nothing" do
       cask_dir.mkpath
       allow(cmd).to receive_messages(
         bundles_from_cask_definition: [],
         bundles_from_cask_metadata:   [],
-        bundles_from_pkgutil:         [Pathname("/Applications/ReceiptApp.app")],
+        bundles_from_pkgutil_bom:     [Pathname("/Applications/BomApp.app")],
       )
 
-      result = cmd.send(:quarantinable_bundles_for, "receipt-cask", cask_dir)
+      expect(cmd.send(:quarantinable_bundles_for, "bom-cask", cask_dir))
+        .to eq([Pathname("/Applications/BomApp.app")])
+    end
 
-      expect(result).to eq([Pathname("/Applications/ReceiptApp.app")])
+    it "falls back to pkgutil receipts when BOM returns nothing" do
+      cask_dir.mkpath
+      allow(cmd).to receive_messages(
+        bundles_from_cask_definition:  [],
+        bundles_from_cask_metadata:    [],
+        bundles_from_pkgutil_bom:      [],
+        bundles_from_pkgutil_receipts: [Pathname("/Applications/ReceiptApp.app")],
+      )
+
+      expect(cmd.send(:quarantinable_bundles_for, "receipt-cask", cask_dir))
+        .to eq([Pathname("/Applications/ReceiptApp.app")])
+    end
+
+    it "falls back to lsregister when pkgutil returns nothing" do
+      cask_dir.mkpath
+      allow(cmd).to receive_messages(
+        bundles_from_cask_definition:  [],
+        bundles_from_cask_metadata:    [],
+        bundles_from_pkgutil_bom:      [],
+        bundles_from_pkgutil_receipts: [],
+        bundles_from_lsregister:       [Pathname("/Applications/RegisteredApp.app")],
+      )
+
+      expect(cmd.send(:quarantinable_bundles_for, "lsr-cask", cask_dir))
+        .to eq([Pathname("/Applications/RegisteredApp.app")])
+    end
+
+    it "falls back to mdfind when lsregister returns nothing" do
+      cask_dir.mkpath
+      allow(cmd).to receive_messages(
+        bundles_from_cask_definition:  [],
+        bundles_from_cask_metadata:    [],
+        bundles_from_pkgutil_bom:      [],
+        bundles_from_pkgutil_receipts: [],
+        bundles_from_lsregister:       [],
+        bundles_from_mdfind:           [Pathname("/Applications/SpotlightApp.app")],
+      )
+
+      expect(cmd.send(:quarantinable_bundles_for, "mdfind-cask", cask_dir))
+        .to eq([Pathname("/Applications/SpotlightApp.app")])
     end
 
   end
 
   describe "#bundles_from_cask_metadata" do
-    around do |example|
-      Dir.mktmpdir do |dir|
-        @tmpdir = Pathname(dir)
-        example.run
-      end
-    end
-
+    let(:tmpdir)   { Pathname(Dir.mktmpdir) }
     let(:token)    { "my-cask" }
-    let(:appdir)   { @tmpdir/"apps" }
+    let(:cask_dir) { tmpdir/"Caskroom"/"my-cask" }
+    let(:appdir)   { tmpdir/"apps" }
     let(:app)      { appdir/"My App.app" }
-    let(:cask_dir) { @tmpdir/"Caskroom"/"my-cask" }
+
+    after { FileUtils.rm_rf(tmpdir) }
 
     before do
       (app/"Contents").mkpath
@@ -122,13 +150,109 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
     it "finds the app bundle in the configured appdir" do
       result = cmd.send(:bundles_from_cask_metadata, token, cask_dir)
 
-      expect(result).to include(appdir/"My App.app")
+      expect(result).to include(app)
     end
 
     it "returns [] when the .metadata directory is absent" do
-      result = cmd.send(:bundles_from_cask_metadata, "nonexistent", @tmpdir/"nonexistent")
+      result = cmd.send(:bundles_from_cask_metadata, "nonexistent", tmpdir/"nonexistent")
 
       expect(result).to eq([])
+    end
+
+  end
+
+  describe "#bundles_from_pkgutil_bom" do
+    let(:tmpdir)   { Pathname(Dir.mktmpdir) }
+    let(:cask_dir) { tmpdir/"my-cask" }
+    let(:install)  { tmpdir/"Applications" }
+    let(:app)      { install/"My App.app" }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    before { (cask_dir/"1.0").mkpath }
+
+    it "finds bundles using lsbom output and install_dirs" do
+      pkg = cask_dir/"1.0"/"install.pkg"
+      pkg.write("")
+      (app/"Contents").mkpath
+      bom_result = instance_double(SystemCommand::Result,
+                                   exit_status: 0, stdout: "/tmp/fake.bom\n", stderr: "")
+      lsbom_result = instance_double(SystemCommand::Result,
+                                     exit_status: 0,
+                                     stdout:      "./My App.app\n./My App.app/Contents/MacOS/helper\n",
+                                     stderr:      "")
+      allow(cmd).to receive(:system_command)
+        .with("/usr/sbin/pkgutil", hash_including(args: ["--bom", pkg.to_s]))
+        .and_return(bom_result)
+      allow(cmd).to receive(:system_command)
+        .with("/usr/bin/lsbom", hash_including(args: ["-s", "/tmp/fake.bom"]))
+        .and_return(lsbom_result)
+      allow(cmd).to receive(:install_dirs).and_return([install])
+
+      result = cmd.send(:bundles_from_pkgutil_bom, "my-cask", cask_dir)
+
+      expect(result).to include(app)
+    end
+
+    it "returns [] when no .pkg files are present" do
+      result = cmd.send(:bundles_from_pkgutil_bom, "my-cask", cask_dir)
+
+      expect(result).to eq([])
+    end
+
+  end
+
+  describe "#bundles_from_lsregister" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+    let(:app)    { tmpdir/"My App.app" }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    before { (app/"Contents").mkpath }
+
+    it "finds bundles matching candidate names in the lsregister dump" do
+      dump = "------------------------------------------------------------\n" \
+             "path:           #{app}\n" \
+             "bundle id:      com.example.myapp\n"
+      result = instance_double(SystemCommand::Result,
+                               exit_status: 0, stdout: dump, stderr: "")
+      allow(cmd).to receive(:system_command)
+        .with(described_class::LSREGISTER_PATH, anything)
+        .and_return(result)
+
+      found = cmd.send(:bundles_from_lsregister, ["My App.app"])
+
+      expect(found).to include(app)
+    end
+
+    it "returns [] when no candidate names are given" do
+      expect(cmd.send(:bundles_from_lsregister, [])).to eq([])
+    end
+
+  end
+
+  describe "#bundles_from_mdfind" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+    let(:app)    { tmpdir/"My App.app" }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    before { (app/"Contents").mkpath }
+
+    it "finds bundles by name via Spotlight" do
+      result = instance_double(SystemCommand::Result,
+                               exit_status: 0, stdout: "#{app}\n", stderr: "")
+      allow(cmd).to receive(:system_command)
+        .with("/usr/bin/mdfind", hash_including(args: ["-name", "My App.app"]))
+        .and_return(result)
+
+      found = cmd.send(:bundles_from_mdfind, ["My App.app"])
+
+      expect(found).to include(app)
+    end
+
+    it "returns [] when no candidate names are given" do
+      expect(cmd.send(:bundles_from_mdfind, [])).to eq([])
     end
 
   end

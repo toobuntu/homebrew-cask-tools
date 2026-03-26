@@ -92,35 +92,69 @@ module Homebrew
 
       sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
       def quarantinable_bundles_for(token, cask_dir)
-        # Tier 1: bundles staged inside Caskroom (covers standard .app casks).
+        # Tier 1: bundles staged inside Caskroom version directory. Covers all
+        # standard casks (.app, .component, etc.) that unzip directly to Caskroom.
         bundles = cask_dir.glob("*/*").select(&:directory?)
         return bundles unless bundles.empty?
 
-        # Tier 2: live cask definition — covers pkg-based casks whose app stanza
-        # or uninstall.delete block records the installed path. Requires the cask
-        # to still be present in a tapped repo.
+        # Tier 2: live cask definition via the Cask API (CaskLoader). Reads `app`
+        # and other Moved artifact targets plus uninstall.delete paths. Works for
+        # pkg-based casks (e.g. adobe-acrobat-reader) when the cask is still tapped.
         odebug "No bundles in Caskroom for #{token}; trying cask definition"
         bundles = bundles_from_cask_definition(token)
         return bundles unless bundles.empty?
 
-        # Tier 3: stored .metadata JSON — same data as tier 2 but read from the
-        # Caskroom filesystem so it works even after a cask is removed from all
-        # taps. Falls back to the Homebrew-configured appdir and ~/Applications.
+        # Tier 3: .metadata JSON on disk. Contains the same data as tier 2 but is
+        # read directly from the Caskroom filesystem rather than through the Cask API,
+        # because the API requires the cask to be present in a tapped repo whereas the
+        # .metadata directory persists in the Caskroom even after a cask is removed
+        # from all taps.
         odebug "No bundles from cask definition for #{token}; trying cask metadata"
         bundles = bundles_from_cask_metadata(token, cask_dir)
         return bundles unless bundles.empty?
 
-        # Tier 4: pkgutil receipt database — expands wildcard pkg patterns from
-        # .metadata, maps each registered pkg ID to its install prefix, and
-        # filters the file list for macOS bundle paths. Authoritative for
-        # currently-installed pkg casks; unaffected by tap availability.
-        odebug "No bundles from cask metadata for #{token}; trying pkgutil"
-        bundles_from_pkgutil(token, cask_dir)
+        # Tier 4: pkgutil BOM. Extracts the Bill of Materials from staged .pkg files
+        # in the Caskroom using `pkgutil --bom` + `lsbom -s`, identifies top-level
+        # bundle names, then searches common install dirs. Does not require the package
+        # to be registered with pkgutil, only that the .pkg file is still present.
+        odebug "No bundles from cask metadata for #{token}; trying pkgutil BOM"
+        bundles = bundles_from_pkgutil_bom(token, cask_dir)
+        return bundles unless bundles.empty?
+
+        # Tier 5: pkgutil receipt database. Expands wildcard pkg identifier patterns
+        # from .metadata JSON via `pkgutil --pkgs`, resolves each registered pkg's
+        # install prefix, and filters its file list for bundle extensions. Requires
+        # the package to be registered with macOS (i.e., the receipt is present).
+        odebug "No bundles from pkgutil BOM for #{token}; trying pkgutil receipts"
+        bundles = bundles_from_pkgutil_receipts(token, cask_dir)
+        return bundles unless bundles.empty?
+
+        candidate_names = candidate_bundle_names(token, cask_dir)
+
+        # Tier 6: macOS Launch Services registry (lsregister). Scans the lsregister
+        # dump for `path:` entries whose basename matches a candidate bundle name.
+        # Authoritative because macOS itself maintains this database of all registered
+        # apps and bundles on the system.
+        odebug "No bundles from pkgutil receipts for #{token}; trying lsregister"
+        bundles = bundles_from_lsregister(candidate_names)
+        return bundles unless bundles.empty?
+
+        # Tier 7: Spotlight / mdfind. Searches the Spotlight metadata index by bundle
+        # name. A robust last resort that works as long as Spotlight has indexed the
+        # install location.
+        odebug "No bundles from lsregister for #{token}; trying mdfind"
+        bundles_from_mdfind(candidate_names)
       end
 
       BUNDLE_EXTENSIONS = T.let(
         %w[.app .component .colorpicker .saver .webplugin .vst .vst3 .dext .systemextension].freeze,
         T::Array[String],
+      )
+
+      LSREGISTER_PATH = T.let(
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/" \
+        "LaunchServices.framework/Versions/A/Support/lsregister",
+        String,
       )
 
       sig { params(token: String).returns(T::Array[Pathname]) }
@@ -147,6 +181,43 @@ module Homebrew
         []
       end
 
+      sig { params(cask_dir: Pathname).returns(T::Array[Pathname]) }
+      def install_dirs(cask_dir)
+        dirs = [Pathname("/Applications"), Pathname(Dir.home)/"Applications"]
+        config_path = cask_dir/".metadata"/"config.json"
+        if config_path.exist?
+          require "json"
+          config = JSON.parse(config_path.read)
+          appdir = config.dig("explicit", "appdir") ||
+                   config.dig("env", "appdir") ||
+                   config.dig("default", "appdir")
+          dirs.unshift(Pathname(appdir)) if appdir && !appdir.empty?
+        end
+        dirs.uniq
+      rescue => e
+        odebug "Could not read install dirs from config.json: #{e.message}"
+        [Pathname("/Applications"), Pathname(Dir.home)/"Applications"]
+      end
+
+      sig { params(token: String, cask_dir: Pathname).returns(T::Array[String]) }
+      def candidate_bundle_names(token, cask_dir)
+        require "json"
+        json_files = (cask_dir/".metadata").glob("**/Casks/#{token}.json")
+        return [] if json_files.empty?
+
+        data = JSON.parse(json_files.max_by(&:mtime).read)
+        artifacts = Array(data["artifacts"])
+        app_names = artifacts.flat_map { |a| Array(a["app"]) }
+        delete_names = artifacts.flat_map { |a| Array(a["uninstall"]) }
+                                .flat_map { |u| Array(u["delete"]) }
+                                .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
+                                .map { |p| File.basename(p) }
+        (app_names + delete_names).uniq.reject(&:empty?)
+      rescue => e
+        odebug "Could not extract candidate bundle names for #{token}: #{e.message}"
+        []
+      end
+
       sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
       def bundles_from_cask_metadata(token, cask_dir)
         require "json"
@@ -154,30 +225,16 @@ module Homebrew
         metadata_dir = cask_dir/".metadata"
         return [] unless metadata_dir.directory?
 
-        config_path = metadata_dir/"config.json"
-        appdir = if config_path.exist?
-          config = JSON.parse(config_path.read)
-          config.dig("explicit", "appdir") ||
-            config.dig("env", "appdir") ||
-            config.dig("default", "appdir") ||
-            "/Applications"
-        else
-          "/Applications"
-        end
-
-        json_files = metadata_dir.glob("*/**/Casks/#{token}.json")
+        json_files = metadata_dir.glob("**/Casks/#{token}.json")
         return [] if json_files.empty?
 
         data = JSON.parse(json_files.max_by(&:mtime).read)
         artifacts = Array(data["artifacts"])
+        dirs = install_dirs(cask_dir)
 
-        # Relative names from `app` stanzas — install to appdir
         app_names = artifacts.flat_map { |a| Array(a["app"]) }
-        name_candidates = app_names.flat_map do |name|
-          [Pathname(appdir)/name, Pathname("/Applications")/name, Dir.home/"Applications"/name]
-        end
+        name_candidates = app_names.flat_map { |name| dirs.map { |dir| dir/name } }
 
-        # Absolute paths from `uninstall.delete` entries (covers pkg-only casks)
         uninstall_candidates = artifacts.flat_map { |a| Array(a["uninstall"]) }
                                         .flat_map { |u| Array(u["delete"]) }
                                         .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
@@ -192,13 +249,57 @@ module Homebrew
       end
 
       sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
-      def bundles_from_pkgutil(token, cask_dir)
+      def bundles_from_pkgutil_bom(token, cask_dir)
+        pkg_files = cask_dir.glob("*/**/*.pkg").select(&:file?)
+        return [] if pkg_files.empty?
+
+        dirs = install_dirs(cask_dir)
+        found = T.let([], T::Array[Pathname])
+
+        pkg_files.each do |pkg_file|
+          bom_result = system_command("/usr/sbin/pkgutil",
+                                     args:         ["--bom", pkg_file.to_s],
+                                     print_stderr: false)
+          next unless bom_result.exit_status.zero?
+
+          bom_path = bom_result.stdout.chomp
+          next if bom_path.empty?
+
+          lsbom_result = system_command("/usr/bin/lsbom",
+                                       args:         ["-s", bom_path],
+                                       print_stderr: false)
+          next unless lsbom_result.exit_status.zero?
+
+          names = lsbom_result.stdout.lines
+                              .map { |l| l.chomp.sub(%r{\A\./}, "") }
+                              .reject { |p| p.include?("/") }
+                              .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
+                              .uniq
+          next if names.empty?
+
+          odebug "BOM bundles in #{pkg_file.basename}: #{names.join(", ")}"
+          names.each do |name|
+            dirs.each do |dir|
+              candidate = dir/name
+              found << candidate if candidate.directory?
+            end
+          end
+        end
+
+        found.uniq
+      rescue => e
+        odebug "pkgutil BOM lookup failed for #{token}: #{e.message}"
+        []
+      end
+
+      sig { params(token: String, cask_dir: Pathname).returns(T::Array[Pathname]) }
+      def bundles_from_pkgutil_receipts(token, cask_dir)
         require "json"
 
         metadata_dir = cask_dir/".metadata"
         return [] unless metadata_dir.directory?
 
-        json_files = metadata_dir.glob("*/**/Casks/#{token}.json")
+        json_files = metadata_dir.glob("**/Casks/#{token}.json")
         return [] if json_files.empty?
 
         data = JSON.parse(json_files.max_by(&:mtime).read)
@@ -241,7 +342,63 @@ module Homebrew
 
         found.uniq
       rescue => e
-        odebug "pkgutil lookup failed for #{token}: #{e.message}"
+        odebug "pkgutil receipts lookup failed for #{token}: #{e.message}"
+        []
+      end
+
+      sig { params(candidate_names: T::Array[String]).returns(T::Array[Pathname]) }
+      def bundles_from_lsregister(candidate_names)
+        return [] if candidate_names.empty?
+
+        result = system_command(LSREGISTER_PATH,
+                                args:         ["-dump"],
+                                print_stderr: false)
+        return [] unless result.exit_status.zero?
+
+        found = T.let([], T::Array[Pathname])
+
+        result.stdout.lines.each do |line|
+          next unless (m = line.match(/^\s*path:\s+(.+)$/))
+
+          path = Pathname(m[1].strip)
+          next unless path.directory?
+          next unless BUNDLE_EXTENSIONS.any? { |ext| path.basename.to_s.downcase.end_with?(ext) }
+          next unless candidate_names.any? { |name| name.casecmp(path.basename.to_s).zero? }
+
+          found << path
+        end
+
+        found.uniq
+      rescue => e
+        odebug "lsregister lookup failed: #{e.message}"
+        []
+      end
+
+      sig { params(candidate_names: T::Array[String]).returns(T::Array[Pathname]) }
+      def bundles_from_mdfind(candidate_names)
+        return [] if candidate_names.empty?
+
+        found = T.let([], T::Array[Pathname])
+
+        candidate_names.each do |name|
+          result = system_command("/usr/bin/mdfind",
+                                  args:         ["-name", name],
+                                  print_stderr: false)
+          next unless result.exit_status.zero?
+
+          result.stdout.lines.map(&:chomp).reject(&:empty?).each do |path_str|
+            p = Pathname(path_str)
+            next unless p.directory?
+            next unless p.basename.to_s.casecmp(name).zero?
+            next unless BUNDLE_EXTENSIONS.any? { |ext| p.basename.to_s.downcase.end_with?(ext) }
+
+            found << p
+          end
+        end
+
+        found.uniq
+      rescue => e
+        odebug "mdfind lookup failed: #{e.message}"
         []
       end
 

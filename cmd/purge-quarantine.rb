@@ -119,7 +119,7 @@ module Homebrew
         # Tier 2: live cask definition via the Cask API (CaskLoader). Reads `app`
         # and other Moved artifact targets plus uninstall.delete paths. Works for
         # pkg-based casks (e.g. adobe-acrobat-reader) when the cask is still tapped.
-        ohai "No bundles in Caskroom for #{token}; trying cask definition" if verbose?
+        ohai "No bundles in Caskroom for #{token}; trying cask definition" if args.verbose?
         bundles = bundles_from_cask_definition(token)
         return bundles unless bundles.empty?
 
@@ -128,7 +128,7 @@ module Homebrew
         # because the API requires the cask to be present in a tapped repo whereas the
         # .metadata directory persists in the Caskroom even after a cask is removed
         # from all taps.
-        ohai "No bundles from cask definition for #{token}; trying cask metadata" if verbose?
+        ohai "No bundles from cask definition for #{token}; trying cask metadata" if args.verbose?
         bundles = bundles_from_cask_metadata(token, cask_dir)
         return bundles unless bundles.empty?
 
@@ -140,7 +140,7 @@ module Homebrew
         # dump for `path:` entries whose basename matches a candidate bundle name.
         # Promoted above pkgutil because macOS itself maintains this database and it
         # records the actual installed location regardless of how the app was installed.
-        ohai "No bundles from cask metadata for #{token}; trying lsregister" if verbose?
+        ohai "No bundles from cask metadata for #{token}; trying lsregister" if args.verbose?
         bundles = bundles_from_lsregister(candidate_names)
         return bundles unless bundles.empty?
 
@@ -148,7 +148,7 @@ module Homebrew
         # from .metadata JSON via `pkgutil --pkgs`, then filters the registered file
         # list for bundle extensions and searches common install dirs. Requires the
         # package to be registered with macOS (i.e., the receipt is present).
-        ohai "No bundles from lsregister for #{token}; trying pkgutil receipts" if verbose?
+        ohai "No bundles from lsregister for #{token}; trying pkgutil receipts" if args.verbose?
         bundles = bundles_from_pkgutil_receipts(token, cask_dir)
         return bundles unless bundles.empty?
 
@@ -156,14 +156,14 @@ module Homebrew
         # in the Caskroom using `pkgutil --bom` + `lsbom -s`, identifies top-level
         # bundle names, then searches common install dirs. Does not require the package
         # to be registered with pkgutil, only that the .pkg file is still present.
-        ohai "No bundles from pkgutil receipts for #{token}; trying pkgutil BOM" if verbose?
+        ohai "No bundles from pkgutil receipts for #{token}; trying pkgutil BOM" if args.verbose?
         bundles = bundles_from_pkgutil_bom(token, cask_dir)
         return bundles unless bundles.empty?
 
         # Tier 7: Spotlight / mdfind. Searches the Spotlight metadata index by bundle
         # name. A robust last resort that works as long as Spotlight has indexed the
         # install location.
-        ohai "No bundles from pkgutil BOM for #{token}; trying mdfind" if verbose?
+        ohai "No bundles from pkgutil BOM for #{token}; trying mdfind" if args.verbose?
         bundles_from_mdfind(candidate_names)
       end
 

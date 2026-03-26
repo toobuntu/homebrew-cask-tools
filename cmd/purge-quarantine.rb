@@ -310,6 +310,8 @@ module Homebrew
 
         found = T.let([], T::Array[Pathname])
 
+        dirs = install_dirs(cask_dir)
+
         pkg_patterns.each do |pattern|
           pkg_ids = system_command("/usr/sbin/pkgutil",
                                    args:         ["--pkgs=#{pattern}"],
@@ -317,25 +319,27 @@ module Homebrew
           next unless pkg_ids.exit_status.zero?
 
           pkg_ids.stdout.lines.map(&:chomp).reject(&:empty?).each do |pkg_id|
-            info = system_command("/usr/sbin/pkgutil",
-                                  args:         ["--pkg-info", pkg_id],
-                                  print_stderr: false)
-            next unless info.exit_status.zero?
-
-            volume   = info.stdout.match(/^volume: (.+)$/)&.captures&.first&.chomp || "/"
-            location = info.stdout.match(/^location: (.+)$/)&.captures&.first&.chomp || ""
-            prefix   = Pathname(volume)/location
-
             files = system_command("/usr/sbin/pkgutil",
                                    args:         ["--files", pkg_id],
                                    print_stderr: false)
             next unless files.exit_status.zero?
 
-            files.stdout.lines.map(&:chomp).reject(&:empty?).each do |rel|
-              next unless BUNDLE_EXTENSIONS.any? { |ext| rel.downcase.end_with?(ext) }
+            # The receipt records where files were staged during installation, not
+            # where postinstall scripts ultimately placed them.  Extract bundle names
+            # from the file list and search install_dirs instead of using the prefix.
+            bundle_names = files.stdout.lines
+                                .map(&:chomp)
+                                .reject(&:empty?)
+                                .filter_map do |rel|
+                                  rel.split("/").find { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
+                                end
+                                .uniq
 
-              full = prefix/rel
-              found << full if full.directory?
+            bundle_names.each do |name|
+              dirs.each do |dir|
+                candidate = dir/name
+                found << candidate if candidate.directory?
+              end
             end
           end
         end

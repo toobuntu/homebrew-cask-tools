@@ -334,11 +334,9 @@ module Homebrew
             location = info.stdout.match(/^location: (.+)$/)&.[](1)&.strip
             next unless location
 
-            # Plugin packages record the actual plugin directory as the install
-            # location (e.g. Library/Audio/Plug-Ins/VST3). Resolve bundle names
-            # from the file list against that prefix. Staging-only paths (e.g.
-            # tmp/…) used by some app pkg scripts no longer exist at runtime and
-            # are skipped gracefully by the directory? check.
+            # Plugin packages record their plugin directory as the install
+            # location (e.g. Library/Audio/Plug-Ins/VST3). App packages may
+            # record a temp staging path that no longer exists at runtime.
             prefix = Pathname(volume)/location
 
             files = system_command("/usr/sbin/pkgutil",
@@ -355,10 +353,20 @@ module Homebrew
                                   end
                                 end
                                 .uniq
+            next if bundle_names.empty?
+
+            odebug "pkgutil #{pkg_id}: prefix=#{prefix}, bundles=#{bundle_names.join(", ")}"
 
             bundle_names.each do |name|
-              candidate = prefix/name
-              found << candidate if candidate.directory?
+              # Try the receipt's recorded install prefix first (correct for plugins).
+              # Fall back to common install dirs for app packages whose receipt
+              # records a staging path (e.g. tmp/com.example.pkg) rather than the
+              # final location.
+              search_dirs = [prefix] + install_dirs(cask_dir)
+              search_dirs.each do |dir|
+                candidate = dir/name
+                found << candidate if candidate.directory?
+              end
             end
           end
         end

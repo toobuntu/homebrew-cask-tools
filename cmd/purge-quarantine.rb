@@ -109,16 +109,17 @@ module Homebrew
         # standard casks (.app, .component, etc.) that unzip directly to Caskroom.
         # Filter by Contents/Info.plist to exclude non-bundle dirs (.metadata, etc.)
         # that would otherwise short-circuit the fallback tiers for pkg-based casks.
-        bundles = cask_dir.glob("*/*").select { |d|
+        bundles = cask_dir.glob("*/*").select do |d|
           d.directory? && (d/"Contents"/"Info.plist").exist?
-        }
-        odebug "Tier 1 Caskroom bundles for #{token}: #{bundles.map { |b| b.basename.to_s }.join(", ").then { |s| s.empty? ? "(none)" : s }}"
+        end
+        tier1_names = bundles.map { |b| b.basename.to_s }.then { |ns| ns.empty? ? "(none)" : ns.join(", ") }
+        odebug "Tier 1 Caskroom bundles for #{token}: #{tier1_names}"
         return bundles unless bundles.empty?
 
         # Tier 2: live cask definition via the Cask API (CaskLoader). Reads `app`
         # and other Moved artifact targets plus uninstall.delete paths. Works for
         # pkg-based casks (e.g. adobe-acrobat-reader) when the cask is still tapped.
-        odebug "No bundles in Caskroom for #{token}; trying cask definition"
+        ohai "No bundles in Caskroom for #{token}; trying cask definition" if verbose?
         bundles = bundles_from_cask_definition(token)
         return bundles unless bundles.empty?
 
@@ -127,18 +128,19 @@ module Homebrew
         # because the API requires the cask to be present in a tapped repo whereas the
         # .metadata directory persists in the Caskroom even after a cask is removed
         # from all taps.
-        odebug "No bundles from cask definition for #{token}; trying cask metadata"
+        ohai "No bundles from cask definition for #{token}; trying cask metadata" if verbose?
         bundles = bundles_from_cask_metadata(token, cask_dir)
         return bundles unless bundles.empty?
 
-        # Candidate bundle names are used by the lsregister and mdfind tiers.
+        # Candidate bundle names (from metadata app/delete/pkgutil) are used by the
+        # lsregister and mdfind tiers.
         candidate_names = candidate_bundle_names(token, cask_dir)
 
         # Tier 4: macOS Launch Services registry (lsregister). Scans the lsregister
         # dump for `path:` entries whose basename matches a candidate bundle name.
         # Promoted above pkgutil because macOS itself maintains this database and it
         # records the actual installed location regardless of how the app was installed.
-        odebug "No bundles from cask metadata for #{token}; trying lsregister"
+        ohai "No bundles from cask metadata for #{token}; trying lsregister" if verbose?
         bundles = bundles_from_lsregister(candidate_names)
         return bundles unless bundles.empty?
 
@@ -146,7 +148,7 @@ module Homebrew
         # from .metadata JSON via `pkgutil --pkgs`, then filters the registered file
         # list for bundle extensions and searches common install dirs. Requires the
         # package to be registered with macOS (i.e., the receipt is present).
-        odebug "No bundles from lsregister for #{token}; trying pkgutil receipts"
+        ohai "No bundles from lsregister for #{token}; trying pkgutil receipts" if verbose?
         bundles = bundles_from_pkgutil_receipts(token, cask_dir)
         return bundles unless bundles.empty?
 
@@ -154,14 +156,14 @@ module Homebrew
         # in the Caskroom using `pkgutil --bom` + `lsbom -s`, identifies top-level
         # bundle names, then searches common install dirs. Does not require the package
         # to be registered with pkgutil, only that the .pkg file is still present.
-        odebug "No bundles from pkgutil receipts for #{token}; trying pkgutil BOM"
+        ohai "No bundles from pkgutil receipts for #{token}; trying pkgutil BOM" if verbose?
         bundles = bundles_from_pkgutil_bom(token, cask_dir)
         return bundles unless bundles.empty?
 
         # Tier 7: Spotlight / mdfind. Searches the Spotlight metadata index by bundle
         # name. A robust last resort that works as long as Spotlight has indexed the
         # install location.
-        odebug "No bundles from pkgutil BOM for #{token}; trying mdfind"
+        ohai "No bundles from pkgutil BOM for #{token}; trying mdfind" if verbose?
         bundles_from_mdfind(candidate_names)
       end
 
@@ -222,7 +224,29 @@ module Homebrew
                                 .flat_map { |u| Array(u["delete"]) }
                                 .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
                                 .map { |p| File.basename(p) }
-        (app_names + delete_names).uniq.reject(&:empty?)
+
+        # For pkg-based casks (no app stanza), extract bundle names from pkgutil receipts
+        # so that lsregister/mdfind can find bundles installed outside the Caskroom.
+        pkg_patterns = artifacts.flat_map { |a| Array(a["uninstall"]) }
+                                .flat_map { |u| Array(u["pkgutil"]) }
+        pkgutil_names = pkg_patterns.flat_map do |pattern|
+          ids = system_command("/usr/sbin/pkgutil", args: ["--pkgs=#{pattern}"], print_stderr: false)
+          next [] unless ids.exit_status.zero?
+
+          ids.stdout.lines.map(&:chomp).reject(&:empty?).flat_map do |pkg_id|
+            files = system_command("/usr/sbin/pkgutil", args: ["--files", pkg_id], print_stderr: false)
+            next [] unless files.exit_status.zero?
+
+            files.stdout.lines.map(&:chomp).reject(&:empty?)
+                 .filter_map do |rel|
+                   rel.split("/").find do |p|
+                     BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) }
+                   end
+                 end
+          end
+        end
+
+        (app_names + delete_names + pkgutil_names).uniq.reject(&:empty?)
       rescue => e
         odebug "Could not extract candidate bundle names for #{token}: #{e.message}"
         []
@@ -310,13 +334,20 @@ module Homebrew
         return [] unless metadata_dir.directory?
 
         json_files = metadata_dir.glob("**/Casks/#{token}.json")
-        return [] if json_files.empty?
+        if json_files.empty?
+          odebug "No metadata JSON found for #{token} in #{metadata_dir}"
+          return []
+        end
 
         data = JSON.parse(json_files.max_by(&:mtime).read)
         pkg_patterns = Array(data["artifacts"])
                        .flat_map { |a| Array(a["uninstall"]) }
                        .flat_map { |u| Array(u["pkgutil"]) }
-        return [] if pkg_patterns.empty?
+        if pkg_patterns.empty?
+          odebug "No pkgutil patterns in metadata for #{token}"
+          return []
+        end
+        odebug "pkgutil patterns for #{token}: #{pkg_patterns.join(", ")}"
 
         found = T.let([], T::Array[Pathname])
 
@@ -324,7 +355,10 @@ module Homebrew
           pkg_ids = system_command("/usr/sbin/pkgutil",
                                    args:         ["--pkgs=#{pattern}"],
                                    print_stderr: false)
-          next unless pkg_ids.exit_status.zero?
+          unless pkg_ids.exit_status.zero?
+            odebug "pkgutil --pkgs=#{pattern}: no matching receipts"
+            next
+          end
 
           pkg_ids.stdout.lines.map(&:chomp).reject(&:empty?).each do |pkg_id|
             info = system_command("/usr/sbin/pkgutil",
@@ -356,7 +390,10 @@ module Homebrew
                                   end
                                 end
                                 .uniq
-            next if bundle_names.empty?
+            if bundle_names.empty?
+              odebug "pkgutil #{pkg_id}: no bundle-extension files found"
+              next
+            end
 
             odebug "pkgutil #{pkg_id}: prefix=#{prefix}, bundles=#{bundle_names.join(", ")}"
 

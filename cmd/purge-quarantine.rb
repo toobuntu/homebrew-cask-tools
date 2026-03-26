@@ -112,6 +112,7 @@ module Homebrew
         bundles = cask_dir.glob("*/*").select { |d|
           d.directory? && (d/"Contents"/"Info.plist").exist?
         }
+        odebug "Tier 1 Caskroom bundles for #{token}: #{bundles.map { |b| b.basename.to_s }.join(", ").then { |s| s.empty? ? "(none)" : s }}"
         return bundles unless bundles.empty?
 
         # Tier 2: live cask definition via the Cask API (CaskLoader). Reads `app`
@@ -175,12 +176,14 @@ module Homebrew
         moved = artifacts
                 .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Moved) }
                 .map { |a| Pathname(T.unsafe(a).target.to_s) }
+        odebug "Cask definition Moved targets for #{token}: #{moved.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
 
         uninstall_delete = artifacts
                            .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Uninstall) }
                            .flat_map { |a| Array(T.unsafe(a).directives[:delete]) }
                            .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
                            .map { |p| Pathname(p) }
+        odebug "Cask definition uninstall.delete bundles for #{token}: #{uninstall_delete.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
 
         (moved + uninstall_delete).uniq.select(&:directory?)
       rescue => e

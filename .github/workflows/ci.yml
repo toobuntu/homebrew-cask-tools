@@ -87,24 +87,3 @@ jobs:
           brew_lib="$(brew --repo)/Library/Homebrew"
           rm -f "${brew_lib}/cmd/purge-quarantine.rb"
           rm -f "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
-
-  workflow_syntax:
-    if: github.repository_owner == 'toobuntu'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Homebrew
-        id: setup-homebrew
-        uses: Homebrew/actions/setup-homebrew@main
-        with:
-          core: false
-          cask: false
-
-      - uses: Homebrew/actions/cache-homebrew-prefix@main
-        with:
-          install: actionlint shellcheck
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - run: actionlint

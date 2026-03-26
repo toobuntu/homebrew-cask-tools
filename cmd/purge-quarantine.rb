@@ -313,8 +313,6 @@ module Homebrew
 
         found = T.let([], T::Array[Pathname])
 
-        dirs = install_dirs(cask_dir)
-
         pkg_patterns.each do |pattern|
           pkg_ids = system_command("/usr/sbin/pkgutil",
                                    args:         ["--pkgs=#{pattern}"],
@@ -322,14 +320,27 @@ module Homebrew
           next unless pkg_ids.exit_status.zero?
 
           pkg_ids.stdout.lines.map(&:chomp).reject(&:empty?).each do |pkg_id|
+            info = system_command("/usr/sbin/pkgutil",
+                                  args:         ["--pkg-info", pkg_id],
+                                  print_stderr: false)
+            next unless info.exit_status.zero?
+
+            volume = info.stdout.match(/^volume: (.+)$/)&.[](1)&.strip || "/"
+            location = info.stdout.match(/^location: (.+)$/)&.[](1)&.strip
+            next unless location
+
+            # Plugin packages record the actual plugin directory as the install
+            # location (e.g. Library/Audio/Plug-Ins/VST3). Resolve bundle names
+            # from the file list against that prefix. Staging-only paths (e.g.
+            # tmp/…) used by some app pkg scripts no longer exist at runtime and
+            # are skipped gracefully by the directory? check.
+            prefix = Pathname(volume)/location
+
             files = system_command("/usr/sbin/pkgutil",
                                    args:         ["--files", pkg_id],
                                    print_stderr: false)
             next unless files.exit_status.zero?
 
-            # The receipt records where files were staged during installation, not
-            # where postinstall scripts ultimately placed them.  Extract bundle names
-            # from the file list and search install_dirs instead of using the prefix.
             bundle_names = files.stdout.lines
                                 .map(&:chomp)
                                 .reject(&:empty?)
@@ -341,10 +352,8 @@ module Homebrew
                                 .uniq
 
             bundle_names.each do |name|
-              dirs.each do |dir|
-                candidate = dir/name
-                found << candidate if candidate.directory?
-              end
+              candidate = prefix/name
+              found << candidate if candidate.directory?
             end
           end
         end

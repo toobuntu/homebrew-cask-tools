@@ -14,7 +14,7 @@ brew tap toobuntu/cask-tools
 
 Disables macOS's Gatekeeper for the named casks by removing the
 `com.apple.quarantine` and `com.apple.provenance` extended attributes from
-their installed `.app` bundles.
+their installed `.app` and plugin bundles (for example: `.component`, `.colorpicker`, `.saver`, `.vst3`).
 
 ### Usage
 

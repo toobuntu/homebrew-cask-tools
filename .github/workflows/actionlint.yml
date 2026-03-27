@@ -45,7 +45,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: zizmor --format sarif . > results.sarif
+      - run: zizmor --config zizmor.toml --format sarif . > results.sarif
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

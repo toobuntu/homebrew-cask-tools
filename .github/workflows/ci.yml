@@ -46,7 +46,7 @@ jobs:
           restore-keys: macos-style-cache-
 
       - name: brew style
-        run: brew style --fix ./cmd/purge-quarantine.rb
+        run: brew style ./cmd/purge-quarantine.rb
 
   brew_tests:
     if: github.repository_owner == 'toobuntu'

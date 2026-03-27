@@ -49,6 +49,7 @@ To annotate unannotated files, run:
             "$@"
     }
 
+    # reuse thinks .m files are mandoc, so specify c.
     printf '%s\n' "$files" | grep -E '\.(m|h)$'  | annotate --style=c
     printf '%s\n' "$files" | grep -vE '\.(m|h)$' | annotate --fallback-dot-license
   fi

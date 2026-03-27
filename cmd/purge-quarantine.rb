@@ -106,7 +106,7 @@ module Homebrew
         if gatekeeper_disabled && any_failure
           opoo "Gatekeeper partially disabled for #{token}: some attributes could not be removed" unless args.quiet?
         elsif gatekeeper_disabled
-          opoo "macOS's Gatekeeper has been disabled for #{token}" unless args.quiet?
+          ohai "macOS's Gatekeeper has been disabled for #{token}" unless args.quiet?
         elsif !attrs_found
           ohai "No quarantine attributes found for #{token}" unless args.quiet?
         end

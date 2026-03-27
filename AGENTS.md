@@ -31,7 +31,8 @@ Run `brew style --fix --changed && brew typecheck` to verify any file edits befo
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
 - `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the command.
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
-- `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and `actionlint`/`zizmor`.
+- `.github/workflows/ci.yml`: CI — runs `brew style` and `brew tests`.
+- `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 
 ## Key Guidelines
 

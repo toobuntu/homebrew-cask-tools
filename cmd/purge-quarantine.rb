@@ -63,6 +63,7 @@ module Homebrew
         end
 
         gatekeeper_disabled = false
+        any_failure = false
         attrs_found = false
 
         bundles.each do |bundle_path|
@@ -93,12 +94,18 @@ module Homebrew
 
           attrs_present.each do |attr|
             deleted = xattr_deleted?(resolved_path, attr)
-            gatekeeper_disabled = true if deleted
-            verify_xattr_removed(resolved_path, attr) if deleted
+            if deleted
+              gatekeeper_disabled = true
+              verify_xattr_removed(resolved_path, attr)
+            else
+              any_failure = true
+            end
           end
         end
 
-        if gatekeeper_disabled
+        if gatekeeper_disabled && any_failure
+          opoo "Gatekeeper partially disabled for #{token}: some attributes could not be removed" unless args.quiet?
+        elsif gatekeeper_disabled
           opoo "macOS's Gatekeeper has been disabled for #{token}" unless args.quiet?
         elsif !attrs_found
           ohai "No quarantine attributes found for #{token}" unless args.quiet?
@@ -190,7 +197,7 @@ module Homebrew
         odebug "Tier 2: Cask definition uninstall.delete bundles for #{token}: #{uninstall_delete.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
 
         (moved + uninstall_delete).uniq.select(&:directory?)
-      rescue => e
+      rescue StandardError => e
         odebug "Could not load cask definition for #{token}: #{e.message}"
         []
       end
@@ -208,7 +215,7 @@ module Homebrew
           dirs.unshift(Pathname(appdir)) if appdir.present?
         end
         dirs.uniq
-      rescue => e
+      rescue StandardError => e
         odebug "Could not read install dirs from config.json: #{e.message}"
         [Pathname("/Applications"), Pathname(Dir.home)/"Applications"]
       end
@@ -249,7 +256,7 @@ module Homebrew
         end
 
         (app_names + delete_names + pkgutil_names).uniq.reject(&:empty?)
-      rescue => e
+      rescue StandardError => e
         odebug "Could not extract candidate bundle names for #{token}: #{e.message}"
         []
       end
@@ -279,7 +286,7 @@ module Homebrew
         candidates = (name_candidates + uninstall_candidates).uniq
         odebug "Tier 3: Metadata candidates for #{token}: #{candidates.empty? ? "(none)" : candidates.map(&:to_s).join(", ")}"
         candidates.select(&:directory?)
-      rescue => e
+      rescue StandardError => e
         odebug "Could not read cask metadata for #{token}: #{e.message}"
         []
       end
@@ -323,7 +330,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue => e
+      rescue StandardError => e
         odebug "pkgutil BOM lookup failed for #{token}: #{e.message}"
         []
       end
@@ -414,7 +421,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue => e
+      rescue StandardError => e
         odebug "pkgutil receipts lookup failed for #{token}: #{e.message}"
         []
       end
@@ -435,7 +442,7 @@ module Homebrew
         cache_path.dirname.mkpath
         cache_path.write(result.stdout)
         result.stdout
-      rescue => e
+      rescue StandardError => e
         odebug "Tier 4: lsregister dump failed: #{e.message}"
         nil
       end
@@ -461,7 +468,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue => e
+      rescue StandardError => e
         odebug "Tier 4: lsregister lookup failed: #{e.message}"
         []
       end
@@ -489,7 +496,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue => e
+      rescue StandardError => e
         odebug "Tier 7: mdfind lookup failed: #{e.message}"
         []
       end

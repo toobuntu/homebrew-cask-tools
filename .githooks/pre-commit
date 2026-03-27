@@ -1,0 +1,23 @@
+#!/bin/sh
+# Pre-commit hook: lints staged Ruby and workflow files.
+# Enable with: git config core.hooksPath .githooks
+#
+# SPDX-FileCopyrightText: Copyright 2026 toobuntu
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+set -e
+
+staged() { git diff --cached --name-only --diff-filter=ACM | grep -E "$1" || true; }
+
+# Lint staged Ruby files with brew style.
+ruby_files=$(staged '\.rb$')
+if [ -n "$ruby_files" ]; then
+  printf '%s\n' "$ruby_files" | xargs brew style --fix
+  printf '%s\n' "$ruby_files" | xargs git add
+fi
+
+# Lint staged workflow files with actionlint if available.
+workflow_files=$(staged '\.github/workflows/.*\.yml$')
+if [ -n "$workflow_files" ] && command -v actionlint >/dev/null 2>&1; then
+  printf '%s\n' "$workflow_files" | xargs actionlint
+fi

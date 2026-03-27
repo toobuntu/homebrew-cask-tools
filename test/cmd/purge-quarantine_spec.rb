@@ -209,11 +209,7 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
       dump = "------------------------------------------------------------\n" \
              "path:           #{app}\n" \
              "bundle id:      com.example.myapp\n"
-      result = instance_double(SystemCommand::Result,
-                               exit_status: 0, stdout: dump, stderr: "")
-      allow(cmd).to receive(:system_command)
-        .with(described_class::LSREGISTER_PATH, anything)
-        .and_return(result)
+      allow(cmd).to receive(:lsregister_dump).and_return(dump)
 
       found = cmd.send(:bundles_from_lsregister, ["My App.app"])
 

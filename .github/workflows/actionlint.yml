@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: read
     container:
-      image: ghcr.io/homebrew/ubuntu22.04:main
+      image: ghcr.io/homebrew/brew:main
     steps:
       - name: Set up Homebrew
         id: setup-homebrew
@@ -38,26 +38,29 @@ jobs:
           core: false
           cask: false
 
-      - name: Install tools
-        run: brew install actionlint shellcheck zizmor
+      - uses: Homebrew/actions/cache-homebrew-prefix@main
+        with:
+          install: actionlint shellcheck zizmor
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - run: zizmor --config zizmor.toml --format sarif . > results.sarif
+      - run: zizmor --format sarif . > results.sarif
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF file
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         with:
           name: results.sarif
           path: results.sarif
 
-      - name: Set up actionlint matcher
-        run: echo "::add-matcher::.github/actionlint-matcher.json"
+      - name: Set up actionlint
+        run: |
+          cp "$(brew --repository)/.github/actionlint-matcher.json" "$HOME"
+          echo "::add-matcher::$HOME/actionlint-matcher.json"
 
       - run: actionlint
 
@@ -67,8 +70,9 @@ jobs:
     if: >
       always() &&
       !contains(fromJSON('["cancelled", "skipped"]'), needs.workflow_syntax.result) &&
-      !github.event.repository.private
-    runs-on: ubuntu-latest
+      !github.event.repository.private &&
+      github.event_name != 'merge_group'
+    runs-on: ubuntu-slim
     permissions:
       contents: read
       security-events: write

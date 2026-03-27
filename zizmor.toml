@@ -1,4 +1,0 @@
-[rules.unpinned-uses]
-# Homebrew does not publish versioned releases for its reusable actions;
-# @main is the only valid ref for all Homebrew/actions/* steps.
-ignore = ["Homebrew/actions/*"]

@@ -1,9 +1,10 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: "/"
+    directories:
+      - "/"
     schedule:
-      interval: monthly
+      interval: weekly
       day: friday
       time: "08:00"
       timezone: Etc/UTC
@@ -13,3 +14,5 @@ updates:
           - "*"
     allow:
       - dependency-type: all
+    cooldown:
+      default-days: 7

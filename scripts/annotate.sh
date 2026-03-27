@@ -14,7 +14,7 @@ files=$(reuse lint --json \
 
 annotate() {
   xargs reuse annotate \
-    --copyright="toobuntu" \
+    --copyright="Todd Schulman" \
     --merge-copyrights \
     --license="GPL-3.0-or-later OR BSD-2-Clause" \
     --copyright-prefix=spdx-string \

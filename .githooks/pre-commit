@@ -1,0 +1,58 @@
+#!/bin/sh
+# Pre-commit hook: lints staged Ruby and workflow files; checks REUSE compliance.
+# Enable with: git config core.hooksPath .githooks
+
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+set -e
+
+staged() { git diff --cached --name-only --diff-filter=ACM | grep -E "$1" || true; }
+
+# Lint staged Ruby files with brew style and re-stage any auto-fixed files.
+ruby_files=$(staged '\.rb$')
+if [ -n "$ruby_files" ]; then
+  brew style --fix --changed
+  git diff --name-only -- "*.rb" | xargs -r git add
+fi
+
+# Lint staged workflow files with actionlint if available.
+workflow_files=$(staged '\.github/workflows/.*\.yml$')
+if [ -n "$workflow_files" ]; then
+  if command -v actionlint >/dev/null 2>&1; then
+    printf '%s\n' "$workflow_files" | xargs actionlint
+  else
+    echo "warning: actionlint not found — skipping workflow lint (brew install actionlint)"
+  fi
+fi
+
+# REUSE compliance check.
+if ! reuse lint --quiet; then
+  reuse lint
+  cat >&2 << 'HINT'
+
+To annotate unannotated files, run:
+
+  files=$(reuse lint --json \
+    | jq -r '.non_compliant
+      | add(.missing_copyright_info, .missing_licensing_info)
+      | unique[]')
+
+  if [ -n "$files" ]; then
+    annotate() {
+        xargs -r reuse annotate \
+            --copyright="Todd Schulman" \
+            --merge-copyrights \
+            --license=GPL-3.0-or-later \
+            --copyright-prefix=spdx-string \
+            "$@"
+    }
+
+    # reuse thinks .m files are mandoc, so specify c.
+    printf '%s\n' "$files" | grep -E '\.(m|h)$'  | annotate --style=c
+    printf '%s\n' "$files" | grep -vE '\.(m|h)$' | annotate --fallback-dot-license
+  fi
+HINT
+  exit 1
+fi

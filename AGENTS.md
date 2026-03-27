@@ -1,26 +1,20 @@
-# Agent Instructions for Homebrew/brew
+# Agent Instructions for toobuntu/homebrew-cask-tools
 
-Most importantly, run `./bin/brew lgtm` to verify any file edits before prompting for input to run all style checks and tests.
+This repository provides Homebrew external tap commands, currently `brew purge-quarantine`.
+Code quality and style should be at a level suitable for potential inclusion in Homebrew.
 
-This is a Ruby based repository with Bash scripts for faster execution.
-It is primarily responsible for providing the `brew` command for the Homebrew package manager.
-Please follow these guidelines when contributing:
-
-When running commands in this repository, use `./bin/brew` (not a system `brew` on `PATH`).
+Run `brew style --fix --changed && brew typecheck` to verify any file edits before committing.
 
 ## Code Standards
 
 ### Required Before Each Commit
 
-- Run `./bin/brew typecheck` to verify types are declared correctly using Sorbet.
-  Individual files/directories cannot be checked.
-  `./bin/brew typecheck` is fast enough to just be run globally every time.
-- Run `./bin/brew style --fix --changed` to lint code formatting using RuboCop.
-  Individual files can be checked/fixed by passing them as arguments e.g. `./bin/brew style --fix Library/Homebrew/cmd/reinstall.rb`
-- Run `./bin/brew tests --online  --changed` to ensure that RSpec unit tests are passing (although some online tests may be flaky so can be ignored if they pass on a rerun).
-  Individual test files can be passed with `--only` e.g. to test `Library/Homebrew/cmd/reinstall.rb` with `Library/Homebrew/test/cmd/reinstall_spec.rb` run `./bin/brew tests --only=cmd/reinstall`.
-- Shortcut: `./bin/brew lgtm --online` runs all of the required checks above in one command.
-- All of the above can be run via the Homebrew MCP Server (launch with `./bin/brew mcp-server`).
+- Run `brew typecheck` to verify types are declared correctly using Sorbet.
+- Run `brew style --fix --changed` to lint code formatting using RuboCop.
+  Individual files can be checked with `brew style --fix path/to/file.rb`.
+- Run `brew tests --only=cmd/purge-quarantine` to ensure RSpec unit tests pass.
+  Requires the cmd and spec to be hardlinked into `$(brew --repo)/Library/Homebrew/` first — use `scripts/run-tests.sh`.
+- All of the above can be run via the Homebrew MCP Server (launch with `brew mcp-server`).
 
 ### Development Flow
 
@@ -33,16 +27,12 @@ When running commands in this repository, use `./bin/brew` (not a system `brew` 
 
 ## Repository Structure
 
-- `bin/brew`: Homebrew's `brew` command main Bash entry point script
-- `completions/`: Generated shell (`bash`/`fish`/`zsh`) completion files. Don't edit directly, regenerate with `./bin/brew generate-man-completions`
-- `Library/Homebrew/`: Homebrew's core Ruby (with a little bash) logic.
-- `Library/Homebrew/bundle/`: Homebrew's `brew bundle` command.
-- `Library/Homebrew/cask/`: Homebrew's Cask classes and DSL.
-- `Library/Homebrew/extend/os/`: Homebrew's OS-specific (i.e. macOS or Linux) class extension logic.
-- `Library/Homebrew/formula.rb`: Homebrew's Formula class and DSL.
-- `docs/`: Documentation for Homebrew users, contributors and maintainers. Consult these for best practices and help.
-- `manpages/`: Generated `man` documentation files. Don't edit directly, regenerate with `./bin/brew generate-man-completions`
-- `package/`: Files to generate the macOS `.pkg` file.
+- `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
+  File name has no `brew-` prefix — Homebrew tap commands use this convention.
+- `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the command.
+- `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
+- `.github/workflows/ci.yml`: CI — runs `brew style` and `brew tests`.
+- `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 
 ## Key Guidelines
 
@@ -50,8 +40,12 @@ When running commands in this repository, use `./bin/brew` (not a system `brew` 
 2. Maintain existing code structure and organisation.
 3. Write unit tests for new functionality.
 4. Document public APIs and complex logic.
-5. Suggest changes to the `docs/` folder when appropriate
+5. Suggest changes to the `docs/` folder when appropriate (create it if needed).
 6. Follow software principles such as DRY and YAGNI.
 7. Keep diffs as minimal as possible.
 8. Prefer shelling out via `HOMEBREW_BREW_FILE` instead of requiring `cmd/` or `dev-cmd` when composing brew commands.
 9. Inline new or existing methods as methods or local variables unless they are reused 2+ times or needed for unit tests.
+10. Use Sorbet `sig` type signatures and `# typed: strict` for all non-spec Ruby files.
+11. Never use `# typed: strict` in RSpec `*_spec.rb` files.
+12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` (not `:cask` — crashes for deprecated casks).
+13. `include SystemCommand::Mixin` (top-level constant, not `Homebrew::SystemCommand::Mixin`).

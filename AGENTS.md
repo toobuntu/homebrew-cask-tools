@@ -7,7 +7,7 @@ Run `brew style --fix --changed && brew typecheck` to verify any file edits befo
 
 ## Homebrew in the Copilot Coding Agent Sandbox
 
-`brew` is installed at `/home/linuxbrew/.linuxbrew/bin/brew` (via `.github/copilot-setup-steps.yml`)
+`brew` is installed at `/home/linuxbrew/.linuxbrew/bin/brew` (via `.github/workflows/copilot-setup-steps.yml`)
 but is **not on `PATH`** by default. Either:
 
 - run `eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"` once per shell session, or
@@ -15,7 +15,7 @@ but is **not on `PATH`** by default. Either:
 
 The cellar is empty (`core: false, cask: false`), but `brew style`, `brew typecheck`,
 `brew tests`, and `brew mcp-server` all work because they only need the Homebrew runtime
-and bundler gems (cached by `copilot-setup-steps.yml`).
+and bundler gems (cached by `.github/workflows/copilot-setup-steps.yml`).
 
 ## Code Standards
 
@@ -47,7 +47,7 @@ and bundler gems (cached by `copilot-setup-steps.yml`).
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
 - `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
-- `.github/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.
+- `.github/workflows/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.
 
 ## MCP Server Configuration
 
@@ -61,7 +61,7 @@ It is configured differently per client:
 | GitHub Copilot coding agent | Repository Settings → Copilot → Coding agent → MCP configuration |
 
 For GitHub Copilot coding agent, add the following JSON in the repository's Copilot settings.
-`brew` is available (but not on `PATH`) because `.github/copilot-setup-steps.yml` runs `Homebrew/actions/setup-homebrew`.
+`brew` is available (but not on `PATH`) because `.github/workflows/copilot-setup-steps.yml` runs `Homebrew/actions/setup-homebrew`.
 
 ```json
 {

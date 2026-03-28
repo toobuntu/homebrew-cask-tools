@@ -1,0 +1,34 @@
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - run: brew install-bundler-gems --groups=all
+
+      # install Homebrew formulae we might need
+      - uses: Homebrew/actions/cache-homebrew-prefix@main
+        with:
+          install: shellcheck shfmt gh gnu-tar subversion curl
+          workflow-key: copilot-setup-steps
+
+      # brew tests doesn't like world writable directories
+      - run: sudo chmod -R g-w,o-w /home/linuxbrew/.linuxbrew/Homebrew

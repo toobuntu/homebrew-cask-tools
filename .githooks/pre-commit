@@ -17,16 +17,19 @@ if [ -n "$ruby_files" ]; then
   git diff --name-only -- "*.rb" | xargs -r git add
 fi
 
-# Lint staged shell files with shellcheck, shfmt, and ksh -n; re-stage any auto-fixed files.
+# Lint staged shell files with shellcheck and shfmt; re-stage any auto-fixed files.
+# Also run ksh -n for syntax checking if ksh is available (standard on macOS).
 shell_files=$(staged '\.(sh)$|^\.githooks/')
 if [ -n "$shell_files" ]; then
-  if command -v shfmt >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1 && command -v ksh >/dev/null 2>&1; then
+  if command -v shfmt >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1; then
     printf '%s\n' "$shell_files" | xargs shfmt --indent 2 --simplify --case-indent --write
     git diff --name-only -- "*.sh" ".githooks/*" | xargs -r git add
     printf '%s\n' "$shell_files" | xargs shellcheck
-    printf '%s\n' "$shell_files" | xargs ksh -n
+    if command -v ksh >/dev/null 2>&1; then
+      printf '%s\n' "$shell_files" | xargs ksh -n
+    fi
   else
-    echo "warning: shfmt/shellcheck/ksh not found — skipping shell lint (brew install shfmt shellcheck ksh)"
+    echo "warning: shfmt/shellcheck not found — skipping shell lint (brew install shfmt shellcheck)"
   fi
 fi
 

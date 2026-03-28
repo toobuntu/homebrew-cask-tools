@@ -33,6 +33,35 @@ Run `brew style --fix --changed && brew typecheck` to verify any file edits befo
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
 - `.github/workflows/ci.yml`: CI — runs `brew style` and `brew tests`.
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
+- `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
+- `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
+
+## MCP Server Configuration
+
+The Homebrew MCP Server (`brew mcp-server`) provides Homebrew tools to AI coding agents.
+It is configured differently per client:
+
+| Client | Config location |
+|--------|-----------------|
+| Claude Code | `.mcp.json` (in this repo) |
+| VS Code | `.vscode/mcp.json` (in this repo) |
+| GitHub Copilot coding agent | Repository Settings → Copilot → Coding agent → MCP configuration |
+
+For GitHub Copilot coding agent, add the following JSON in the repository's Copilot settings.
+`brew` is available because `.github/copilot-setup-steps.yml` runs `Homebrew/actions/setup-homebrew`.
+
+```json
+{
+  "mcpServers": {
+    "Homebrew": {
+      "type": "local",
+      "command": "brew",
+      "args": ["mcp-server"],
+      "tools": ["*"]
+    }
+  }
+}
+```
 
 ## Key Guidelines
 

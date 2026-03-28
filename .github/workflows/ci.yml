@@ -48,6 +48,32 @@ jobs:
       - name: brew style
         run: brew style --changed
 
+  shell_style:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/homebrew/brew:main
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - uses: Homebrew/actions/cache-homebrew-prefix@main
+        with:
+          install: shellcheck shfmt
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: shell style
+        run: |
+          shfmt --indent 2 --simplify --case-indent --diff scripts/ .githooks/
+          shellcheck scripts/annotate.sh scripts/run-tests.sh .githooks/pre-commit
+
   brew_tests:
     if: github.repository_owner == 'toobuntu'
     runs-on: macos-latest

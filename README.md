@@ -31,4 +31,4 @@ Please use this command only with software you trust.
 
 ## License
 
-GPL-3.0-or-later and [BSD-2-Clause](LICENSE) Copyright 2006 Todd Schulman
+GPL-3.0-or-later or [BSD-2-Clause](LICENSE) Copyright 2026 Todd Schulman

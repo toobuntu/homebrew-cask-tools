@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook: lints staged Ruby and workflow files; checks REUSE compliance.
+# Pre-commit hook: lints staged Ruby, shell, and workflow files; checks REUSE compliance.
 # Enable with: git config core.hooksPath .githooks
 
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
@@ -15,6 +15,18 @@ ruby_files=$(staged '\.rb$')
 if [ -n "$ruby_files" ]; then
   brew style --fix --changed
   git diff --name-only -- "*.rb" | xargs -r git add
+fi
+
+# Lint staged shell files with shellcheck and shfmt; re-stage any auto-fixed files.
+shell_files=$(staged '\.(sh)$|^\.githooks/')
+if [ -n "$shell_files" ]; then
+  if command -v shfmt >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1; then
+    printf '%s\n' "$shell_files" | xargs shfmt --indent 2 --simplify --case-indent --write
+    git diff --name-only -- "*.sh" ".githooks/*" | xargs -r git add
+    printf '%s\n' "$shell_files" | xargs shellcheck
+  else
+    echo "warning: shfmt/shellcheck not found — skipping shell lint (brew install shfmt shellcheck)"
+  fi
 fi
 
 # Lint staged workflow files with actionlint if available.
@@ -44,7 +56,7 @@ To annotate unannotated files, run:
         xargs -r reuse annotate \
             --copyright="Todd Schulman" \
             --merge-copyrights \
-            --license=GPL-3.0-or-later \
+            --license="GPL-3.0-or-later OR BSD-2-Clause" \
             --copyright-prefix=spdx-string \
             "$@"
     }

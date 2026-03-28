@@ -5,6 +5,18 @@ Code quality and style should be at a level suitable for potential inclusion in 
 
 Run `brew style --fix --changed && brew typecheck` to verify any file edits before committing.
 
+## Homebrew in the Copilot Coding Agent Sandbox
+
+`brew` is installed at `/home/linuxbrew/.linuxbrew/bin/brew` (via `.github/copilot-setup-steps.yml`)
+but is **not on `PATH`** by default. Either:
+
+- run `eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"` once per shell session, or
+- use the full path `/home/linuxbrew/.linuxbrew/bin/brew` directly.
+
+The cellar is empty (`core: false, cask: false`), but `brew style`, `brew typecheck`,
+`brew tests`, and `brew mcp-server` all work because they only need the Homebrew runtime
+and bundler gems (cached by `copilot-setup-steps.yml`).
+
 ## Code Standards
 
 ### Required Before Each Commit
@@ -35,6 +47,7 @@ Run `brew style --fix --changed && brew typecheck` to verify any file edits befo
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
 - `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
+- `.github/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.
 
 ## MCP Server Configuration
 
@@ -48,14 +61,14 @@ It is configured differently per client:
 | GitHub Copilot coding agent | Repository Settings → Copilot → Coding agent → MCP configuration |
 
 For GitHub Copilot coding agent, add the following JSON in the repository's Copilot settings.
-`brew` is available because `.github/copilot-setup-steps.yml` runs `Homebrew/actions/setup-homebrew`.
+`brew` is available (but not on `PATH`) because `.github/copilot-setup-steps.yml` runs `Homebrew/actions/setup-homebrew`.
 
 ```json
 {
   "mcpServers": {
     "Homebrew": {
       "type": "local",
-      "command": "brew",
+      "command": "/home/linuxbrew/.linuxbrew/bin/brew",
       "args": ["mcp-server"],
       "tools": ["*"]
     }

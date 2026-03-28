@@ -59,7 +59,7 @@ WARNING
 
 # Check that source files exist.
 for src in "${CMD_SRC}" "${SPEC_SRC}"; do
-  if [[ ! -f "${src}" ]]; then
+  if [[ ! -f ${src} ]]; then
     echo "Error: source file not found: ${src}" >&2
     exit 1
   fi
@@ -73,7 +73,7 @@ echo "==> Hardlinking files into Homebrew repository..." >&2
 for pair in "${CMD_SRC}:${CMD_DST}" "${SPEC_SRC}:${SPEC_DST}"; do
   src="${pair%%:*}"
   dst="${pair##*:}"
-  [[ -e "${dst}" ]] && echo "==> (replacing existing ${dst##*/})" >&2
+  [[ -e ${dst} ]] && echo "==> (replacing existing ${dst##*/})" >&2
   ln -f "${src}" "${dst}"
 done
 

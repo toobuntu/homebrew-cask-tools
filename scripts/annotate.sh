@@ -7,8 +7,8 @@
 
 set -e
 
-files=$(reuse lint --json \
-  | jq -r '.non_compliant | (.missing_copyright_info + .missing_licensing_info) | unique[]') || true
+files=$(reuse lint --json |
+  jq -r '.non_compliant | (.missing_copyright_info + .missing_licensing_info) | unique[]') || true
 
 [ -z "$files" ] && exit 0
 

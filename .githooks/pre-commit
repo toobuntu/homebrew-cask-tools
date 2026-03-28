@@ -30,7 +30,7 @@ fi
 # REUSE compliance check.
 if ! reuse lint --quiet; then
   reuse lint
-  cat >&2 << 'HINT'
+  cat >&2 <<'HINT'
 
 To annotate unannotated files, run:
 

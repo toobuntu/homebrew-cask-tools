@@ -39,7 +39,7 @@ PURGE_SPEC_SRC="${TAP_DIR}/test/cmd/purge-quarantine_spec.rb"
 PURGE_CMD_DST="${HOMEBREW_LIB}/cmd/purge-quarantine.rb"
 PURGE_SPEC_DST="${HOMEBREW_LIB}/test/cmd/purge-quarantine_spec.rb"
 
-GENTC_CMD_SRC="${TAP_DIR}/cmd/generate-tap-man-completions.rb"
+GENTC_CMD_SRC="${TAP_DIR}/dev-cmd/generate-tap-man-completions.rb"
 GENTC_SPEC_SRC="${TAP_DIR}/test/cmd/generate-tap-man-completions_spec.rb"
 GENTC_CMD_DST="${HOMEBREW_LIB}/cmd/generate-tap-man-completions.rb"
 GENTC_SPEC_DST="${HOMEBREW_LIB}/test/cmd/generate-tap-man-completions_spec.rb"

@@ -33,7 +33,8 @@ stanzas, `uninstall.delete` paths, and `pkgutil` receipt file lists.
 ## Shell completions
 
 Shell completion files live in `completions/{bash,zsh,fish}/` and are generated
-by `cmd/generate-tap-man-completions.rb` (`brew generate-tap-man-completions`).
+by `dev-cmd/generate-tap-man-completions.rb` (`brew generate-tap-man-completions`).
+This is a developer-only command that requires `HOMEBREW_DEVELOPER=1`.
 
 - **ZSH**: Defines `_brew_purge_quarantine()`. ZSH's `_brew` dispatcher automatically calls
   `_brew_<command>` functions, so this provides full `brew purge-quarantine <TAB>` completion.

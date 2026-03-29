@@ -7,7 +7,7 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 # Agent Instructions for toobuntu/homebrew-cask-tools
 
 This repository provides Homebrew external tap commands: `brew purge-quarantine` and
-`brew generate-tap-man-completions`.
+`brew generate-tap-man-completions` (developer-only).
 Code quality and style should be at a level suitable for potential inclusion in Homebrew.
 
 Run `brew style --fix --changed && brew typecheck` to verify any file edits before committing.
@@ -56,7 +56,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `Homebrew/style` (MCP) — equivalent to `brew style --fix --changed`
 - `Homebrew/typecheck` (MCP) — equivalent to `brew typecheck`
 - `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine` or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
-  (requires the cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
+  (requires the cmd/dev-cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 
 ### Development Flow
 
@@ -71,9 +71,12 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
-- `cmd/generate-tap-man-completions.rb`: External tap command implementing `brew generate-tap-man-completions`.
+- `dev-cmd/generate-tap-man-completions.rb`: Developer-only command implementing `brew generate-tap-man-completions`.
   Generates Bash, ZSH, and Fish completion files for all commands in `cmd/`, Ronn man
   page sources (`.1.md`), and compiled roff (`.1`) into `manpages/`. Accepts `--tap=<user>/<repo>` to override the auto-detected tap.
+  Lives in `dev-cmd/` to avoid confusing casual users; requires `HOMEBREW_DEVELOPER=1`.
+  Homebrew does not support external `dev-cmd/` in taps, so a `cmd/` symlink is needed
+  locally (see `.gitignore`). CI hardlinks the file directly into Homebrew's `cmd/` directory.
 - `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
 - `test/cmd/generate-tap-man-completions_spec.rb`: RSpec spec for the `generate-tap-man-completions` command.
 - `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-man-completions`
@@ -82,6 +85,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   Regenerate with `brew generate-tap-man-completions` after any `cmd_args` change.
   CI verifies sources are not out of date.
 - `docs/`: Project documentation, including architecture notes (see `docs/architecture.md`).
+- `.gitignore`: Ignores the `cmd/generate-tap-man-completions.rb` symlink (see dev-cmd above).
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
 - `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this

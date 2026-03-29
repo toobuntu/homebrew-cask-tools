@@ -39,6 +39,11 @@ module Homebrew
 
       sig { override.void }
       def run
+        unless Homebrew::EnvConfig.developer?
+          raise UsageError, "`brew generate-tap-man-completions` is a developer command. " \
+                            "Set HOMEBREW_DEVELOPER=1 to enable it."
+        end
+
         tap = resolve_tap
         tap_path = tap.path
         bash_dir = tap_path/"completions/bash"
@@ -55,7 +60,7 @@ module Homebrew
         require "manpages/parser/ronn"
         require "manpages/converter/roff"
 
-        Pathname.glob(tap_path/"cmd/*.rb").sort.each do |cmd_path|
+        Pathname.glob(tap_path/"cmd/*.rb").reject(&:symlink?).sort.each do |cmd_path|
           command = cmd_path.basename(".rb").to_s
           write_if_changed bash_dir/"brew-#{command}",      bash_content(command)
           write_if_changed zsh_dir/"_brew-#{command}",      zsh_content(command)

@@ -13,9 +13,13 @@ This file provides technical notes for AI agents and contributors working in thi
 This is a Homebrew external tap hosting `brew purge-quarantine` and `brew generate-tap-man-completions`.
 `brew purge-quarantine` removes macOS quarantine (`com.apple.quarantine`) and provenance
 (`com.apple.provenance`) extended attributes from installed cask bundles to satisfy Gatekeeper.
-`brew generate-tap-man-completions` generates shell completions and Ronn man page sources for commands in `cmd/`.
+`brew generate-tap-man-completions` is a developer-only command (requires `HOMEBREW_DEVELOPER=1`)
+that generates shell completions and Ronn man page sources for commands in `cmd/`.
 
-Commands are implemented as Ruby files in `cmd/` using Homebrew's `AbstractCommand` infrastructure.
+Commands are implemented as Ruby files in `cmd/` (user-facing) and `dev-cmd/` (developer-only)
+using Homebrew's `AbstractCommand` infrastructure. Since Homebrew does not support external
+`dev-cmd/` in third-party taps, a local symlink from `cmd/` to `dev-cmd/` is needed for
+development use (the symlink is gitignored). CI hardlinks the file directly.
 
 ## Commands
 

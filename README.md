@@ -35,16 +35,28 @@ Please use this command only with software you trust.
 
 ---
 
-## `brew generate-tap-man-completions`
+## `brew generate-tap-man-completions` (developer only)
 
-Generates Bash, ZSH, and Fish shell completions and Ronn man pages for all
-commands in this tap. Primarily used to keep the pre-committed `completions/`
+A developer-only command that generates Bash, ZSH, and Fish shell completions and
+Ronn man pages for all user-facing commands in this tap. Requires `HOMEBREW_DEVELOPER=1`.
+Primarily used by maintainers to keep the pre-committed `completions/`
 and `manpages/` directories up to date.
+
+### Setup
+
+Homebrew does not load `dev-cmd/` from third-party taps automatically.
+To use this command locally, create a symlink:
+
+```sh
+ln -s ../dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb
+```
+
+The symlink is already listed in `.gitignore`.
 
 ### Usage
 
 ```sh
-brew generate-tap-man-completions [--tap=<user>/<repo>] [--no-exit-code]
+HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions [--tap=<user>/<repo>] [--no-exit-code]
 ```
 
 ---

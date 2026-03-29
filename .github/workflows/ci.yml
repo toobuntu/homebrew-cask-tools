@@ -107,7 +107,7 @@ jobs:
           mkdir -p "${brew_lib}/cmd" "${brew_lib}/test/cmd"
           ln -f cmd/purge-quarantine.rb "${brew_lib}/cmd/purge-quarantine.rb"
           ln -f test/cmd/purge-quarantine_spec.rb "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
-          ln -f cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+          ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
           ln -f test/cmd/generate-tap-man-completions_spec.rb "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
 
       - name: brew tests
@@ -151,7 +151,7 @@ jobs:
         run: |
           brew_lib="$(brew --repo)/Library/Homebrew"
           mkdir -p "${brew_lib}/cmd"
-          ln -f cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+          ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
 
       - name: Check completions and man pages are up to date
         run: brew generate-tap-man-completions --no-exit-code

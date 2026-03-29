@@ -6,7 +6,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
-require_relative "../../cmd/generate-tap-man-completions"
+require_relative "../../dev-cmd/generate-tap-man-completions"
 require "tmpdir"
 
 RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do

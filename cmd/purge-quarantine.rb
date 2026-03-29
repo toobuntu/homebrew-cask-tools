@@ -24,7 +24,7 @@ module Homebrew
           `.saver`, `.webplugin`, and other artifact types).
         EOS
 
-        named_args :installed_cask
+        named_args min: 1
       end
 
       BUNDLE_EXTENSIONS = T.let(
@@ -64,7 +64,11 @@ module Homebrew
         bundles = quarantinable_bundles_for(token, cask_dir)
 
         if bundles.empty?
-          opoo "No quarantinable bundles found for #{token}" unless args.quiet?
+          unless args.quiet?
+            opoo "No quarantinable bundles found for #{token}."
+            opoo "If this cask was removed from all taps, try re-running with --verbose to see " \
+                 "which discovery tiers were attempted."
+          end
           return
         end
 

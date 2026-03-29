@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
-# typed: true
+# typed: true # rubocop:disable Sorbet/StrictSigil
 # frozen_string_literal: true
 
 require "fileutils"

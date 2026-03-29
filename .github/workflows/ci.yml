@@ -107,9 +107,13 @@ jobs:
           mkdir -p "${brew_lib}/cmd" "${brew_lib}/test/cmd"
           ln -f cmd/purge-quarantine.rb "${brew_lib}/cmd/purge-quarantine.rb"
           ln -f test/cmd/purge-quarantine_spec.rb "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
+          ln -f cmd/generate-tap-completions.rb "${brew_lib}/cmd/generate-tap-completions.rb"
+          ln -f test/cmd/generate-tap-completions_spec.rb "${brew_lib}/test/cmd/generate-tap-completions_spec.rb"
 
       - name: brew tests
-        run: brew tests --only=cmd/purge-quarantine
+        run: |
+          brew tests --only=cmd/purge-quarantine
+          brew tests --only=cmd/generate-tap-completions
 
       - name: Unlink tap files from Homebrew
         if: always()
@@ -117,3 +121,44 @@ jobs:
           brew_lib="$(brew --repo)/Library/Homebrew"
           rm -f "${brew_lib}/cmd/purge-quarantine.rb"
           rm -f "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
+          rm -f "${brew_lib}/cmd/generate-tap-completions.rb"
+          rm -f "${brew_lib}/test/cmd/generate-tap-completions_spec.rb"
+
+  completions:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: macos-latest
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - name: Cache Homebrew Bundler RubyGems
+        id: cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ runner.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ runner.os }}-rubygems-
+
+      - name: Install Homebrew Bundler RubyGems
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install-bundler-gems
+
+      - name: Link generate-tap-completions into Homebrew for brew run
+        run: |
+          brew_lib="$(brew --repo)/Library/Homebrew"
+          mkdir -p "${brew_lib}/cmd"
+          ln -f cmd/generate-tap-completions.rb "${brew_lib}/cmd/generate-tap-completions.rb"
+
+      - name: Check completions are up to date
+        run: brew generate-tap-completions --no-exit-code
+
+      - name: Fail if completions are out of date
+        run: git diff --exit-code completions/
+
+      - name: Unlink generate-tap-completions from Homebrew
+        if: always()
+        run: rm -f "$(brew --repo)/Library/Homebrew/cmd/generate-tap-completions.rb"

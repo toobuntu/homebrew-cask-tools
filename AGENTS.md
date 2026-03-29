@@ -54,7 +54,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `Homebrew/style` (MCP) — equivalent to `brew style --fix --changed`
 - `Homebrew/typecheck` (MCP) — equivalent to `brew typecheck`
-- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine` — equivalent to `brew tests --only=cmd/purge-quarantine`
+- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine` or `--only=cmd/generate-tap-completions` — equivalent to `brew tests --only=cmd/<file>`
   (requires the cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 
 ### Development Flow
@@ -70,9 +70,16 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
-- `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the command.
+- `cmd/generate-tap-completions.rb`: External tap command implementing `brew generate-tap-completions`.
+  Generates Bash, ZSH, and Fish completion files for all commands in `cmd/`.
+  Accepts `--tap=<user>/<repo>` to override the auto-detected tap.
+- `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
+- `test/cmd/generate-tap-completions_spec.rb`: RSpec spec for the `generate-tap-completions` command.
+- `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-completions`
+  after any `cmd_args` change. CI verifies these are not out of date.
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
-- `.github/workflows/ci.yml`: CI — runs `brew style` and `brew tests`.
+  Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
+- `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and checks completions are current.
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
 - `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
@@ -134,7 +141,7 @@ The `shell_style` CI job uses a Docker container (`ghcr.io/homebrew/brew:main`).
 9. Inline new or existing methods as methods or local variables unless they are reused 2+ times or needed for unit tests.
 10. Use Sorbet `sig` type signatures and `# typed: strict` for all non-spec Ruby files.
 11. Never use `# typed: strict` in RSpec `*_spec.rb` files.
-12. Named arguments in `AbstractCommand` subclasses: use `named_args :installed_cask` for cask commands — this enables tab completion for installed cask tokens. Note: validates against tapped sources at parse time, so it fails for casks that have been removed from all taps; use `named_args min: 1` only when handling deprecated/removed casks is a hard requirement.
+12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` for cask commands — this allows purging quarantine from casks that have been removed from all taps (a primary use case as Homebrew deprecates Gatekeeper-failing casks). Tab completion for installed casks is provided via the pre-generated files in `completions/`. Note: `named_args :installed_cask` validates against tapped sources at parse time and must not be used for commands that handle deprecated or removed casks.
 13. `include SystemCommand::Mixin` (top-level constant, not `Homebrew::SystemCommand::Mixin`).
 14. All implementations must be compatible with macOS (see macOS Compatibility section above). The agent runs on Ubuntu, but users run this tap on macOS. Avoid GNU-only CLI extensions; use POSIX/BSD-compatible syntax.
 15. Do **not** hand-write SPDX/REUSE headers. Instead run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout the repo.

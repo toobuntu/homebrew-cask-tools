@@ -21,10 +21,12 @@ annotate() {
     "$@"
 }
 
-# Fish completion files must keep their generated content intact, so annotate
+# Fish completion and man page files must keep their generated content intact, so annotate
 # them with a .license sidecar instead of inline SPDX comment headers.
 fish_files=$(printf '%s\n' "${files}" | grep '\.fish$' || true)
-other_files=$(printf '%s\n' "${files}" | grep -v '\.fish$' || true)
+man_files=$(printf '%s\n' "${files}" | grep '\.\(1\|1\.md\)$' || true)
+other_files=$(printf '%s\n' "${files}" | grep -v '\.\(fish\|1\|1\.md\)$' || true)
 
 [[ -n "${fish_files}" ]] && printf '%s\n' "${fish_files}" | annotate --force-dot-license
+[[ -n "${man_files}" ]] && printf '%s\n' "${man_files}" | annotate --force-dot-license
 [[ -n "${other_files}" ]] && printf '%s\n' "${other_files}" | annotate --fallback-dot-license

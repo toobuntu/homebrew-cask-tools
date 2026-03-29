@@ -76,7 +76,7 @@ jobs:
       - name: shell style
         run: |
           shfmt --indent 2 --simplify --case-indent --diff scripts/ .githooks/
-          shellcheck scripts/annotate.sh scripts/run-tests.sh .githooks/pre-commit
+          shellcheck scripts/annotate.sh scripts/generate-man-pages.sh scripts/run-tests.sh .githooks/pre-commit
 
   brew_tests:
     if: github.repository_owner == 'toobuntu'
@@ -153,11 +153,11 @@ jobs:
           mkdir -p "${brew_lib}/cmd"
           ln -f cmd/generate-tap-completions.rb "${brew_lib}/cmd/generate-tap-completions.rb"
 
-      - name: Check completions are up to date
+      - name: Check completions and man pages are up to date
         run: brew generate-tap-completions --no-exit-code
 
-      - name: Fail if completions are out of date
-        run: git diff --exit-code completions/
+      - name: Fail if completions or man page sources are out of date
+        run: git diff --exit-code completions/ manpages/
 
       - name: Unlink generate-tap-completions from Homebrew
         if: always()

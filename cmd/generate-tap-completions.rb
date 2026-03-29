@@ -6,24 +6,26 @@
 # frozen_string_literal: true
 
 require "abstract_command"
+require "cli/parser"
 require "completions"
 require "system_command"
 require "tap"
 
 module Homebrew
   module Cmd
-    # Generates shell completions for a tap's external commands.
+    # Generates shell completions and man pages for a tap's external commands.
     class GenerateTapCompletions < AbstractCommand
       include SystemCommand::Mixin
 
       cmd_args do
         usage_banner "`generate-tap-completions` [`--tap=`<tap>] [`--no-exit-code`]"
         description <<~EOS
-          Generate shell completions for a tap's commands.
+          Generate shell completions and man pages for a tap's commands.
 
           Reads each `*.rb` file in `cmd/` and writes Bash, ZSH, and Fish completion
-          files into `completions/`. The tap is auto-detected from the location of
-          this command file. Use `--tap` to override.
+          files into `completions/`, and Ronn man page sources into `manpages/`. The tap
+          is auto-detected from the location of this command file. Use `--tap` to override.
+          Compile man page sources to roff with `scripts/generate-man-pages.sh`.
         EOS
 
         flag   "--tap=",
@@ -42,21 +44,29 @@ module Homebrew
         bash_dir = tap_path/"completions/bash"
         zsh_dir  = tap_path/"completions/zsh"
         fish_dir = tap_path/"completions/fish"
-        [bash_dir, zsh_dir, fish_dir].each(&:mkpath)
+        man_dir  = tap_path/"manpages"
+        [bash_dir, zsh_dir, fish_dir, man_dir].each(&:mkpath)
 
         Pathname.glob(tap_path/"cmd/*.rb").sort.each do |cmd_path|
           command = cmd_path.basename(".rb").to_s
           write_if_changed bash_dir/"brew-#{command}",      bash_content(command)
           write_if_changed zsh_dir/"_brew-#{command}",      zsh_content(command)
           write_if_changed fish_dir/"brew-#{command}.fish", fish_content(command)
+
+          md = man_page_markdown(command, cmd_path)
+          write_if_changed man_dir/"brew-#{command}.1.md", md if md
         end
 
         diff = system_command "git", args: [
           "-C", tap_path,
-          "diff", "--shortstat", "--patch", "--exit-code", "completions"
+          "diff", "--shortstat", "--patch", "--exit-code", "completions", "manpages"
         ]
 
-        message = diff.status.success? ? "No changes to completions." : "Completions updated."
+        message = if diff.status.success?
+          "No changes to completions or man pages."
+        else
+          "Completions and man pages updated."
+        end
         if diff.status.success? && !args.no_exit_code?
           ofail message
         else
@@ -105,6 +115,44 @@ module Homebrew
         func = Completions.generate_fish_subcommand_completion(command) ||
                "__fish_brew_complete_cmd '#{command}' '#{command}'\n"
         HEADER + func
+      end
+
+      sig { params(command: String, cmd_path: Pathname).returns(T.nilable(String)) }
+      def man_page_markdown(command, cmd_path)
+        parser = Homebrew::CLI::Parser.from_cmd_path(cmd_path)
+        return unless parser
+
+        banner = parser.usage_banner_text
+        return unless banner
+
+        # usage_banner_text contains synopsis followed by description, separated by \n\n
+        parts = banner.strip.split(/\n\n+/, 2)
+        synopsis = parts[0]&.strip
+        return unless synopsis
+
+        description = parts[1]&.strip
+
+        # Use description's first line as the title suffix when it is a complete sentence
+        lines = description&.lines
+        first_line = lines&.first&.strip
+        short_desc = first_line&.end_with?(".") ? first_line.delete_suffix(".") : nil
+
+        title_cmd = "brew-#{command}"
+        title_line = short_desc ? "#{title_cmd}(1) -- #{short_desc}" : "#{title_cmd}(1)"
+
+        md = "#{title_line}\n#{"=" * title_line.length}\n\n"
+        md << "## SYNOPSIS\n\n`brew` #{synopsis}\n\n"
+        md << "## DESCRIPTION\n\n#{description}\n\n" if description
+        md << "## OPTIONS\n\n"
+        parser.processed_options.each do |opt|
+          short, long, desc, hidden = opt
+          next if hidden
+
+          opt_parts = [short && "`#{short}`", long && "`#{long}`"].compact
+          md << "#{opt_parts.join(", ")}\n\n: #{desc}\n\n"
+        end
+
+        md.freeze
       end
     end
   end

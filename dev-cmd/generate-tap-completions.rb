@@ -48,10 +48,11 @@ module Homebrew
           "diff", "--shortstat", "--patch", "--exit-code", "completions"
         ]
 
-        if diff.status.success?
-          ofail "No changes to completions." unless args.no_exit_code?
+        message = diff.status.success? ? "No changes to completions." : "Completions updated."
+        if diff.status.success? && !args.no_exit_code?
+          ofail message
         else
-          puts "Completions updated."
+          puts message
         end
       end
 

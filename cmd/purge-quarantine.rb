@@ -38,6 +38,8 @@ module Homebrew
 
       sig { override.void }
       def run
+        raise UsageError, "`brew purge-quarantine` is only supported on macOS." unless OS.mac?
+
         args.named.each do |token|
           purge_quarantine_for_cask(token)
         end

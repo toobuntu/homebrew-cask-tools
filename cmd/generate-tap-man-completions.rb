@@ -47,7 +47,8 @@ module Homebrew
         man_dir  = tap_path/"manpages"
         [bash_dir, zsh_dir, fish_dir, man_dir].each(&:mkpath)
 
-        # rubocop:disable Homebrew/InstallBundlerGems -- kramdown is needed to compile Ronn sources to roff
+        # kramdown (man bundler group) is needed to compile Ronn sources to roff
+        # rubocop:disable Homebrew/InstallBundlerGems
         Homebrew.install_bundler_gems!(groups: ["man"])
         # rubocop:enable Homebrew/InstallBundlerGems
 

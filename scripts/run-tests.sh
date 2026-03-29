@@ -39,10 +39,10 @@ PURGE_SPEC_SRC="${TAP_DIR}/test/cmd/purge-quarantine_spec.rb"
 PURGE_CMD_DST="${HOMEBREW_LIB}/cmd/purge-quarantine.rb"
 PURGE_SPEC_DST="${HOMEBREW_LIB}/test/cmd/purge-quarantine_spec.rb"
 
-GENTC_CMD_SRC="${TAP_DIR}/cmd/generate-tap-completions.rb"
-GENTC_SPEC_SRC="${TAP_DIR}/test/cmd/generate-tap-completions_spec.rb"
-GENTC_CMD_DST="${HOMEBREW_LIB}/cmd/generate-tap-completions.rb"
-GENTC_SPEC_DST="${HOMEBREW_LIB}/test/cmd/generate-tap-completions_spec.rb"
+GENTC_CMD_SRC="${TAP_DIR}/cmd/generate-tap-man-completions.rb"
+GENTC_SPEC_SRC="${TAP_DIR}/test/cmd/generate-tap-man-completions_spec.rb"
+GENTC_CMD_DST="${HOMEBREW_LIB}/cmd/generate-tap-man-completions.rb"
+GENTC_SPEC_DST="${HOMEBREW_LIB}/test/cmd/generate-tap-man-completions_spec.rb"
 
 cleanup() {
   local exit_code=$?
@@ -105,6 +105,6 @@ then
 else
   echo "==> Running: brew tests --only=cmd/purge-quarantine" >&2
   brew tests --only=cmd/purge-quarantine
-  echo "==> Running: brew tests --only=cmd/generate-tap-completions" >&2
-  brew tests --only=cmd/generate-tap-completions
+  echo "==> Running: brew tests --only=cmd/generate-tap-man-completions" >&2
+  brew tests --only=cmd/generate-tap-man-completions
 fi

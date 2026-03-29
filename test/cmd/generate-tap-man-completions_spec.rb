@@ -6,10 +6,10 @@
 # frozen_string_literal: true
 
 require "fileutils"
-require_relative "../../cmd/generate-tap-completions"
+require_relative "../../cmd/generate-tap-man-completions"
 require "tmpdir"
 
-RSpec.describe Homebrew::Cmd::GenerateTapCompletions do
+RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
   subject(:cmd) { described_class.new([]) }
 
   describe "cmd_args" do

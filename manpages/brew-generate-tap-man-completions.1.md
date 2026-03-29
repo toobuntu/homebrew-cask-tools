@@ -1,18 +1,18 @@
-brew-generate-tap-completions(1) -- Generate shell completions and man pages for a tap's commands
-=================================================================================================
+brew-generate-tap-man-completions(1) -- Generate shell completions and man pages for a tap's commands
+=====================================================================================================
 
 ## SYNOPSIS
 
-`brew` `generate-tap-completions` [`--tap=`<tap>] [`--no-exit-code`]
+`brew` `generate-tap-man-completions` [`--tap=`<tap>] [`--no-exit-code`]
 
 ## DESCRIPTION
 
 Generate shell completions and man pages for a tap's commands.
 
 Reads each `*.rb` file in `cmd/` and writes Bash, ZSH, and Fish completion
-files into `completions/`, and Ronn man page sources into `manpages/`. The tap
-is auto-detected from the location of this command file. Use `--tap` to override.
-Compile man page sources to roff with `scripts/generate-man-pages.sh`.
+files into `completions/`, and Ronn man page sources (`.1.md`) and compiled
+roff (`.1`) into `manpages/`. The tap is auto-detected from the location of
+this command file. Use `--tap` to override.
 
 ## OPTIONS
 

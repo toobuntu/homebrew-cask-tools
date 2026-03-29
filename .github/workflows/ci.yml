@@ -76,7 +76,7 @@ jobs:
       - name: shell style
         run: |
           shfmt --indent 2 --simplify --case-indent --diff scripts/ .githooks/
-          shellcheck scripts/annotate.sh scripts/generate-man-pages.sh scripts/run-tests.sh .githooks/pre-commit
+          shellcheck scripts/annotate.sh scripts/run-tests.sh .githooks/pre-commit
 
   brew_tests:
     if: github.repository_owner == 'toobuntu'
@@ -107,13 +107,13 @@ jobs:
           mkdir -p "${brew_lib}/cmd" "${brew_lib}/test/cmd"
           ln -f cmd/purge-quarantine.rb "${brew_lib}/cmd/purge-quarantine.rb"
           ln -f test/cmd/purge-quarantine_spec.rb "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
-          ln -f cmd/generate-tap-completions.rb "${brew_lib}/cmd/generate-tap-completions.rb"
-          ln -f test/cmd/generate-tap-completions_spec.rb "${brew_lib}/test/cmd/generate-tap-completions_spec.rb"
+          ln -f cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+          ln -f test/cmd/generate-tap-man-completions_spec.rb "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
 
       - name: brew tests
         run: |
           brew tests --only=cmd/purge-quarantine
-          brew tests --only=cmd/generate-tap-completions
+          brew tests --only=cmd/generate-tap-man-completions
 
       - name: Unlink tap files from Homebrew
         if: always()
@@ -121,8 +121,8 @@ jobs:
           brew_lib="$(brew --repo)/Library/Homebrew"
           rm -f "${brew_lib}/cmd/purge-quarantine.rb"
           rm -f "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
-          rm -f "${brew_lib}/cmd/generate-tap-completions.rb"
-          rm -f "${brew_lib}/test/cmd/generate-tap-completions_spec.rb"
+          rm -f "${brew_lib}/cmd/generate-tap-man-completions.rb"
+          rm -f "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
 
   completions:
     if: github.repository_owner == 'toobuntu'
@@ -147,18 +147,18 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: brew install-bundler-gems
 
-      - name: Link generate-tap-completions into Homebrew for brew run
+      - name: Link generate-tap-man-completions into Homebrew for brew run
         run: |
           brew_lib="$(brew --repo)/Library/Homebrew"
           mkdir -p "${brew_lib}/cmd"
-          ln -f cmd/generate-tap-completions.rb "${brew_lib}/cmd/generate-tap-completions.rb"
+          ln -f cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
 
       - name: Check completions and man pages are up to date
-        run: brew generate-tap-completions --no-exit-code
+        run: brew generate-tap-man-completions --no-exit-code
 
       - name: Fail if completions or man page sources are out of date
         run: git diff --exit-code completions/ manpages/
 
-      - name: Unlink generate-tap-completions from Homebrew
+      - name: Unlink generate-tap-man-completions from Homebrew
         if: always()
-        run: rm -f "$(brew --repo)/Library/Homebrew/cmd/generate-tap-completions.rb"
+        run: rm -f "$(brew --repo)/Library/Homebrew/cmd/generate-tap-man-completions.rb"

@@ -1,20 +1,62 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+
+SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+-->
+
 # Agent Instructions for toobuntu/homebrew-cask-tools
 
-This repository provides Homebrew external tap commands, currently `brew purge-quarantine`.
+This repository provides Homebrew external tap commands: `brew purge-quarantine` and
+`brew generate-tap-man-completions` (developer-only).
 Code quality and style should be at a level suitable for potential inclusion in Homebrew.
 
 Run `brew style --fix --changed && brew typecheck` to verify any file edits before committing.
+
+## Homebrew in the Copilot Coding Agent Sandbox
+
+`brew` is installed at `/home/linuxbrew/.linuxbrew/bin/brew` (via `.github/workflows/copilot-setup-steps.yml`)
+but is **not on `PATH`** by default. Either:
+
+- run `eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"` once per shell session, or
+- use the full path `/home/linuxbrew/.linuxbrew/bin/brew` directly.
+
+The cellar is empty (`core: false, cask: false`), but `brew style`, `brew typecheck`,
+`brew tests`, and `brew mcp-server` all work because they only need the Homebrew runtime
+and bundler gems (cached by `.github/workflows/copilot-setup-steps.yml`).
+The following formulae are also pre-installed and available on `PATH`:
+`actionlint`, `reuse`, `pinact`, `zizmor`, `shellcheck`, `shfmt`, `gh`, `gnu-tar`, `subversion`, `curl`.
+
+## macOS Compatibility
+
+The Copilot Coding Agent runs on Ubuntu, but this tap targets macOS end-users. **All
+implementations must be compatible with macOS.** Specifically:
+
+- Use POSIX/BSD-compatible CLI syntax. macOS ships BSD variants of core utilities
+  (`sed`, `awk`, `find`, `xargs`, `date`, `grep`, …); GNU extensions (e.g. `sed -E`
+  with multi-line ranges, `date -d`, `find -printf`) are **not** available by default.
+- Prefer Homebrew-installed tools (e.g. `ggrep`, `gsed`) or POSIX flags that work on both.
+- Shell scripts must be POSIX `sh`-compatible or explicitly target `bash`/`zsh` with the
+  appropriate shebang. Avoid bash-only syntax (e.g. `mapfile`, process substitution) in
+  files with a `#!/bin/sh` shebang.
+- Do not depend on Linux-specific paths (`/proc`, `/sys`) or packages (`apt`, `dpkg`).
+- Ruby code that shells out must use commands available on macOS (e.g. `xattr`, `pkgutil`).
+- When testing locally on the Ubuntu sandbox, be aware that macOS-only paths (Caskroom,
+  `/Applications`, etc.) will not exist; mock or skip those paths in specs.
 
 ## Code Standards
 
 ### Required Before Each Commit
 
-- Run `brew typecheck` to verify types are declared correctly using Sorbet.
-- Run `brew style --fix --changed` to lint code formatting using RuboCop.
-  Individual files can be checked with `brew style --fix path/to/file.rb`.
-- Run `brew tests --only=cmd/purge-quarantine` to ensure RSpec unit tests pass.
-  Requires the cmd and spec to be hardlinked into `$(brew --repo)/Library/Homebrew/` first — use `scripts/run-tests.sh`.
-- All of the above can be run via the Homebrew MCP Server (launch with `brew mcp-server`).
+**Always prefer the Homebrew MCP Server tools** — use `Homebrew/style`, `Homebrew/typecheck`,
+and `Homebrew/tests` from the MCP server rather than running `brew` via the bash tool.
+The bash tool may have restricted network access in the Copilot sandbox; the MCP server
+tools do not require outbound network access for style, typecheck, or test operations because
+the bundler gems are pre-cached. Only fall back to bash if the MCP server is unavailable.
+
+- `Homebrew/style` (MCP) — equivalent to `brew style --fix --changed`
+- `Homebrew/typecheck` (MCP) — equivalent to `brew typecheck`
+- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine` or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
+  (requires the cmd/dev-cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 
 ### Development Flow
 
@@ -29,10 +71,75 @@ Run `brew style --fix --changed && brew typecheck` to verify any file edits befo
 
 - `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
-- `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the command.
+- `dev-cmd/generate-tap-man-completions.rb`: Developer-only command implementing `brew generate-tap-man-completions`.
+  Generates Bash, ZSH, and Fish completion files for all commands in `cmd/`, Ronn man
+  page sources (`.1.md`), and compiled roff (`.1`) into `manpages/`. Accepts `--tap=<user>/<repo>` to override the auto-detected tap.
+  Lives in `dev-cmd/` to avoid confusing casual users; requires `HOMEBREW_DEVELOPER=1`.
+  Homebrew does not support external `dev-cmd/` in taps, so a `cmd/` symlink is needed
+  locally (see `.gitignore`). CI hardlinks the file directly into Homebrew's `cmd/` directory.
+- `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
+- `test/cmd/generate-tap-man-completions_spec.rb`: RSpec spec for the `generate-tap-man-completions` command.
+- `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-man-completions`
+  after any `cmd_args` change. CI verifies these are not out of date.
+- `manpages/`: Pre-generated man page sources (`.1.md`, Ronn format) and compiled roff (`.1`).
+  Regenerate with `brew generate-tap-man-completions` after any `cmd_args` change.
+  CI verifies sources are not out of date.
+- `docs/`: Project documentation, including architecture notes (see `docs/architecture.md`).
+- `.gitignore`: Ignores the `cmd/generate-tap-man-completions.rb` symlink (see dev-cmd above).
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
-- `.github/workflows/ci.yml`: CI — runs `brew style` and `brew tests`.
+  Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
+- `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this
+  instead of hand-writing SPDX headers.
+- `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and checks completions and man page sources are current.
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
+- `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream
+  Homebrew repositories. Uses `yq` for YAML mutations with post-mutation assertions.
+- `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
+- `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
+- `.github/workflows/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.
+
+## MCP Server Configuration
+
+The Homebrew MCP Server (`brew mcp-server`) provides Homebrew tools to AI coding agents.
+It is configured differently per client:
+
+| Client | Config location |
+|--------|-----------------|
+| Claude Code | `.mcp.json` (in this repo) |
+| VS Code | `.vscode/mcp.json` (in this repo) |
+| GitHub Copilot coding agent | Repository Settings → Copilot → Coding agent → MCP configuration |
+
+For GitHub Copilot coding agent, add the following JSON in the repository's Copilot settings.
+`brew` is available (but not on `PATH`) because `.github/workflows/copilot-setup-steps.yml` runs `Homebrew/actions/setup-homebrew`.
+
+```json
+{
+  "mcpServers": {
+    "Homebrew": {
+      "type": "local",
+      "command": "/home/linuxbrew/.linuxbrew/bin/brew",
+      "args": ["mcp-server"],
+      "tools": ["*"]
+    }
+  }
+}
+```
+
+## CI and `setup-homebrew` Container Behaviour
+
+The `shell_style` CI job uses a Docker container (`ghcr.io/homebrew/brew:main`). The
+`Homebrew/actions/setup-homebrew` action behaves differently in containers vs. bare runners:
+
+- **Bare runner** (e.g. `style`, `brew_tests` jobs): `setup-homebrew` detects it is NOT
+  in a container, moves the tap's content to `$GITHUB_WORKSPACE`, and creates a symlink
+  from the tap path back to `$GITHUB_WORKSPACE`. This makes the tap available in the default
+  working directory without a separate checkout step.
+- **Container** (e.g. `shell_style` job): `setup-homebrew` detects `/.dockerenv` or
+  `actions_job|docker` in `/proc/1/cgroup`, sets `HOMEBREW_IN_CONTAINER=1`, uses `setfacl`
+  to fix permissions on runner-mounted directories, and **skips the `GITHUB_WORKSPACE`
+  symlinking step entirely** (see `if [[ -z "${HOMEBREW_IN_CONTAINER-}" ]]` in the action
+  source). The repo must therefore be checked out with an explicit `actions/checkout` step,
+  which is why the `shell_style` job has one and the others do not.
 
 ## Key Guidelines
 
@@ -47,5 +154,9 @@ Run `brew style --fix --changed && brew typecheck` to verify any file edits befo
 9. Inline new or existing methods as methods or local variables unless they are reused 2+ times or needed for unit tests.
 10. Use Sorbet `sig` type signatures and `# typed: strict` for all non-spec Ruby files.
 11. Never use `# typed: strict` in RSpec `*_spec.rb` files.
-12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` (not `:cask` — crashes for deprecated casks).
+12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` for cask commands — this allows purging quarantine from casks that have been removed from all taps (a primary use case as Homebrew deprecates Gatekeeper-failing casks). Tab completion for installed casks is provided via the pre-generated files in `completions/`. Note: `named_args :installed_cask` validates against tapped sources at parse time and must not be used for commands that handle deprecated or removed casks.
 13. `include SystemCommand::Mixin` (top-level constant, not `Homebrew::SystemCommand::Mixin`).
+14. All implementations must be compatible with macOS (see macOS Compatibility section above). The agent runs on Ubuntu, but users run this tap on macOS. Avoid GNU-only CLI extensions; use POSIX/BSD-compatible syntax.
+15. Do **not** hand-write SPDX/REUSE headers. Instead run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout the repo. `annotate.sh` special-cases `.fish` completion files and man page (`.1`, `.1.md`) files to use `.license` sidecars (`--force-dot-license`) so their generated content is never altered.
+16. **Output ordering**: `ohai`/`oh1` write to `$stdout`; `opoo`/`ofail` write to `$stderr`. These streams may interleave when both are used in the same code path (e.g., `ohai` inside a loop followed by an `opoo`). When multiple related warning lines must stay together, emit them as a single `opoo <<~EOS … EOS` call rather than separate `opoo` calls, so both lines go to stderr atomically.
+17. **Man pages**: `brew generate-tap-man-completions` generates Ronn man page sources (`manpages/brew-<command>.1.md`) and compiled roff (`manpages/brew-<command>.1`) from each command's `cmd_args`. Regenerate after any `cmd_args` change; CI verifies sources are current.

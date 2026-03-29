@@ -1,0 +1,123 @@
+From 894a3d23ac Mon Sep 17 00:00:00 2001
+From: <author>
+Date: Sun, 29 Mar 2026 19:34:46 +0000
+Subject: [PATCH] commands,tap,brew: support dev-cmd/ in third-party taps
+
+Homebrew currently only loads external commands from cmd/ in third-party
+taps. dev-cmd/ directories in taps are ignored, preventing tap authors
+from shipping developer-only commands that should not appear to casual users.
+
+This patch adds support for tap dev-cmd/ directories, gated on
+HOMEBREW_DEVELOPER=1:
+
+- Commands.tap_dev_cmd_directories: new method returning Pathname.glob
+  for */*/dev-cmd directories.
+- external_ruby_v2_cmd_path, external_ruby_cmd_path, external_cmd_path:
+  search tap_dev_cmd_directories in addition to tap_cmd_directories when
+  HOMEBREW_DEVELOPER is set.
+- external_commands: include dev-cmd commands in listing when developer.
+- brew.rb: append tap_dev_cmd_directories to PATH when developer.
+- Tap#developer_command_dir, Tap#developer_command_files: new accessors.
+
+---
+--- a/Library/Homebrew/commands.rb
++++ b/Library/Homebrew/commands.rb
+@@ -85,19 +85,25 @@
+   # Ruby commands which can be `require`d without being run.
+   sig { params(cmd: String).returns(T.nilable(Pathname)) }
+   def self.external_ruby_v2_cmd_path(cmd)
+-    path = which("#{cmd}.rb", tap_cmd_directories)
++    dirs = tap_cmd_directories
++    dirs += tap_dev_cmd_directories if Homebrew::EnvConfig.developer?
++    path = which("#{cmd}.rb", dirs)
+     path if Homebrew.require?(path)
+   end
+ 
+   # Ruby commands which are run by being `require`d.
+   sig { params(cmd: String).returns(T.nilable(Pathname)) }
+   def self.external_ruby_cmd_path(cmd)
+-    which("brew-#{cmd}.rb", PATH.new(ENV.fetch("PATH")).append(tap_cmd_directories))
++    dirs = tap_cmd_directories
++    dirs += tap_dev_cmd_directories if Homebrew::EnvConfig.developer?
++    which("brew-#{cmd}.rb", PATH.new(ENV.fetch("PATH")).append(dirs))
+   end
+ 
+   sig { params(cmd: String).returns(T.nilable(Pathname)) }
+   def self.external_cmd_path(cmd)
+-    which("brew-#{cmd}", PATH.new(ENV.fetch("PATH")).append(tap_cmd_directories))
++    dirs = tap_cmd_directories
++    dirs += tap_dev_cmd_directories if Homebrew::EnvConfig.developer?
++    which("brew-#{cmd}", PATH.new(ENV.fetch("PATH")).append(dirs))
+   end
+ 
+   sig { params(cmd: String).returns(T.nilable(Pathname)) }
+@@ -126,6 +132,12 @@
+     Pathname.glob HOMEBREW_TAP_DIRECTORY/"*/*/cmd"
+   end
+ 
++  # An array of all tap dev-cmd directory {Pathname}s.
++  sig { returns(T::Array[Pathname]) }
++  def self.tap_dev_cmd_directories
++    Pathname.glob HOMEBREW_TAP_DIRECTORY/"*/*/dev-cmd"
++  end
++
+   sig { returns(T::Array[Pathname]) }
+   def self.internal_commands_paths
+     find_commands HOMEBREW_CMD_PATH
+@@ -160,7 +172,9 @@
+ 
+   sig { returns(T::Array[String]) }
+   def self.external_commands
+-    tap_cmd_directories.flat_map do |path|
++    dirs = tap_cmd_directories
++    dirs += tap_dev_cmd_directories if Homebrew::EnvConfig.developer?
++    dirs.flat_map do |path|
+       find_commands(path).select(&:executable?)
+                          .map { |basename| basename_without_extension(basename) }
+                          .map { |p| p.to_s.delete_prefix("brew-").strip }
+--- a/Library/Homebrew/brew.rb
++++ b/Library/Homebrew/brew.rb
+@@ -74,6 +74,7 @@
+     unless internal_cmd
+       # Add contributed commands to PATH before checking.
+       homebrew_path.append(Commands.tap_cmd_directories)
++      homebrew_path.append(Commands.tap_dev_cmd_directories) if Homebrew::EnvConfig.developer?
+ 
+       # External commands expect a normal PATH
+       ENV["PATH"] = homebrew_path.to_s
+--- a/Library/Homebrew/tap.rb
++++ b/Library/Homebrew/tap.rb
+@@ -249,6 +249,8 @@
+ 
+     @command_dir = nil
+     @command_files = nil
++    @developer_command_dir = nil
++    @developer_command_files = nil
+ 
+     @tap_migrations = nil
+     @reverse_tap_migrations_renames = nil
+@@ -907,6 +909,24 @@
+       else
+         []
+       end,
++      T.nilable(T::Array[Pathname]),
++    )
++  end
++
++  sig { returns(Pathname) }
++  def developer_command_dir
++    @developer_command_dir ||= T.let(path/"dev-cmd", T.nilable(Pathname))
++  end
++
++  # An array of all developer command files of this {Tap}.
++  sig { returns(T::Array[Pathname]) }
++  def developer_command_files
++    @developer_command_files ||= T.let(
++      if developer_command_dir.directory?
++        Commands.find_commands(developer_command_dir)
++      else
++        []
++      end,
+       T.nilable(T::Array[Pathname]),
+     )
+   end

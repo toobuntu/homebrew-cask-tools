@@ -2,6 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
-# Symlink to dev-cmd/ — Homebrew only loads external commands from cmd/,
-# so this symlink is needed locally but should not be committed.
+# Hardlink to dev-cmd/ — Homebrew only loads external commands from cmd/,
+# so this hardlink is needed locally but should not be committed.
 cmd/generate-tap-man-completions.rb

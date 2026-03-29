@@ -60,7 +60,8 @@ module Homebrew
         require "manpages/parser/ronn"
         require "manpages/converter/roff"
 
-        Pathname.glob(tap_path/"cmd/*.rb").reject(&:symlink?).sort.each do |cmd_path|
+        dev_cmd_names = Pathname.glob(tap_path/"dev-cmd/*.rb").map { |p| p.basename(".rb").to_s }.to_set
+        Pathname.glob(tap_path/"cmd/*.rb").reject { |p| dev_cmd_names.include?(p.basename(".rb").to_s) }.sort.each do |cmd_path|
           command = cmd_path.basename(".rb").to_s
           write_if_changed bash_dir/"brew-#{command}",      bash_content(command)
           write_if_changed zsh_dir/"_brew-#{command}",      zsh_content(command)

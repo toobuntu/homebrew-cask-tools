@@ -18,8 +18,15 @@ that generates shell completions and Ronn man page sources for commands in `cmd/
 
 Commands are implemented as Ruby files in `cmd/` (user-facing) and `dev-cmd/` (developer-only)
 using Homebrew's `AbstractCommand` infrastructure. Since Homebrew does not support external
-`dev-cmd/` in third-party taps, a local symlink from `cmd/` to `dev-cmd/` is needed for
-development use (the symlink is gitignored). CI hardlinks the file directly.
+`dev-cmd/` in third-party taps, a local hardlink from `cmd/` to `dev-cmd/` is needed for
+development use (the hardlink is gitignored). Symlinks do not work — use a hardlink:
+
+```sh
+ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb
+```
+
+Re-run after any `git pull` that updates `dev-cmd/generate-tap-man-completions.rb`, as git
+may recreate the file as a new inode leaving the hardlink stale. CI hardlinks the file directly.
 
 ## Commands
 

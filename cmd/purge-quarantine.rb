@@ -65,9 +65,10 @@ module Homebrew
 
         if bundles.empty?
           unless args.quiet?
-            opoo "No quarantinable bundles found for #{token}."
-            opoo "If this cask was removed from all taps, try re-running with --verbose to see " \
-                 "which discovery tiers were attempted."
+            opoo <<~EOS
+              No quarantinable bundles found for #{token}.
+              If this cask was removed from all taps, try re-running with --verbose to see which discovery tiers were attempted.
+            EOS
           end
           return
         end

@@ -10,7 +10,7 @@ set -e
 files=$(reuse lint --json |
   jq -r '.non_compliant | (.missing_copyright_info + .missing_licensing_info) | unique[]') || true
 
-[ -z "$files" ] && exit 0
+[[ -z "${files}" ]] && exit 0
 
 annotate() {
   xargs reuse annotate \
@@ -21,4 +21,10 @@ annotate() {
     "$@"
 }
 
-printf '%s\n' "$files" | annotate --fallback-dot-license
+# Fish completion files must keep their generated content intact, so annotate
+# them with a .license sidecar instead of inline SPDX comment headers.
+fish_files=$(printf '%s\n' "${files}" | grep '\.fish$' || true)
+other_files=$(printf '%s\n' "${files}" | grep -v '\.fish$' || true)
+
+[[ -n "${fish_files}" ]] && printf '%s\n' "${fish_files}" | annotate --force-dot-license
+[[ -n "${other_files}" ]] && printf '%s\n' "${other_files}" | annotate --fallback-dot-license

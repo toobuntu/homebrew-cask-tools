@@ -6,7 +6,8 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
 # Agent Instructions for toobuntu/homebrew-cask-tools
 
-This repository provides Homebrew external tap commands, currently `brew purge-quarantine`.
+This repository provides Homebrew external tap commands: `brew purge-quarantine` and
+`brew generate-tap-man-completions`.
 Code quality and style should be at a level suitable for potential inclusion in Homebrew.
 
 Run `brew style --fix --changed && brew typecheck` to verify any file edits before committing.

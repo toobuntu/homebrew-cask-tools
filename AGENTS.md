@@ -81,10 +81,6 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   Regenerate sources with `brew generate-tap-completions` after any `cmd_args` change.
   Compile roff with `scripts/generate-man-pages.sh`. CI verifies sources are not out of date.
 - `scripts/generate-man-pages.sh`: Compiles Ronn markdown sources in `manpages/` to roff (`.1`) using Homebrew's internal Ronn converter. Requires `brew ruby` with the `man` bundler group.
-- `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
-- `test/cmd/generate-tap-completions_spec.rb`: RSpec spec for the `generate-tap-completions` command.
-- `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-completions`
-  after any `cmd_args` change. CI verifies these are not out of date.
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
 - `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and checks completions and man page sources are current.

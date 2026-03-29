@@ -125,7 +125,7 @@ module Homebrew
         banner = parser.usage_banner_text
         return unless banner
 
-        # usage_banner_text contains synopsis followed by description, separated by \n\n
+        # usage_banner_text contains synopsis followed by description, separated by one or more blank lines
         parts = banner.strip.split(/\n\n+/, 2)
         synopsis = parts[0]&.strip
         return unless synopsis

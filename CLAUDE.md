@@ -78,7 +78,20 @@ In CI (`brew_tests` job in `.github/workflows/ci.yml`) the same hardlink approac
 - `T.unsafe()` for Sorbet strict typing with dynamic Cask artifact APIs.
 - `include SystemCommand::Mixin` (top-level, not `Homebrew::SystemCommand::Mixin`).
 
+## macOS compatibility
+
+The Copilot Coding Agent runs on Ubuntu, but this tap targets macOS end-users. All
+implementations must be compatible with macOS:
+
+- Use POSIX/BSD-compatible CLI syntax — macOS ships BSD variants of `sed`, `awk`, `find`,
+  `xargs`, `date`, `grep`, etc.; GNU extensions are not available by default on macOS.
+- Do not rely on Linux-specific paths (`/proc`, `/sys`) or package managers (`apt`, `dpkg`).
+- Ruby code that shells out should use commands available on macOS (`xattr`, `pkgutil`, etc.).
+- Shell scripts with `#!/bin/sh` must be POSIX-compatible; scripts with `#!/usr/bin/env bash`
+  may use bash features but must avoid GNU coreutil extensions.
+
 ## REUSE / licensing
 
 Files must carry SPDX headers. Run `scripts/annotate.sh` to annotate non-compliant files.
-Install the `reuse` tool with `pip install reuse`.
+The `reuse` tool is pre-installed in the Copilot sandbox; do **not** hand-write SPDX headers —
+run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout.

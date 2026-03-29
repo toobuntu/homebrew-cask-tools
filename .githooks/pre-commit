@@ -33,13 +33,18 @@ if [ -n "$shell_files" ]; then
   fi
 fi
 
-# Lint staged workflow files with actionlint if available.
+# Lint staged workflow files with actionlint and zizmor if available.
 workflow_files=$(staged '\.github/workflows/.*\.yml$')
 if [ -n "$workflow_files" ]; then
   if command -v actionlint >/dev/null 2>&1; then
     printf '%s\n' "$workflow_files" | xargs actionlint
   else
     echo "warning: actionlint not found — skipping workflow lint (brew install actionlint)"
+  fi
+  if command -v zizmor >/dev/null 2>&1; then
+    zizmor .
+  else
+    echo "warning: zizmor not found — skipping workflow security scan (brew install zizmor)"
   fi
 fi
 

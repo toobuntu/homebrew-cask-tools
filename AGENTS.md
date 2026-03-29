@@ -16,6 +16,25 @@ but is **not on `PATH`** by default. Either:
 The cellar is empty (`core: false, cask: false`), but `brew style`, `brew typecheck`,
 `brew tests`, and `brew mcp-server` all work because they only need the Homebrew runtime
 and bundler gems (cached by `.github/workflows/copilot-setup-steps.yml`).
+The following formulae are also pre-installed and available on `PATH`:
+`actionlint`, `reuse`, `pinact`, `zizmor`, `shellcheck`, `shfmt`, `gh`, `gnu-tar`, `subversion`, `curl`.
+
+## macOS Compatibility
+
+The Copilot Coding Agent runs on Ubuntu, but this tap targets macOS end-users. **All
+implementations must be compatible with macOS.** Specifically:
+
+- Use POSIX/BSD-compatible CLI syntax. macOS ships BSD variants of core utilities
+  (`sed`, `awk`, `find`, `xargs`, `date`, `grep`, …); GNU extensions (e.g. `sed -E`
+  with multi-line ranges, `date -d`, `find -printf`) are **not** available by default.
+- Prefer Homebrew-installed tools (e.g. `ggrep`, `gsed`) or POSIX flags that work on both.
+- Shell scripts must be POSIX `sh`-compatible or explicitly target `bash`/`zsh` with the
+  appropriate shebang. Avoid bash-only syntax (e.g. `mapfile`, process substitution) in
+  files with a `#!/bin/sh` shebang.
+- Do not depend on Linux-specific paths (`/proc`, `/sys`) or packages (`apt`, `dpkg`).
+- Ruby code that shells out must use commands available on macOS (e.g. `xattr`, `pkgutil`).
+- When testing locally on the Ubuntu sandbox, be aware that macOS-only paths (Caskroom,
+  `/Applications`, etc.) will not exist; mock or skip those paths in specs.
 
 ## Code Standards
 
@@ -91,3 +110,5 @@ For GitHub Copilot coding agent, add the following JSON in the repository's Copi
 11. Never use `# typed: strict` in RSpec `*_spec.rb` files.
 12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` (not `:cask` — crashes for deprecated casks).
 13. `include SystemCommand::Mixin` (top-level constant, not `Homebrew::SystemCommand::Mixin`).
+14. All implementations must be compatible with macOS (see macOS Compatibility section above). The agent runs on Ubuntu, but users run this tap on macOS. Avoid GNU-only CLI extensions; use POSIX/BSD-compatible syntax.
+15. Do **not** hand-write SPDX/REUSE headers. Instead run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout the repo.

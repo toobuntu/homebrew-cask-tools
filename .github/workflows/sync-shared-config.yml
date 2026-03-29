@@ -49,7 +49,7 @@ jobs:
           curl -fsSL \
             "https://raw.githubusercontent.com/Homebrew/brew/main/.github/workflows/copilot-setup-steps.yml" \
             -o .github/workflows/copilot-setup-steps.yml
-          sed -i 's/core: true/core: false/; s/cask: true/cask: false/' \
+          sed -i 's/core: true/core: false/; s/cask: true/cask: false/; s/install: /install: actionlint reuse pinact zizmor /' \
             .github/workflows/copilot-setup-steps.yml
 
       - name: Check for changes
@@ -83,5 +83,5 @@ jobs:
             gh pr create \
               --head sync-shared-config \
               --title "Synchronize shared configuration" \
-              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github), \`.github/actionlint-matcher.json\` from [Homebrew/brew](https://github.com/Homebrew/brew), and \`.github/workflows/copilot-setup-steps.yml\` from [Homebrew/brew](https://github.com/Homebrew/brew) (with \`core\`/\`cask\` set to \`false\` for tap use)."
+              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github), \`.github/actionlint-matcher.json\` from [Homebrew/brew](https://github.com/Homebrew/brew), and \`.github/workflows/copilot-setup-steps.yml\` from [Homebrew/brew](https://github.com/Homebrew/brew) (with \`core\`/\`cask\` set to \`false\` and \`actionlint reuse pinact zizmor\` prepended to the install list for tap use)."
           fi

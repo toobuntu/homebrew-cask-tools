@@ -81,10 +81,15 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `manpages/`: Pre-generated man page sources (`.1.md`, Ronn format) and compiled roff (`.1`).
   Regenerate with `brew generate-tap-man-completions` after any `cmd_args` change.
   CI verifies sources are not out of date.
+- `docs/`: Project documentation, including architecture notes (see `docs/architecture.md`).
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
+- `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this
+  instead of hand-writing SPDX headers.
 - `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and checks completions and man page sources are current.
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
+- `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream
+  Homebrew repositories. Uses `yq` for YAML mutations with post-mutation assertions.
 - `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
 - `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
 - `.github/workflows/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.

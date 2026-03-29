@@ -35,6 +35,20 @@ Please use this command only with software you trust.
 
 ---
 
+## `brew generate-tap-man-completions`
+
+Generates Bash, ZSH, and Fish shell completions and Ronn man pages for all
+commands in this tap. Primarily used to keep the pre-committed `completions/`
+and `manpages/` directories up to date.
+
+### Usage
+
+```sh
+brew generate-tap-man-completions [--tap=<user>/<repo>] [--no-exit-code]
+```
+
+---
+
 ## License
 
 GPL-3.0-or-later or [BSD-2-Clause](LICENSE) Copyright 2026 Todd Schulman

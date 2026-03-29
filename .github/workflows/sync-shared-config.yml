@@ -53,8 +53,24 @@ jobs:
           curl -fsSL \
             "https://raw.githubusercontent.com/Homebrew/brew/main/.github/workflows/copilot-setup-steps.yml" \
             -o .github/workflows/copilot-setup-steps.yml
-          sed -i 's/core: true/core: false/; s/cask: true/cask: false/; s/install: /install: actionlint reuse pinact zizmor /' \
-            .github/workflows/copilot-setup-steps.yml
+
+      - name: Apply tap-specific mutations to copilot-setup-steps.yml
+        run: |
+          f=".github/workflows/copilot-setup-steps.yml"
+          yq -i '(.jobs.copilot-setup-steps.steps[] |
+            select(.uses // "" | test("Homebrew/actions/setup-homebrew@"))).with.core = false' "$f"
+          yq -i '(.jobs.copilot-setup-steps.steps[] |
+            select(.uses // "" | test("Homebrew/actions/setup-homebrew@"))).with.cask = false' "$f"
+          yq -i '(.jobs.copilot-setup-steps.steps[] |
+            select(.uses // "" | test("Homebrew/actions/cache-homebrew-prefix@"))).with.install |=
+            "actionlint reuse pinact zizmor " + .' "$f"
+
+      - name: Verify mutations were applied
+        run: |
+          f=".github/workflows/copilot-setup-steps.yml"
+          grep -q 'core: false' "$f" || { echo "::error::core not set to false"; exit 1; }
+          grep -q 'cask: false' "$f" || { echo "::error::cask not set to false"; exit 1; }
+          grep -q 'actionlint' "$f"  || { echo "::error::extra tools not prepended to install list"; exit 1; }
 
       - name: Check for changes
         id: changes

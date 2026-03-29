@@ -55,25 +55,8 @@ if ! reuse lint --quiet; then
 
 To annotate unannotated files, run:
 
-  files=$(reuse lint --json \
-    | jq -r '.non_compliant
-      | add(.missing_copyright_info, .missing_licensing_info)
-      | unique[]')
+  scripts/annotate.sh
 
-  if [ -n "$files" ]; then
-    annotate() {
-        xargs -r reuse annotate \
-            --copyright="Todd Schulman" \
-            --merge-copyrights \
-            --license="GPL-3.0-or-later OR BSD-2-Clause" \
-            --copyright-prefix=spdx-string \
-            "$@"
-    }
-
-    # reuse thinks .m files are mandoc, so specify c.
-    printf '%s\n' "$files" | grep -E '\.(m|h)$'  | annotate --style=c
-    printf '%s\n' "$files" | grep -vE '\.(m|h)$' | annotate --fallback-dot-license
-  fi
 HINT
   exit 1
 fi

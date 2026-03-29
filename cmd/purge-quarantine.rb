@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
 # typed: strict
 # frozen_string_literal: true
 
@@ -20,7 +24,7 @@ module Homebrew
           `.saver`, `.webplugin`, and other artifact types).
         EOS
 
-        named_args min: 1
+        named_args :installed_cask
       end
 
       BUNDLE_EXTENSIONS = T.let(
@@ -189,17 +193,22 @@ module Homebrew
         moved = artifacts
                 .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Moved) }
                 .map { |a| Pathname(T.unsafe(a).target.to_s) }
-        odebug "Tier 2: Cask definition Moved targets for #{token}: #{moved.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
+        odebug "Tier 2: Cask definition Moved targets for #{token}: #{moved.join(", ").then do |s|
+          s.empty? ? "(none)" : s
+        end}"
 
         uninstall_delete = artifacts
                            .select { |a| T.unsafe(a).is_a?(Cask::Artifact::Uninstall) }
                            .flat_map { |a| Array(T.unsafe(a).directives[:delete]) }
                            .select { |p| BUNDLE_EXTENSIONS.any? { |ext| p.downcase.end_with?(ext) } }
                            .map { |p| Pathname(p) }
-        odebug "Tier 2: Cask definition uninstall.delete bundles for #{token}: #{uninstall_delete.map(&:to_s).join(", ").then { |s| s.empty? ? "(none)" : s }}"
+        uninstall_delete_debug = uninstall_delete.join(", ").then do |s|
+          s.empty? ? "(none)" : s
+        end
+        odebug "Tier 2: Cask definition uninstall.delete bundles for #{token}: #{uninstall_delete_debug}"
 
         (moved + uninstall_delete).uniq.select(&:directory?)
-      rescue StandardError => e
+      rescue => e
         odebug "Could not load cask definition for #{token}: #{e.message}"
         []
       end
@@ -217,7 +226,7 @@ module Homebrew
           dirs.unshift(Pathname(appdir)) if appdir.present?
         end
         dirs.uniq
-      rescue StandardError => e
+      rescue => e
         odebug "Could not read install dirs from config.json: #{e.message}"
         [Pathname("/Applications"), Pathname(Dir.home)/"Applications"]
       end
@@ -258,7 +267,7 @@ module Homebrew
         end
 
         (app_names + delete_names + pkgutil_names).uniq.reject(&:empty?)
-      rescue StandardError => e
+      rescue => e
         odebug "Could not extract candidate bundle names for #{token}: #{e.message}"
         []
       end
@@ -286,9 +295,9 @@ module Homebrew
                                         .map { |p| Pathname(p) }
 
         candidates = (name_candidates + uninstall_candidates).uniq
-        odebug "Tier 3: Metadata candidates for #{token}: #{candidates.empty? ? "(none)" : candidates.map(&:to_s).join(", ")}"
+        odebug "Tier 3: Metadata candidates for #{token}: #{candidates.empty? ? "(none)" : candidates.join(", ")}"
         candidates.select(&:directory?)
-      rescue StandardError => e
+      rescue => e
         odebug "Could not read cask metadata for #{token}: #{e.message}"
         []
       end
@@ -303,16 +312,16 @@ module Homebrew
 
         pkg_files.each do |pkg_file|
           bom_result = system_command("/usr/sbin/pkgutil",
-                                     args:         ["--bom", pkg_file.to_s],
-                                     print_stderr: false)
+                                      args:         ["--bom", pkg_file.to_s],
+                                      print_stderr: false)
           next unless bom_result.exit_status.zero?
 
           bom_path = bom_result.stdout.chomp
           next if bom_path.empty?
 
           lsbom_result = system_command("/usr/bin/lsbom",
-                                       args:         ["-s", bom_path],
-                                       print_stderr: false)
+                                        args:         ["-s", bom_path],
+                                        print_stderr: false)
           next unless lsbom_result.exit_status.zero?
 
           names = lsbom_result.stdout.lines
@@ -332,7 +341,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue StandardError => e
+      rescue => e
         odebug "pkgutil BOM lookup failed for #{token}: #{e.message}"
         []
       end
@@ -423,7 +432,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue StandardError => e
+      rescue => e
         odebug "pkgutil receipts lookup failed for #{token}: #{e.message}"
         []
       end
@@ -439,12 +448,12 @@ module Homebrew
 
         odebug "Tier 4: running lsregister -dump (may take ~20s); result will be cached for #{LSREGISTER_CACHE_TTL}s"
         result = system_command(LSREGISTER_PATH, args: ["-dump"], print_stderr: false)
-        return nil unless result.exit_status.zero?
+        return unless result.exit_status.zero?
 
         cache_path.dirname.mkpath
         cache_path.write(result.stdout)
         result.stdout
-      rescue StandardError => e
+      rescue => e
         odebug "Tier 4: lsregister dump failed: #{e.message}"
         nil
       end
@@ -470,7 +479,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue StandardError => e
+      rescue => e
         odebug "Tier 4: lsregister lookup failed: #{e.message}"
         []
       end
@@ -498,7 +507,7 @@ module Homebrew
         end
 
         found.uniq
-      rescue StandardError => e
+      rescue => e
         odebug "Tier 7: mdfind lookup failed: #{e.message}"
         []
       end

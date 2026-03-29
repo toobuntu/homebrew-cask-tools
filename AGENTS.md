@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+
+SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+-->
+
 # Agent Instructions for toobuntu/homebrew-cask-tools
 
 This repository provides Homebrew external tap commands, currently `brew purge-quarantine`.
@@ -40,12 +46,16 @@ implementations must be compatible with macOS.** Specifically:
 
 ### Required Before Each Commit
 
-- Run `brew typecheck` to verify types are declared correctly using Sorbet.
-- Run `brew style --fix --changed` to lint code formatting using RuboCop.
-  Individual files can be checked with `brew style --fix path/to/file.rb`.
-- Run `brew tests --only=cmd/purge-quarantine` to ensure RSpec unit tests pass.
-  Requires the cmd and spec to be hardlinked into `$(brew --repo)/Library/Homebrew/` first — use `scripts/run-tests.sh`.
-- All of the above can be run via the Homebrew MCP Server (launch with `brew mcp-server`).
+**Always prefer the Homebrew MCP Server tools** — use `Homebrew/style`, `Homebrew/typecheck`,
+and `Homebrew/tests` from the MCP server rather than running `brew` via the bash tool.
+The bash tool may have restricted network access in the Copilot sandbox; the MCP server
+tools do not require outbound network access for style, typecheck, or test operations because
+the bundler gems are pre-cached. Only fall back to bash if the MCP server is unavailable.
+
+- `Homebrew/style` (MCP) — equivalent to `brew style --fix --changed`
+- `Homebrew/typecheck` (MCP) — equivalent to `brew typecheck`
+- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine` — equivalent to `brew tests --only=cmd/purge-quarantine`
+  (requires the cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 
 ### Development Flow
 
@@ -95,6 +105,22 @@ For GitHub Copilot coding agent, add the following JSON in the repository's Copi
 }
 ```
 
+## CI and `setup-homebrew` Container Behaviour
+
+The `shell_style` CI job uses a Docker container (`ghcr.io/homebrew/brew:main`). The
+`Homebrew/actions/setup-homebrew` action behaves differently in containers vs. bare runners:
+
+- **Bare runner** (e.g. `style`, `brew_tests` jobs): `setup-homebrew` detects it is NOT
+  in a container, moves the tap's content to `$GITHUB_WORKSPACE`, and creates a symlink
+  from the tap path back to `$GITHUB_WORKSPACE`. This makes the tap available in the default
+  working directory without a separate checkout step.
+- **Container** (e.g. `shell_style` job): `setup-homebrew` detects `/.dockerenv` or
+  `actions_job|docker` in `/proc/1/cgroup`, sets `HOMEBREW_IN_CONTAINER=1`, uses `setfacl`
+  to fix permissions on runner-mounted directories, and **skips the `GITHUB_WORKSPACE`
+  symlinking step entirely** (see `if [[ -z "${HOMEBREW_IN_CONTAINER-}" ]]` in the action
+  source). The repo must therefore be checked out with an explicit `actions/checkout` step,
+  which is why the `shell_style` job has one and the others do not.
+
 ## Key Guidelines
 
 1. Follow Ruby and Bash best practices and idiomatic patterns.
@@ -108,7 +134,7 @@ For GitHub Copilot coding agent, add the following JSON in the repository's Copi
 9. Inline new or existing methods as methods or local variables unless they are reused 2+ times or needed for unit tests.
 10. Use Sorbet `sig` type signatures and `# typed: strict` for all non-spec Ruby files.
 11. Never use `# typed: strict` in RSpec `*_spec.rb` files.
-12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` (not `:cask` — crashes for deprecated casks).
+12. Named arguments in `AbstractCommand` subclasses: use `named_args :installed_cask` for cask commands — this enables tab completion for installed cask tokens. Note: validates against tapped sources at parse time, so it fails for casks that have been removed from all taps; use `named_args min: 1` only when handling deprecated/removed casks is a hard requirement.
 13. `include SystemCommand::Mixin` (top-level constant, not `Homebrew::SystemCommand::Mixin`).
 14. All implementations must be compatible with macOS (see macOS Compatibility section above). The agent runs on Ubuntu, but users run this tap on macOS. Avoid GNU-only CLI extensions; use POSIX/BSD-compatible syntax.
 15. Do **not** hand-write SPDX/REUSE headers. Instead run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout the repo.

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
 # Run brew tests for the purge-quarantine command.
 #
 # brew tests only finds specs inside $(brew --repo)/Library/Homebrew/test/.

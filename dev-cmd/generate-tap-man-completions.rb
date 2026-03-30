@@ -100,8 +100,15 @@ module Homebrew
         if (tap_arg = args.tap)
           Tap.fetch(tap_arg)
         else
+          cmd_name = File.basename(__FILE__, ".rb")
           tap_dir = Pathname(__FILE__).dirname.dirname
-          T.must_because(Tap.all.find { |t| t.path == tap_dir }) do
+          tap = Tap.all.find do |t|
+            # Direct match: command lives in the tap's cmd/ directory.
+            # Fallback: command is hardlinked into Homebrew's core cmd/ (e.g., CI);
+            # find the tap that has this command in its dev-cmd/ directory.
+            t.path == tap_dir || (t.path/"dev-cmd/#{cmd_name}.rb").exist?
+          end
+          T.must_because(tap) do
             "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>."
           end
         end

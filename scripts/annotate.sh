@@ -26,6 +26,7 @@ annotate() {
 fish_files=$(printf '%s\n' "${files}" | grep -E '\.fish$' || true)
 man_files=$(printf '%s\n' "${files}" | grep -E '\.(1|1\.md)$' || true)
 # Shell scripts with no file extension need --style=python for reuse to infer the # comment style.
+# The pattern (^|/)[^./]+$ matches basenames with no dot (no extension).
 no_ext_files=$(printf '%s\n' "${files}" | grep -vE '\.(fish|1|1\.md)$' | grep -E '(^|/)[^./]+$' || true)
 other_files=$(printf '%s\n' "${files}" | grep -vE '\.(fish|1|1\.md)$' | grep -vE '(^|/)[^./]+$' || true)
 

@@ -6,7 +6,6 @@
 # frozen_string_literal: true
 
 require "abstract_command"
-require "completions"
 require "system_command"
 require "tap"
 
@@ -52,21 +51,23 @@ module Homebrew
         [bash_dir, zsh_dir, fish_dir, man_dir].each(&:mkpath)
 
         # kramdown (man bundler group) is needed to compile Ronn sources to roff
-        # rubocop:disable Homebrew/InstallBundlerGems
         Homebrew.install_bundler_gems!(groups: ["man"])
-        # rubocop:enable Homebrew/InstallBundlerGems
-
         require "manpages/parser/ronn"
         require "manpages/converter/roff"
 
-        dev_cmd_names = Pathname.glob(tap_path/"dev-cmd/*.rb").map { |p| p.basename(".rb").to_s }.to_set
-        Pathname.glob(tap_path/"cmd/*.rb").reject { |p| dev_cmd_names.include?(p.basename(".rb").to_s) }.sort.each do |cmd_path|
+        dev_cmd_names = Pathname.glob(tap_path/"dev-cmd/*.rb").to_set { |p| p.basename(".rb").to_s }
+        cmd_paths = Pathname.glob(tap_path/"cmd/*.rb").reject do |p|
+          dev_cmd_names.include?(p.basename(".rb").to_s)
+        end
+        cmd_paths.sort.each do |cmd_path|
           command = cmd_path.basename(".rb").to_s
-          write_if_changed bash_dir/"brew-#{command}",      bash_content(command)
-          write_if_changed zsh_dir/"_brew-#{command}",      zsh_content(command)
-          write_if_changed fish_dir/"brew-#{command}.fish", fish_content(command)
+          parser = Homebrew::CLI::Parser.from_cmd_path(cmd_path)
 
-          md = man_page_markdown(command, cmd_path)
+          write_if_changed bash_dir/"brew-#{command}",      bash_completion(command, parser)
+          write_if_changed zsh_dir/"_brew-#{command}",      zsh_completion(command, parser)
+          write_if_changed fish_dir/"brew-#{command}.fish", fish_completion(command, parser)
+
+          md = man_page_markdown(command, parser)
           next unless md
 
           write_if_changed man_dir/"brew-#{command}.1.md", md
@@ -119,30 +120,103 @@ module Homebrew
         path.write(content)
       end
 
-      sig { params(command: String).returns(String) }
-      def bash_content(command)
-        func = Completions.generate_bash_subcommand_completion(command) ||
-               "_brew_#{command.tr("-", "_")}() { : ; }\n"
-        HEADER + func
+      sig { params(parser: Homebrew::CLI::Parser).returns(T::Hash[String, String]) }
+      def expanded_options(parser)
+        options = {}
+        parser.processed_options.each do |short, long, desc, hidden|
+          next if hidden
+
+          name = T.must(long || short)
+          if name.start_with?("--[no-]")
+            options[name.gsub("[no-]", "")] = desc
+            options[name.sub("[no-]", "no-")] = desc
+          else
+            options[name] = desc
+          end
+        end
+        options
       end
 
-      sig { params(command: String).returns(String) }
-      def zsh_content(command)
-        func = Completions.generate_zsh_subcommand_completion(command) ||
-               "_brew_#{command.tr("-", "_")}() { : ; }\n"
-        HEADER + func
+      # Formats a description string for shell completions, matching
+      # the escaping behaviour of Homebrew::Completions.format_description.
+      sig { params(text: String, fish: T::Boolean).returns(String) }
+      def escape_description(text, fish: false)
+        result = if fish
+          text.gsub("'", "\\\\'")
+        else
+          text.gsub("'", "'\\\\''")
+        end
+        result.gsub(/[<>]/, "").tr("\n", " ").chomp(".")
       end
 
-      sig { params(command: String).returns(String) }
-      def fish_content(command)
-        func = Completions.generate_fish_subcommand_completion(command) ||
-               "__fish_brew_complete_cmd '#{command}' '#{command}'\n"
-        HEADER + func
+      sig { params(command: String, parser: T.nilable(Homebrew::CLI::Parser)).returns(String) }
+      def bash_completion(command, parser)
+        func_name = command.tr("-", "_").delete("?")
+        options = parser && expanded_options(parser)
+        if options&.any?
+          HEADER + <<~COMPLETION
+            _brew_#{func_name}() {
+              local cur="${COMP_WORDS[COMP_CWORD]}"
+              case "${cur}" in
+                -*)
+                  __brewcomp "
+                  #{options.keys.sort.join("\n      ")}
+                  "
+                  return
+                  ;;
+                *) ;;
+              esac
+            }
+          COMPLETION
+        else
+          HEADER + "_brew_#{func_name}() { : ; }\n"
+        end
       end
 
-      sig { params(command: String, cmd_path: Pathname).returns(T.nilable(String)) }
-      def man_page_markdown(command, cmd_path)
-        parser = Homebrew::CLI::Parser.from_cmd_path(cmd_path)
+      sig { params(command: String, parser: T.nilable(Homebrew::CLI::Parser)).returns(String) }
+      def zsh_completion(command, parser)
+        func_name = command.tr("-", "_").delete("?")
+        options = parser && expanded_options(parser)
+        if options&.any?
+          opts = options.sort.map do |opt, desc|
+            if desc.blank?
+              "'#{opt}'"
+            else
+              "'#{opt}[#{escape_description(desc)}]'"
+            end
+          end
+          HEADER + <<~COMPLETION
+            # brew #{command}
+            _brew_#{func_name}() {
+              _arguments \\
+                #{opts.join(" \\\n    ")}
+            }
+          COMPLETION
+        else
+          HEADER + "_brew_#{func_name}() { : ; }\n"
+        end
+      end
+
+      sig { params(command: String, parser: T.nilable(Homebrew::CLI::Parser)).returns(String) }
+      def fish_completion(command, parser)
+        options = parser && expanded_options(parser)
+        if options&.any?
+          short_desc = T.must(parser).description&.split(/\.(?>\s|$)/)&.first
+          desc_text = escape_description(short_desc.to_s, fish: true)
+          lines = ["__fish_brew_complete_cmd '#{command}' '#{desc_text}'"]
+          options.sort.each do |opt, desc|
+            line = "__fish_brew_complete_arg '#{command}' -l #{opt.sub(/^-+/, "")}"
+            line += " -d '#{escape_description(desc, fish: true)}'" if desc.present?
+            lines << line
+          end
+          HEADER + "#{lines.join("\n")}\n"
+        else
+          HEADER + "__fish_brew_complete_cmd '#{command}' '#{command}'\n"
+        end
+      end
+
+      sig { params(command: String, parser: T.nilable(Homebrew::CLI::Parser)).returns(T.nilable(String)) }
+      def man_page_markdown(command, parser)
         return unless parser
 
         banner = parser.usage_banner_text

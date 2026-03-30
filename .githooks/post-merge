@@ -1,0 +1,12 @@
+#!/bin/sh
+# Re-creates the cmd/ hardlink for dev-cmd/ after git pull (merge mode).
+# Enable with: git config core.hooksPath .githooks
+
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+repo_root="$(git rev-parse --show-toplevel)"
+src="$repo_root/dev-cmd/generate-tap-man-completions.rb"
+dst="$repo_root/cmd/generate-tap-man-completions.rb"
+[ -f "$src" ] && ln -f "$src" "$dst"

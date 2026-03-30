@@ -51,9 +51,15 @@ To use this command locally, create a hardlink:
 ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb
 ```
 
-The hardlink is already listed in `.gitignore`. Re-run this command after any
-`git pull` that updates `dev-cmd/generate-tap-man-completions.rb`, as git may
-recreate the file as a new inode and leave the hardlink pointing to stale content.
+The hardlink is listed in `.gitignore`. To automate re-linking after `git pull`,
+enable the included git hooks once:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+With hooks enabled, `.githooks/post-merge` and `.githooks/post-rewrite` silently
+re-create the hardlink after every `git pull` (merge or rebase mode).
 
 ### Usage
 

@@ -14,7 +14,8 @@ staged() { git diff --cached --name-only --diff-filter=ACM | grep -E "$1" || tru
 ruby_files=$(staged '\.rb$')
 if [ -n "$ruby_files" ]; then
   brew style --fix --changed
-  git diff --name-only -- "*.rb" | xargs -r git add
+  auto_fixed=$(git diff --name-only -- "*.rb")
+  [ -n "$auto_fixed" ] && printf '%s\n' "$auto_fixed" | xargs git add
 fi
 
 # Lint staged shell files with shellcheck and shfmt; re-stage any auto-fixed files.
@@ -23,7 +24,8 @@ shell_files=$(staged '\.(sh)$|^\.githooks/')
 if [ -n "$shell_files" ]; then
   if command -v shfmt >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1; then
     printf '%s\n' "$shell_files" | xargs shfmt --indent 2 --simplify --case-indent --write
-    git diff --name-only -- "*.sh" ".githooks/*" | xargs -r git add
+    auto_fixed=$(git diff --name-only -- "*.sh" ".githooks/*")
+    [ -n "$auto_fixed" ] && printf '%s\n' "$auto_fixed" | xargs git add
     printf '%s\n' "$shell_files" | xargs shellcheck
     if command -v ksh >/dev/null 2>&1; then
       printf '%s\n' "$shell_files" | xargs ksh -n

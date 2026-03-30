@@ -78,8 +78,8 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   Homebrew does not support external `dev-cmd/` in taps, so a `cmd/` hardlink is needed
   locally (see `.gitignore`). Symlinks do not work; Homebrew's command loading resolves
   symlinks to their realpath before registering commands. CI hardlinks the file directly.
-  Re-run `ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb`
-  after any `git pull` that updates the file (git may recreate it as a new inode).
+  The `.githooks/post-merge` and `.githooks/post-rewrite` hooks re-create the hardlink
+  automatically after `git pull` (set `core.hooksPath = .githooks` once to enable).
 - `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
 - `test/cmd/generate-tap-man-completions_spec.rb`: RSpec spec for the `generate-tap-man-completions` command.
 - `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-man-completions`
@@ -93,6 +93,9 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
 - `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this
   instead of hand-writing SPDX headers.
+- `.githooks/pre-commit`: Pre-commit hook — runs style, shellcheck, shfmt, actionlint, and REUSE compliance.
+- `.githooks/post-merge`: Post-merge hook — re-creates the `cmd/` hardlink for `dev-cmd/` after `git pull` (merge).
+- `.githooks/post-rewrite`: Post-rewrite hook — re-creates the hardlink after `git pull --rebase` or `git rebase`.
 - `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and checks completions and man page sources are current.
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream

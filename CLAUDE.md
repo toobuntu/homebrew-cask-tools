@@ -28,6 +28,9 @@ ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.r
 Re-run after any `git pull` that updates `dev-cmd/generate-tap-man-completions.rb`, as git
 may recreate the file as a new inode leaving the hardlink stale. CI hardlinks the file directly.
 
+The `.githooks/post-merge` and `.githooks/post-rewrite` hooks automate this re-link after
+`git pull` for developers who have `git config core.hooksPath .githooks` set.
+
 ## Commands
 
 ```sh

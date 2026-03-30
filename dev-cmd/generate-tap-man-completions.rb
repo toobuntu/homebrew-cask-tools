@@ -101,13 +101,11 @@ module Homebrew
           Tap.fetch(tap_arg)
         else
           tap_dir = Pathname(__FILE__).dirname.dirname
-          cmd_name = File.basename(__FILE__, ".rb")
-          tap = Tap.all.find do |t|
-            # Direct match: tap root equals grandparent of this file's path.
-            # Fallback: command is hardlinked into Homebrew's core cmd/ (e.g., CI);
-            # find the tap that has this command in its dev-cmd/ directory.
-            t.path == tap_dir || (t.path/"dev-cmd/#{cmd_name}.rb").exist?
-          end
+          # Prefer direct match (fast path comparison, no I/O).
+          tap = Tap.all.find { |t| t.path == tap_dir }
+          # Fallback: command is hardlinked into Homebrew's core cmd/ (e.g., CI);
+          # find the tap that has this command in its dev-cmd/ directory.
+          tap ||= Tap.all.find { |t| (t.path/"dev-cmd/#{File.basename(__FILE__, ".rb")}.rb").exist? }
           T.must_because(tap) do
             "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>."
           end

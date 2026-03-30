@@ -6,7 +6,6 @@
 # frozen_string_literal: true
 
 require "abstract_command"
-require "cli/parser"
 require "completions"
 require "system_command"
 require "tap"

@@ -24,8 +24,7 @@ shell_files=$(staged '\.(sh)$|^\.githooks/')
 if [ -n "$shell_files" ]; then
   if command -v shfmt >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1; then
     printf '%s\n' "$shell_files" | xargs shfmt --indent 2 --simplify --case-indent --write
-    auto_fixed=$(git diff --name-only -- "*.sh" ".githooks/*")
-    [ -n "$auto_fixed" ] && printf '%s\n' "$auto_fixed" | xargs git add
+    printf '%s\n' "$shell_files" | xargs -r git add
     printf '%s\n' "$shell_files" | xargs shellcheck
     if command -v ksh >/dev/null 2>&1; then
       printf '%s\n' "$shell_files" | xargs ksh -n

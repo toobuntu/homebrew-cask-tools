@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+
+SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+-->
+
 # homebrew-cask-tools
 
 A Homebrew tap providing external commands for working with casks.
@@ -29,6 +35,40 @@ Please use this command only with software you trust.
 
 ---
 
+## `brew generate-tap-man-completions` (developer only)
+
+A developer-only command that generates Bash, ZSH, and Fish shell completions and
+Ronn man pages for all user-facing commands in this tap. Requires `HOMEBREW_DEVELOPER=1`.
+Primarily used by maintainers to keep the pre-committed `completions/`
+and `manpages/` directories up to date.
+
+### Setup
+
+Homebrew does not load `dev-cmd/` from third-party taps automatically.
+To use this command locally, create a hardlink:
+
+```sh
+ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb
+```
+
+The hardlink is listed in `.gitignore`. To automate re-linking after `git pull`,
+enable the included git hooks once:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+With hooks enabled, `.githooks/post-merge` and `.githooks/post-rewrite` silently
+re-create the hardlink after every `git pull` (merge or rebase mode).
+
+### Usage
+
+```sh
+HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions [--tap=<user>/<repo>] [--no-exit-code]
+```
+
+---
+
 ## License
 
-GPL-3.0-or-later and [BSD-2-Clause](LICENSE) Copyright 2006 Todd Schulman
+GPL-3.0-or-later OR BSD-2-Clause Copyright 2026 Todd Schulman

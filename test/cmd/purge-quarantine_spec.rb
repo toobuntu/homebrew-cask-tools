@@ -1,4 +1,8 @@
-# typed: true
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+# typed: true # rubocop:disable Sorbet/StrictSigil
 # frozen_string_literal: true
 
 require "fileutils"

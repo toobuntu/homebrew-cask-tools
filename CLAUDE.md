@@ -1,54 +1,64 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+
+SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+-->
+
 # CLAUDE.md
 
 This file provides technical notes for AI agents and contributors working in this repository.
 
 ## Repository overview
 
-This is a Homebrew external tap hosting `brew purge-quarantine`, a command that removes
-macOS quarantine (`com.apple.quarantine`) and provenance (`com.apple.provenance`) extended
-attributes from installed cask bundles to satisfy Gatekeeper.
+This is a Homebrew external tap hosting `brew purge-quarantine` and `brew generate-tap-man-completions`.
+`brew purge-quarantine` removes macOS quarantine (`com.apple.quarantine`) and provenance
+(`com.apple.provenance`) extended attributes from installed cask bundles to satisfy Gatekeeper.
+`brew generate-tap-man-completions` is a developer-only command (requires `HOMEBREW_DEVELOPER=1`)
+that generates shell completions and Ronn man page sources for commands in `cmd/`.
 
-The command is implemented as a single Ruby file at `cmd/purge-quarantine.rb` using
-Homebrew's `AbstractCommand` infrastructure.
+Commands are implemented as Ruby files in `cmd/` (user-facing) and `dev-cmd/` (developer-only)
+using Homebrew's `AbstractCommand` infrastructure. Since Homebrew does not support external
+`dev-cmd/` in third-party taps, a local hardlink from `cmd/` to `dev-cmd/` is needed for
+development use (the hardlink is gitignored). Symlinks do not work — use a hardlink:
+
+```sh
+ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb
+```
+
+Re-run after any `git pull` that updates `dev-cmd/generate-tap-man-completions.rb`, as git
+may recreate the file as a new inode leaving the hardlink stale. CI hardlinks the file directly.
+
+The `.githooks/post-merge` and `.githooks/post-rewrite` hooks automate this re-link after
+`git pull` for developers who have `git config core.hooksPath .githooks` set.
 
 ## Commands
 
 ```sh
-# Lint (must pass before committing)
+# Prefer the Homebrew MCP Server tools for all brew operations in the agent sandbox.
+# Use Homebrew/style, Homebrew/typecheck, Homebrew/tests instead of running brew via bash.
+
+# Lint (must pass before committing) — prefer Homebrew/style via MCP
 brew style --fix --changed
 
-# Type-check
+# Type-check — prefer Homebrew/typecheck via MCP
 brew typecheck
 
-# Run tests (requires hardlinks — use the script instead of running directly)
+# Run all tests (requires hardlinks — use the script instead of running directly)
 scripts/run-tests.sh
 
-# Run a single test example
+# Run a specific test file or line
 scripts/run-tests.sh --only=cmd/purge-quarantine:LINE
+scripts/run-tests.sh --only=cmd/generate-tap-man-completions
+
+# Regenerate shell completions, man page sources, and compiled roff after any cmd_args change
+brew generate-tap-man-completions
 ```
 
 ## Architecture: tiered bundle discovery
 
-`quarantinable_bundles_for` uses seven tiers in order, stopping at the first non-empty result:
-
-| Tier | Method | When it works |
-|------|--------|---------------|
-| 1 | Caskroom glob | Standard DMG casks with bundles staged in `HOMEBREW_CASKROOM/<token>/<version>/` |
-| 2 | `bundles_from_cask_definition` | Cask still tapped; reads `Moved` targets and `uninstall.delete` paths via CaskLoader |
-| 3 | `bundles_from_cask_metadata` | Cask removed from taps; `.metadata` dir remains in Caskroom |
-| 4 | `bundles_from_lsregister` | App registered with macOS Launch Services; dump cached for 5 min |
-| 5 | `bundles_from_pkgutil_receipts` | Pkg still registered with macOS; `pkgutil --pkg-info` gives install prefix |
-| 6 | `bundles_from_pkgutil_bom` | `.pkg` file still staged in Caskroom; BOM gives bundle names to search |
-| 7 | `bundles_from_mdfind` | Spotlight has indexed the bundle; last resort |
-
-Tiers 4–7 need **candidate bundle names** (from `candidate_bundle_names`) to target their
-search. This helper extracts names from `.metadata` JSON `app` stanzas, `uninstall.delete`
-paths, and `pkgutil` receipt file lists.
-
-### Common install directories
-
-`install_dirs(cask_dir)` returns `[configured appdir, /Applications, ~/Applications]`
-(deduped). The configured appdir is read from `.metadata/config.json` if present.
+See [`docs/architecture.md`](docs/architecture.md) for the full architecture
+documentation, including the seven-tier bundle discovery strategy and shell
+completion details.
 
 ## Testing
 
@@ -73,12 +83,51 @@ In CI (`brew_tests` job in `.github/workflows/ci.yml`) the same hardlink approac
 
 - `args.verbose?` not `verbose?` (not an instance method on `AbstractCommand` subclasses).
 - `Cask::Artifact::Moved` (not `::App`) covers all installable artifact types with a target.
-- `named_args min: 1` — not `:cask` (crashes on deprecated casks) or `:token` (silently empty).
-- `rescue StandardError => e` not `rescue => e` (bare rescue catches `SystemExit`/`Interrupt`).
+- `named_args min: 1` — required for `purge-quarantine` because deprecated/removed casks are a primary use case; `:installed_cask` validates against tapped sources at parse time and must not be used.
+- `rescue => e` (idiomatic Ruby; equivalent to `rescue StandardError => e`). Never use bare `rescue Exception` — that catches `SystemExit` and `Interrupt`.
 - `T.unsafe()` for Sorbet strict typing with dynamic Cask artifact APIs.
 - `include SystemCommand::Mixin` (top-level, not `Homebrew::SystemCommand::Mixin`).
+- **Output ordering**: `ohai`/`oh1` write to `$stdout`; `opoo`/`ofail` write to `$stderr`. When mixed in the same code path the two streams can interleave (system commands run in-order, but Ruby buffers stdout and stderr independently). Emit multiple related warning lines as one `opoo <<~EOS … EOS` block so they reach stderr atomically and cannot be split by stdout output.
+- **RuboCop disables**: Homebrew's custom `Cop/DisableComment` cop requires a comment on the line immediately above a `# rubocop:disable` line. The inline `--` RuboCop syntax is not accepted.
+
+## macOS compatibility
+
+The Copilot Coding Agent runs on Ubuntu, but this tap targets macOS end-users. All
+implementations must be compatible with macOS:
+
+- Use POSIX/BSD-compatible CLI syntax — macOS ships BSD variants of `sed`, `awk`, `find`,
+  `xargs`, `date`, `grep`, etc.; GNU extensions are not available by default on macOS.
+- Do not rely on Linux-specific paths (`/proc`, `/sys`) or package managers (`apt`, `dpkg`).
+- Ruby code that shells out should use commands available on macOS (`xattr`, `pkgutil`, etc.).
+- Shell scripts with `#!/bin/sh` must be POSIX-compatible; scripts with `#!/usr/bin/env bash`
+  may use bash features but must avoid GNU coreutil extensions.
 
 ## REUSE / licensing
 
 Files must carry SPDX headers. Run `scripts/annotate.sh` to annotate non-compliant files.
-Install the `reuse` tool with `pip install reuse`.
+The `reuse` tool is pre-installed in the Copilot sandbox; do **not** hand-write SPDX headers —
+run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout.
+
+`scripts/annotate.sh` special-cases `.fish` completion files and man page files (`.1`, `.1.md`):
+because the generator overwrites their content, they use `.license` sidecars created with
+`--force-dot-license` rather than inline `#` comment headers.
+
+License texts are committed in `LICENSES/` (populated via `reuse download --all`).
+
+## Man pages
+
+Man page sources (`manpages/brew-<command>.1.md`, Ronn format) and compiled roff (`manpages/brew-<command>.1`)
+are both generated by `brew generate-tap-man-completions`.
+The generator uses `CLI::Parser.from_cmd_path` to extract `usage_banner_text` and `processed_options`
+from each command's `cmd_args` block — the same approach as Homebrew's `manpages.rb`.
+Roff compilation uses Homebrew's internal Ronn converter (`manpages/parser/ronn` +
+`manpages/converter/roff`) inline in the command itself, with the `man` bundler gem group (`kramdown`).
+
+Regenerate man page sources and roff after any `cmd_args` change by running `brew generate-tap-man-completions`. CI verifies sources are current.
+
+Note: `Homebrew.install_bundler_gems!` is restricted to `dev-cmd/` by Homebrew's Rubocop rules,
+so a `# rubocop:disable Homebrew/InstallBundlerGems` with a preceding clarifying comment is used
+in the command to allow inline roff compilation.
+
+For shell completion architecture details, see [`docs/architecture.md`](docs/architecture.md).
+

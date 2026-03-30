@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook: lints staged Ruby and workflow files; checks REUSE compliance.
+# Pre-commit hook: lints staged Ruby, shell, and workflow files; checks REUSE compliance.
 # Enable with: git config core.hooksPath .githooks
 
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
@@ -14,10 +14,26 @@ staged() { git diff --cached --name-only --diff-filter=ACM | grep -E "$1" || tru
 ruby_files=$(staged '\.rb$')
 if [ -n "$ruby_files" ]; then
   brew style --fix --changed
-  git diff --name-only -- "*.rb" | xargs -r git add
+  printf '%s\n' "$ruby_files" | xargs -r git add
 fi
 
-# Lint staged workflow files with actionlint if available.
+# Lint staged shell files with shellcheck and shfmt; re-stage any auto-fixed files.
+# Also run ksh -n for syntax checking if ksh is available (standard on macOS).
+shell_files=$(staged '\.(sh)$|^\.githooks/')
+if [ -n "$shell_files" ]; then
+  if command -v shfmt >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1; then
+    printf '%s\n' "$shell_files" | xargs shfmt --indent 2 --simplify --case-indent --write
+    printf '%s\n' "$shell_files" | xargs -r git add
+    printf '%s\n' "$shell_files" | xargs shellcheck
+    if command -v ksh >/dev/null 2>&1; then
+      printf '%s\n' "$shell_files" | xargs ksh -n
+    fi
+  else
+    echo "warning: shfmt/shellcheck not found — skipping shell lint (brew install shfmt shellcheck)"
+  fi
+fi
+
+# Lint staged workflow files with actionlint and zizmor if available.
 workflow_files=$(staged '\.github/workflows/.*\.yml$')
 if [ -n "$workflow_files" ]; then
   if command -v actionlint >/dev/null 2>&1; then
@@ -25,34 +41,22 @@ if [ -n "$workflow_files" ]; then
   else
     echo "warning: actionlint not found — skipping workflow lint (brew install actionlint)"
   fi
+  if command -v zizmor >/dev/null 2>&1; then
+    zizmor .
+  else
+    echo "warning: zizmor not found — skipping workflow security scan (brew install zizmor)"
+  fi
 fi
 
 # REUSE compliance check.
 if ! reuse lint --quiet; then
   reuse lint
-  cat >&2 << 'HINT'
+  cat >&2 <<'HINT'
 
 To annotate unannotated files, run:
 
-  files=$(reuse lint --json \
-    | jq -r '.non_compliant
-      | add(.missing_copyright_info, .missing_licensing_info)
-      | unique[]')
+  scripts/annotate.sh
 
-  if [ -n "$files" ]; then
-    annotate() {
-        xargs -r reuse annotate \
-            --copyright="Todd Schulman" \
-            --merge-copyrights \
-            --license=GPL-3.0-or-later \
-            --copyright-prefix=spdx-string \
-            "$@"
-    }
-
-    # reuse thinks .m files are mandoc, so specify c.
-    printf '%s\n' "$files" | grep -E '\.(m|h)$'  | annotate --style=c
-    printf '%s\n' "$files" | grep -vE '\.(m|h)$' | annotate --fallback-dot-license
-  fi
 HINT
   exit 1
 fi

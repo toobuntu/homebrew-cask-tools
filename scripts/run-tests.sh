@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TAP_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 BREW_REPO="$(brew --repo)"
@@ -71,7 +71,7 @@ WARNING
 # Check that source files exist.
 for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}"
 do
-  if [[ ! -f "${src}" ]]
+  if [ ! -f "${src}" ]
   then
     echo "Error: source file not found: ${src}" >&2
     exit 1
@@ -93,12 +93,12 @@ for pair in "${pairs[@]}"
 do
   src="${pair%%:*}"
   dst="${pair##*:}"
-  [[ -e "${dst}" ]] && echo "==> (replacing existing ${dst##*/})" >&2
+  [ -e "${dst}" ] && echo "==> (replacing existing ${dst##*/})" >&2
   ln -f "${src}" "${dst}"
 done
 
 only="${1:-}"
-if [[ -n "${only}" ]]
+if [ -n "${only}" ]
 then
   echo "==> Running: brew tests ${only}" >&2
   brew tests "${only}"

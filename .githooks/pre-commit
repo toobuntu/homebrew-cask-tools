@@ -14,8 +14,7 @@ staged() { git diff --cached --name-only --diff-filter=ACM | grep -E "$1" || tru
 ruby_files=$(staged '\.rb$')
 if [ -n "$ruby_files" ]; then
   brew style --fix --changed
-  auto_fixed=$(git diff --name-only -- "*.rb")
-  [ -n "$auto_fixed" ] && printf '%s\n' "$auto_fixed" | xargs git add
+  printf '%s\n' "$ruby_files" | xargs -r git add
 fi
 
 # Lint staged shell files with shellcheck and shfmt; re-stage any auto-fixed files.

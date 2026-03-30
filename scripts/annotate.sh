@@ -1,16 +1,16 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Annotates non-REUSE-compliant files with SPDX copyright and license headers.
 # Requires: reuse (pip install reuse), jq
 #
 # SPDX-FileCopyrightText: Copyright 2026 toobuntu
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
-set -euo pipefail
+set -eu
 
 files=$(reuse lint --json |
   jq -r '.non_compliant | (.missing_copyright_info + .missing_licensing_info) | unique[]') || true
 
-[[ -z "${files}" ]] && exit 0
+[ -z "${files}" ] && exit 0
 
 annotate() {
   xargs reuse annotate \
@@ -23,10 +23,13 @@ annotate() {
 
 # Fish completion and man page files must keep their generated content intact, so annotate
 # them with a .license sidecar instead of inline SPDX comment headers.
-fish_files=$(printf '%s\n' "${files}" | grep '\.fish$' || true)
-man_files=$(printf '%s\n' "${files}" | grep '\.\(1\|1\.md\)$' || true)
-other_files=$(printf '%s\n' "${files}" | grep -v '\.\(fish\|1\|1\.md\)$' || true)
+fish_files=$(printf '%s\n' "${files}" | grep -E '\.fish$' || true)
+man_files=$(printf '%s\n' "${files}" | grep -E '\.(1|1\.md)$' || true)
+# Shell scripts with no file extension need --style=python for reuse to infer the # comment style.
+no_ext_files=$(printf '%s\n' "${files}" | grep -vE '\.(fish|1|1\.md)$' | grep -E '(^|/)[^./]+$' || true)
+other_files=$(printf '%s\n' "${files}" | grep -vE '\.(fish|1|1\.md)$' | grep -vE '(^|/)[^./]+$' || true)
 
-[[ -n "${fish_files}" ]] && printf '%s\n' "${fish_files}" | annotate --force-dot-license
-[[ -n "${man_files}" ]] && printf '%s\n' "${man_files}" | annotate --force-dot-license
-[[ -n "${other_files}" ]] && printf '%s\n' "${other_files}" | annotate --fallback-dot-license
+[ -n "${fish_files}" ] && printf '%s\n' "${fish_files}" | annotate --force-dot-license
+[ -n "${man_files}" ] && printf '%s\n' "${man_files}" | annotate --force-dot-license
+[ -n "${no_ext_files}" ] && printf '%s\n' "${no_ext_files}" | annotate --style=python --fallback-dot-license
+[ -n "${other_files}" ] && printf '%s\n' "${other_files}" | annotate --fallback-dot-license

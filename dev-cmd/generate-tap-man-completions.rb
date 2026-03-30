@@ -101,10 +101,9 @@ module Homebrew
           Tap.fetch(tap_arg)
         else
           tap_dir = Pathname(__FILE__).dirname.dirname
-          T.must(
-            Tap.all.find { |t| t.path == tap_dir },
-            "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>.",
-          )
+          T.must_because(Tap.all.find { |t| t.path == tap_dir }) do
+            "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>."
+          end
         end
       end
 

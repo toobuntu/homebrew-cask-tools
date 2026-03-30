@@ -71,4 +71,4 @@ HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions [--tap=<user>/<repo>] [--
 
 ## License
 
-GPL-3.0-or-later or [BSD-2-Clause](LICENSE) Copyright 2026 Todd Schulman
+GPL-3.0-or-later OR BSD-2-Clause Copyright 2026 Todd Schulman

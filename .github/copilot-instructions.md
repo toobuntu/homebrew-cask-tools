@@ -35,9 +35,3 @@ needed because bundler gems are pre-cached):
   required hardlinks automatically)
 
 Do **not** hand-write SPDX headers; run `scripts/annotate.sh` instead.
-
-## Path-specific instructions
-
-[LICENSES/**](LICENSES/**):
-Do not review, comment on, or suggest changes to files in this directory. These are
-REUSE-standard license texts managed by `reuse download --all` and must not be modified.

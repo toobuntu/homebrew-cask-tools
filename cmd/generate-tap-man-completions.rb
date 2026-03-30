@@ -51,14 +51,18 @@ module Homebrew
         man_dir  = tap_path/"manpages"
         [bash_dir, zsh_dir, fish_dir, man_dir].each(&:mkpath)
 
-        # kramdown (man bundler group) is needed to compile Ronn sources to roff
+        # kramdown (man bundler group) is needed to compile Ronn sources to roff.
+        # rubocop:disable Homebrew/InstallBundlerGems
         Homebrew.install_bundler_gems!(groups: ["man"])
+        # rubocop:enable Homebrew/InstallBundlerGems
         require "manpages/parser/ronn"
         require "manpages/converter/roff"
 
         dev_cmd_names = Pathname.glob(tap_path/"dev-cmd/*.rb").to_set { |p| p.basename(".rb").to_s }
+        self_cmd_name = File.basename(__FILE__, ".rb")
         cmd_paths = Pathname.glob(tap_path/"cmd/*.rb").reject do |p|
-          dev_cmd_names.include?(p.basename(".rb").to_s)
+          name = p.basename(".rb").to_s
+          dev_cmd_names.include?(name) || name == self_cmd_name
         end
         cmd_paths.sort.each do |cmd_path|
           command = cmd_path.basename(".rb").to_s
@@ -104,8 +108,8 @@ module Homebrew
           # Prefer direct match (fast path comparison, no I/O).
           tap = Tap.all.find { |t| t.path == tap_dir }
           # Fallback: command is hardlinked into Homebrew's core cmd/ (e.g., CI);
-          # find the tap that has this command in its dev-cmd/ directory.
-          tap ||= Tap.all.find { |t| (t.path/"dev-cmd/#{File.basename(__FILE__, ".rb")}.rb").exist? }
+          # find the tap that has this command in its cmd/ directory.
+          tap ||= Tap.all.find { |t| (t.path/"cmd/#{File.basename(__FILE__, ".rb")}.rb").exist? }
           T.must_because(tap) do
             "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>."
           end

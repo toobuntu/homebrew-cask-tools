@@ -16,20 +16,10 @@ This is a Homebrew external tap hosting `brew purge-quarantine` and `brew genera
 `brew generate-tap-man-completions` is a developer-only command (requires `HOMEBREW_DEVELOPER=1`)
 that generates shell completions and Ronn man page sources for commands in `cmd/`.
 
-Commands are implemented as Ruby files in `cmd/` (user-facing) and `dev-cmd/` (developer-only)
-using Homebrew's `AbstractCommand` infrastructure. Since Homebrew does not support external
-`dev-cmd/` in third-party taps, a local hardlink from `cmd/` to `dev-cmd/` is needed for
-development use (the hardlink is gitignored). Symlinks do not work — use a hardlink:
-
-```sh
-ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb
-```
-
-Re-run after any `git pull` that updates `dev-cmd/generate-tap-man-completions.rb`, as git
-may recreate the file as a new inode leaving the hardlink stale. CI hardlinks the file directly.
-
-The `.githooks/post-merge` and `.githooks/post-rewrite` hooks automate this re-link after
-`git pull` for developers who have `git config core.hooksPath .githooks` set.
+Commands are implemented as Ruby files in `cmd/` using Homebrew's `AbstractCommand`
+infrastructure. `brew generate-tap-man-completions` lives in `cmd/` (committed) so it
+is available in the taproom without any local hardlink setup. CI hardlinks it into
+Homebrew's core `cmd/` only for `brew tests` (so that specs can `require_relative` it).
 
 ## Commands
 
@@ -125,9 +115,9 @@ Roff compilation uses Homebrew's internal Ronn converter (`manpages/parser/ronn`
 
 Regenerate man page sources and roff after any `cmd_args` change by running `brew generate-tap-man-completions`. CI verifies sources are current.
 
-Note: `Homebrew.install_bundler_gems!` is restricted to `dev-cmd/` by Homebrew's Rubocop rules,
-so a `# rubocop:disable Homebrew/InstallBundlerGems` with a preceding clarifying comment is used
-in the command to allow inline roff compilation.
+Note: `Homebrew.install_bundler_gems!` is restricted to `dev-cmd/` by Homebrew's Rubocop rules.
+Since `generate-tap-man-completions` lives in `cmd/`, a `# rubocop:disable Homebrew/InstallBundlerGems`
+with a preceding clarifying comment is used to allow inline roff compilation.
 
 For shell completion architecture details, see [`docs/architecture.md`](docs/architecture.md).
 

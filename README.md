@@ -44,22 +44,14 @@ and `manpages/` directories up to date.
 
 ### Setup
 
-Homebrew does not load `dev-cmd/` from third-party taps automatically.
-To use this command locally, create a hardlink:
+The command is available automatically in the taproom after `brew tap toobuntu/cask-tools`.
+No additional setup is required to run `brew generate-tap-man-completions`.
 
-```sh
-ln -f dev-cmd/generate-tap-man-completions.rb cmd/generate-tap-man-completions.rb
-```
-
-The hardlink is listed in `.gitignore`. To automate re-linking after `git pull`,
-enable the included git hooks once:
+To enable code-quality pre-commit linting for contributors:
 
 ```sh
 git config core.hooksPath .githooks
 ```
-
-With hooks enabled, `.githooks/post-merge` and `.githooks/post-rewrite` silently
-re-create the hardlink after every `git pull` (merge or rebase mode).
 
 ### Usage
 

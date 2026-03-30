@@ -56,7 +56,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `Homebrew/style` (MCP) — equivalent to `brew style --fix --changed`
 - `Homebrew/typecheck` (MCP) — equivalent to `brew typecheck`
 - `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine` or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
-  (requires the cmd/dev-cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
+  (requires the cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 
 ### Development Flow
 
@@ -71,15 +71,12 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
-- `dev-cmd/generate-tap-man-completions.rb`: Developer-only command implementing `brew generate-tap-man-completions`.
+- `cmd/generate-tap-man-completions.rb`: Developer-only command implementing `brew generate-tap-man-completions`.
   Generates Bash, ZSH, and Fish completion files for all commands in `cmd/`, Ronn man
   page sources (`.1.md`), and compiled roff (`.1`) into `manpages/`. Accepts `--tap=<user>/<repo>` to override the auto-detected tap.
-  Lives in `dev-cmd/` to avoid confusing casual users; requires `HOMEBREW_DEVELOPER=1`.
-  Homebrew does not support external `dev-cmd/` in taps, so a `cmd/` hardlink is needed
-  locally (see `.gitignore`). Symlinks do not work; Homebrew's command loading resolves
-  symlinks to their realpath before registering commands. CI hardlinks the file directly.
-  The `.githooks/post-merge` and `.githooks/post-rewrite` hooks re-create the hardlink
-  automatically after `git pull` (set `core.hooksPath = .githooks` once to enable).
+  Requires `HOMEBREW_DEVELOPER=1`. Committed to `cmd/` so it is available automatically
+  in the taproom without any local hardlink setup. CI hardlinks it into Homebrew's core
+  `cmd/` only for `brew tests` (so that specs can `require_relative` it).
 - `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
 - `test/cmd/generate-tap-man-completions_spec.rb`: RSpec spec for the `generate-tap-man-completions` command.
 - `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-man-completions`
@@ -88,14 +85,12 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   Regenerate with `brew generate-tap-man-completions` after any `cmd_args` change.
   CI verifies sources are not out of date.
 - `docs/`: Project documentation, including architecture notes (see `docs/architecture.md`).
-- `.gitignore`: Ignores the `cmd/generate-tap-man-completions.rb` hardlink (see dev-cmd above).
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
 - `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this
   instead of hand-writing SPDX headers.
 - `.githooks/pre-commit`: Pre-commit hook — runs style, shellcheck, shfmt, actionlint, and REUSE compliance.
-- `.githooks/post-merge`: Post-merge hook — re-creates the `cmd/` hardlink for `dev-cmd/` after `git pull` (merge).
-- `.githooks/post-rewrite`: Post-rewrite hook — re-creates the hardlink after `git pull --rebase` or `git rebase`.
+  Enable with `git config core.hooksPath .githooks`.
 - `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and checks completions and man page sources are current.
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream

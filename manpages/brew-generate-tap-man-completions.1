@@ -3,7 +3,7 @@
 .SH NAME
 brew\-generate\-tap\-man\-completions \- Generate shell completions and man pages for a tap\'s commands
 .SH "SYNOPSIS"
-\fBbrew\fP \fBgenerate\-tap\-man\-completions\fP [\fB\-\-tap=\fP\fItap\fP] [\fB\-\-no\-exit\-code\fP]
+\fBbrew\fP \fBgenerate\-tap\-man\-completions\fP [\fB\-\-tap=\fP\fItap\fP] [\fB\-\-no\-exit\-code\fP] [\fB\-\-open\-pr\fP] [\fB\-\-no\-pull\-requests\fP] [\fB\-\-no\-fork\fP]
 .SH "DESCRIPTION"
 Generate shell completions and man pages for a tap\[u2019]s commands\.
 .P
@@ -11,7 +11,7 @@ Reads each \fB*\.rb\fP file in \fBcmd/\fP and \fBdev\-cmd/\fP and writes Bash, Z
 .P
 Exits non\-zero when no files change (like \fBgit diff \-\-exit\-code\fP)\. This is the same convention used by Homebrew\[u2019]s \fBgenerate\-man\-completions\fP\&\. Pass \fB\-\-no\-exit\-code\fP to always exit 0\.
 .P
-Pass \fB\-\-debug\fP for detailed diagnostics about tap resolution, command discovery, and per\-file write decisions\.
+Pass \fB\-\-verbose\fP for a summary of what was processed (commands found, files written/skipped, stale files removed)\. Pass \fB\-\-debug\fP for detailed diagnostics about tap resolution, command discovery, and per\-file write decisions\.
 .SH "OPTIONS"
 .TP
 \fB\-d\fP, \fB\-\-debug\fP
@@ -31,3 +31,12 @@ Generate completions for \fItap\fP (default: auto\-detected from command locatio
 .TP
 \fB\-\-no\-exit\-code\fP
 Exit with code 0 even if no changes were made\.
+.TP
+\fB\-\-open\-pr\fP
+Check for duplicate pull requests before allowing a PR to be opened\.
+.TP
+\fB\-\-no\-pull\-requests\fP
+Do not check for duplicate pull requests\.
+.TP
+\fB\-\-no\-fork\fP
+Don\[u2019]t try to fork the repository\.

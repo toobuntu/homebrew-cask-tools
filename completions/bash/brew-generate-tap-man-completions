@@ -7,6 +7,9 @@ _brew_generate_tap_man_completions() {
       --debug
       --help
       --no-exit-code
+      --no-fork
+      --no-pull-requests
+      --open-pr
       --quiet
       --tap
       --verbose

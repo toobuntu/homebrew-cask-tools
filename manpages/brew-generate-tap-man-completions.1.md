@@ -3,7 +3,7 @@ brew-generate-tap-man-completions(1) -- Generate shell completions and man pages
 
 ## SYNOPSIS
 
-`brew` `generate-tap-man-completions` [`--tap=`<tap>] [`--no-exit-code`]
+`brew` `generate-tap-man-completions` [`--tap=`<tap>] [`--no-exit-code`] [`--open-pr`] [`--no-pull-requests`] [`--no-fork`]
 
 ## DESCRIPTION
 
@@ -19,8 +19,9 @@ Exits non-zero when no files change (like `git diff --exit-code`). This is the
 same convention used by Homebrew's `generate-man-completions`. Pass
 `--no-exit-code` to always exit 0.
 
-Pass `--debug` for detailed diagnostics about tap resolution, command
-discovery, and per-file write decisions.
+Pass `--verbose` for a summary of what was processed (commands found, files
+written/skipped, stale files removed). Pass `--debug` for detailed diagnostics
+about tap resolution, command discovery, and per-file write decisions.
 
 ## OPTIONS
 
@@ -47,4 +48,16 @@ discovery, and per-file write decisions.
 `--no-exit-code`
 
 : Exit with code 0 even if no changes were made.
+
+`--open-pr`
+
+: Check for duplicate pull requests before allowing a PR to be opened.
+
+`--no-pull-requests`
+
+: Do not check for duplicate pull requests.
+
+`--no-fork`
+
+: Don't try to fork the repository.
 

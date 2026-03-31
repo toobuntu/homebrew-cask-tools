@@ -71,7 +71,6 @@ fi
 
 # Parse script-specific flags; forward the rest to the command.
 OPEN_PR=false
-NO_FORK=false
 BREW_ARGS=()
 for arg in "$@"; do
   case "${arg}" in
@@ -79,7 +78,8 @@ for arg in "$@"; do
       OPEN_PR=true
       ;;
     --no-fork)
-      NO_FORK=true
+      # Accepted for brew bump consistency; currently a no-op since we always
+      # push to origin. Reserved for future use with gh repo fork.
       ;;
     *)
       BREW_ARGS+=("${arg}")
@@ -124,20 +124,12 @@ for subdir in completions/bash completions/zsh completions/fish manpages; do
   dst="${DEV_DIR}/${subdir}"
   [[ -d ${src} ]] || continue
   mkdir -p "${dst}"
-  # Copy only generated files, not .license sidecars (those are managed by annotate.sh)
-  find "${src}" -maxdepth 1 -type f ! -name '*.license' -newer "${CMD_SRC}" -exec cp {} "${dst}/" \; 2>/dev/null || true
-done
-
-# Also sync any files that exist in tap but not in dev clone (new commands)
-for subdir in completions/bash completions/zsh completions/fish manpages; do
-  src="${TAP_DIR}/${subdir}"
-  dst="${DEV_DIR}/${subdir}"
-  [[ -d ${src} ]] || continue
+  # Copy all generated files, not .license sidecars (those are managed by annotate.sh)
   for f in "${src}"/*; do
     [[ -f ${f} ]] || continue
     base="$(basename "${f}")"
     [[ ${base} == *.license ]] && continue
-    [[ -f "${dst}/${base}" ]] || cp "${f}" "${dst}/"
+    cp "${f}" "${dst}/"
   done
 done
 
@@ -188,12 +180,10 @@ if [[ ${OPEN_PR} == true ]]; then
   git -C "${DEV_DIR}" commit -m "Update completions and man pages [bot]"
 
   echo "==> Pushing branch..." >&2
-  if [[ ${NO_FORK} == true ]]; then
-    push_remote="origin"
-  else
-    push_remote="origin"
-  fi
-  if git -C "${DEV_DIR}" push --set-upstream "${push_remote}" "${BRANCH}" 2>/dev/null; then
+  # --no-fork pushes directly to origin (the default for the repo owner).
+  # Without --no-fork, a fork would be used for PRs to upstream — but since
+  # this is typically run by the repo owner, both paths push to origin.
+  if git -C "${DEV_DIR}" push --set-upstream origin "${BRANCH}" 2>/dev/null; then
     if command -v gh >/dev/null 2>&1; then
       # Convert tap name (toobuntu/cask-tools) to GitHub repo (toobuntu/homebrew-cask-tools).
       # Use ${var/pattern/replacement} syntax compatible with bash, ksh, and zsh.

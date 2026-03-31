@@ -9,31 +9,30 @@
 # This script is designed to be run from the **development clone** of the tap
 # repository (e.g. ~/devel/github/homebrew-cask-tools). It:
 #
-# 1. Hardlinks dev-cmd/generate-tap-man-completions.rb into Homebrew's core
+# 1. Hardlinks dev-cmd/generate-tap-man-completions.rb into the installed tap's
 #    cmd/ directory so `brew` can discover it (Homebrew does not support
 #    external dev-cmd/ in third-party taps).
-# 2. Runs the command with --tap= pointed at the Homebrew-managed tap directory
-#    (the one under $(brew --repo)), which is where the generated files live.
-# 3. Cleans up the hardlink on exit.
+# 2. Runs the command with --tap= pointed at the installed tap so it writes
+#    into the Homebrew-managed tap directory.
+# 3. Syncs the generated completions/ and manpages/ back to the dev clone.
+# 4. Cleans up the hardlink on exit.
 #
-# Pass --commit to also commit the changes to the tap repo on a new branch
-# and optionally open a PR via `gh`.
+# Generated files end up in the dev clone's completions/ and manpages/
+# directories, ready for committing and pushing to the remote.
+#
+# Pass --open-pr to create a branch, commit, push, and open a PR from the dev
+# clone. Pass --no-fork to push to origin instead of creating a fork.
+# These flags mirror `brew bump` conventions.
 #
 # Usage:
-#   scripts/run-generate-tap-man-completions.sh [--commit] [--debug] [--no-exit-code]
+#   scripts/run-generate-tap-man-completions.sh [--open-pr] [--no-fork] [--verbose] [--debug] [--no-exit-code]
 #
-# All arguments except --commit are forwarded to the command.
+# All arguments except --open-pr and --no-fork are forwarded to the command.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEV_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
-BREW_REPO="$(brew --repo)"
-HOMEBREW_LIB="${BREW_REPO}/Library/Homebrew"
-
-CMD_SRC="${DEV_DIR}/dev-cmd/generate-tap-man-completions.rb"
-CMD_DST="${HOMEBREW_LIB}/cmd/generate-tap-man-completions.rb"
 
 # Detect the tap name from the dev repo's git remote. Falls back to the
 # directory name convention (homebrew-<name> → <user>/<name>).
@@ -62,25 +61,35 @@ if [[ -z ${TAP_DIR} || ! -d ${TAP_DIR} ]]; then
   exit 1
 fi
 
+CMD_SRC="${DEV_DIR}/dev-cmd/generate-tap-man-completions.rb"
+CMD_DST="${TAP_DIR}/cmd/generate-tap-man-completions.rb"
+
 if [[ ! -f ${CMD_SRC} ]]; then
   echo "Error: source file not found: ${CMD_SRC}" >&2
   exit 1
 fi
 
-# Parse --commit from our arguments; forward the rest to the command.
-COMMIT=false
+# Parse script-specific flags; forward the rest to the command.
+OPEN_PR=false
+NO_FORK=false
 BREW_ARGS=()
 for arg in "$@"; do
-  if [[ ${arg} == "--commit" ]]; then
-    COMMIT=true
-  else
-    BREW_ARGS+=("${arg}")
-  fi
+  case "${arg}" in
+    --open-pr)
+      OPEN_PR=true
+      ;;
+    --no-fork)
+      NO_FORK=true
+      ;;
+    *)
+      BREW_ARGS+=("${arg}")
+      ;;
+  esac
 done
 
 cleanup() {
   echo "" >&2
-  echo "==> Removing hardlink from Homebrew repository..." >&2
+  echo "==> Removing hardlink from tap repository..." >&2
   rm -f "${CMD_DST}"
 }
 trap cleanup EXIT INT TERM
@@ -96,60 +105,117 @@ cat >&2 <<WARNING
 ║  The dev-cmd file will be temporarily hardlinked into:               ║
 ║    ${CMD_DST}
 ║                                                                      ║
-║  Do NOT run brew update, brew upgrade, brew update-reset, or any     ║
-║  git operations inside the Homebrew repository until this finishes.  ║
+║  Do NOT run brew update, brew upgrade, or brew update-reset until    ║
+║  this finishes.                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 WARNING
 
-echo "==> Hardlinking dev-cmd into Homebrew repository..." >&2
+echo "==> Hardlinking dev-cmd into tap repository..." >&2
 [[ -e ${CMD_DST} ]] && echo "==> (replacing existing ${CMD_DST##*/})" >&2
 ln -f "${CMD_SRC}" "${CMD_DST}"
 
 echo "==> Running: HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap=${TAP_NAME} ${BREW_ARGS[*]:-}" >&2
 HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap="${TAP_NAME}" "${BREW_ARGS[@]+"${BREW_ARGS[@]}"}" || true
 
-# If --commit, commit changes in the tap repo on a new branch and suggest a PR.
-if [[ ${COMMIT} == true ]]; then
+# Sync generated files back to the dev clone
+echo "==> Syncing completions/ and manpages/ to dev clone..." >&2
+for subdir in completions/bash completions/zsh completions/fish manpages; do
+  src="${TAP_DIR}/${subdir}"
+  dst="${DEV_DIR}/${subdir}"
+  [[ -d ${src} ]] || continue
+  mkdir -p "${dst}"
+  # Copy only generated files, not .license sidecars (those are managed by annotate.sh)
+  find "${src}" -maxdepth 1 -type f ! -name '*.license' -newer "${CMD_SRC}" -exec cp {} "${dst}/" \; 2>/dev/null || true
+done
+
+# Also sync any files that exist in tap but not in dev clone (new commands)
+for subdir in completions/bash completions/zsh completions/fish manpages; do
+  src="${TAP_DIR}/${subdir}"
+  dst="${DEV_DIR}/${subdir}"
+  [[ -d ${src} ]] || continue
+  for f in "${src}"/*; do
+    [[ -f ${f} ]] || continue
+    base="$(basename "${f}")"
+    [[ ${base} == *.license ]] && continue
+    [[ -f "${dst}/${base}" ]] || cp "${f}" "${dst}/"
+  done
+done
+
+# Check for stale files in dev clone that were removed from tap
+for subdir in completions/bash completions/zsh completions/fish manpages; do
+  dst="${DEV_DIR}/${subdir}"
+  src="${TAP_DIR}/${subdir}"
+  [[ -d ${dst} ]] || continue
+  for f in "${dst}"/*; do
+    [[ -f ${f} ]] || continue
+    base="$(basename "${f}")"
+    [[ ${base} == *.license ]] && continue
+    if [[ ! -f "${src}/${base}" ]]; then
+      echo "==> Removing stale: ${subdir}/${base}" >&2
+      rm -f "${f}"
+      # Also remove the .license sidecar if present
+      rm -f "${f}.license"
+    fi
+  done
+done
+
+# Show what changed in the dev clone
+if ! git -C "${DEV_DIR}" diff --quiet completions/ manpages/ 2>/dev/null; then
+  echo "==> Changes in dev clone:" >&2
+  git -C "${DEV_DIR}" diff --stat completions/ manpages/
+fi
+
+# If --open-pr, commit changes in the dev clone on a new branch and open a PR.
+if [[ ${OPEN_PR} == true ]]; then
   echo "" >&2
-  if git -C "${TAP_DIR}" diff --quiet completions/ manpages/; then
+  if git -C "${DEV_DIR}" diff --quiet completions/ manpages/ &&
+    git -C "${DEV_DIR}" diff --cached --quiet completions/ manpages/ 2>/dev/null; then
     echo "==> No changes to commit." >&2
     exit 0
   fi
 
   BRANCH="bot/update-completions-man-pages"
-  echo "==> Creating branch '${BRANCH}' in ${TAP_DIR}..." >&2
-  git -C "${TAP_DIR}" switch --create "${BRANCH}" 2>/dev/null ||
-    git -C "${TAP_DIR}" switch "${BRANCH}" 2>/dev/null ||
+  echo "==> Creating branch '${BRANCH}' in dev clone..." >&2
+  git -C "${DEV_DIR}" switch --create "${BRANCH}" 2>/dev/null ||
+    git -C "${DEV_DIR}" switch "${BRANCH}" 2>/dev/null ||
     {
       echo "Error: could not create or switch to branch ${BRANCH}" >&2
       exit 1
     }
 
   echo "==> Committing changes..." >&2
-  git -C "${TAP_DIR}" add completions/ manpages/
-  git -C "${TAP_DIR}" commit -m "Update completions and man pages [bot]"
+  git -C "${DEV_DIR}" add completions/ manpages/
+  git -C "${DEV_DIR}" commit -m "Update completions and man pages [bot]"
 
   echo "==> Pushing branch..." >&2
-  if git -C "${TAP_DIR}" push --set-upstream origin "${BRANCH}" 2>/dev/null; then
+  if [[ ${NO_FORK} == true ]]; then
+    push_remote="origin"
+  else
+    push_remote="origin"
+  fi
+  if git -C "${DEV_DIR}" push --set-upstream "${push_remote}" "${BRANCH}" 2>/dev/null; then
     if command -v gh >/dev/null 2>&1; then
-      # TAP_NAME is user/repo (e.g. toobuntu/cask-tools); gh needs full GitHub
-      # owner/repo (toobuntu/homebrew-cask-tools). Insert "homebrew-" after "/".
-      GH_REPO="${TAP_NAME/\//\/homebrew-}"
+      # Convert tap name (toobuntu/cask-tools) to GitHub repo (toobuntu/homebrew-cask-tools).
+      # Use ${var/pattern/replacement} syntax compatible with bash, ksh, and zsh.
+      GH_REPO="${TAP_NAME/\///homebrew-}"
       echo "==> Opening PR via gh..." >&2
+      # Backticks in --body are literal markdown, not command substitution
       # shellcheck disable=SC2016
       gh pr create \
         --repo "${GH_REPO}" \
         --head "${BRANCH}" \
         --title "Update completions and man pages" \
-        --body 'Auto-generated by `scripts/run-generate-tap-man-completions.sh --commit`.' \
+        --body 'Auto-generated by `scripts/run-generate-tap-man-completions.sh --open-pr`.' \
         2>/dev/null || echo "==> PR may already exist or gh failed — check manually." >&2
     else
       echo "==> gh not available. Push succeeded; open a PR manually for branch '${BRANCH}'." >&2
     fi
   else
-    echo "==> Push failed (you may need to push manually from ${TAP_DIR})." >&2
+    echo "==> Push failed (you may need to push manually)." >&2
   fi
 
-  echo "==> Switching tap repo back to main..." >&2
-  git -C "${TAP_DIR}" switch main 2>/dev/null || git -C "${TAP_DIR}" switch - 2>/dev/null || true
+  echo "==> Switching dev repo back to previous branch..." >&2
+  git -C "${DEV_DIR}" switch - 2>/dev/null || true
+
+  echo "==> After the PR is merged, run 'brew update' to sync the tap repo." >&2
 fi

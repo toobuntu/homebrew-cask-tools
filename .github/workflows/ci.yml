@@ -50,7 +50,14 @@ jobs:
           restore-keys: macos-style-cache-
 
       - name: brew style
-        run: brew style --changed
+        run: |
+          # Shell formatting is checked by the shell_style job (raw shfmt + shellcheck).
+          # Homebrew's shfmt wrapper (wrap_then_do) uses different conventions than
+          # raw shfmt, so only check Ruby files here to avoid conflicts.
+          changed_rb="$(git diff --name-only origin/main -- '*.rb')"
+          if [ -n "${changed_rb}" ]; then
+            echo "${changed_rb}" | xargs brew style
+          fi
 
   shell_style:
     if: github.repository_owner == 'toobuntu'

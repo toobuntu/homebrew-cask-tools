@@ -38,8 +38,7 @@ DEV_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 detect_tap_name() {
   local remote_url tap_user tap_repo
   remote_url="$(git -C "${DEV_DIR}" remote get-url origin 2>/dev/null || true)"
-  if [[ -n ${remote_url} ]]
-  then
+  if [[ -n ${remote_url} ]]; then
     # Extract user/repo from SSH or HTTPS URLs
     tap_repo="$(basename "${remote_url}" .git)"
     tap_user="$(basename "$(dirname "${remote_url}")")"
@@ -60,8 +59,7 @@ TAP_DIR="$(brew --repo "${TAP_NAME}" 2>/dev/null || true)"
 GH_REPO="${TAP_NAME/\///homebrew-}"
 BRANCH="bot/update-completions-man-pages"
 
-if [[ -z ${TAP_DIR} || ! -d ${TAP_DIR} ]]
-then
+if [[ -z ${TAP_DIR} || ! -d ${TAP_DIR} ]]; then
   echo "Error: tap '${TAP_NAME}' is not installed. Run: brew tap ${TAP_NAME}" >&2
   exit 1
 fi
@@ -69,8 +67,7 @@ fi
 CMD_SRC="${DEV_DIR}/dev-cmd/generate-tap-man-completions.rb"
 CMD_DST="${TAP_DIR}/cmd/generate-tap-man-completions.rb"
 
-if [[ ! -f ${CMD_SRC} ]]
-then
+if [[ ! -f ${CMD_SRC} ]]; then
   echo "Error: source file not found: ${CMD_SRC}" >&2
   exit 1
 fi
@@ -78,8 +75,7 @@ fi
 # Detect --open-pr for the git workflow after syncing. All arguments
 # (including --open-pr) are forwarded to the brew command.
 OPEN_PR=false
-for arg in "$@"
-do
+for arg in "$@"; do
   [[ ${arg} == "--open-pr" ]] && OPEN_PR=true
 done
 
@@ -120,23 +116,20 @@ set +e
 HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap="${TAP_NAME}" "$@"
 gen_exit=$?
 set -e
-if [[ ${gen_exit} -ne 0 && ${gen_exit} -ne 1 ]]
-then
+if [[ ${gen_exit} -ne 0 && ${gen_exit} -ne 1 ]]; then
   echo "Error: brew generate-tap-man-completions exited with code ${gen_exit}" >&2
   exit "${gen_exit}"
 fi
 
 # Sync generated files back to the dev clone
 echo "==> Syncing completions/ and manpages/ to dev clone..." >&2
-for subdir in completions/bash completions/zsh completions/fish manpages
-do
+for subdir in completions/bash completions/zsh completions/fish manpages; do
   src="${TAP_DIR}/${subdir}"
   dst="${DEV_DIR}/${subdir}"
   [[ -d ${src} ]] || continue
   mkdir -p "${dst}"
   # Copy all generated files, not .license sidecars (those are managed by annotate.sh)
-  for f in "${src}"/*
-  do
+  for f in "${src}"/*; do
     [[ -f ${f} ]] || continue
     base="$(basename "${f}")"
     [[ ${base} == *.license ]] && continue
@@ -145,18 +138,15 @@ do
 done
 
 # Check for stale files in dev clone that were removed from tap
-for subdir in completions/bash completions/zsh completions/fish manpages
-do
+for subdir in completions/bash completions/zsh completions/fish manpages; do
   dst="${DEV_DIR}/${subdir}"
   src="${TAP_DIR}/${subdir}"
   [[ -d ${dst} ]] || continue
-  for f in "${dst}"/*
-  do
+  for f in "${dst}"/*; do
     [[ -f ${f} ]] || continue
     base="$(basename "${f}")"
     [[ ${base} == *.license ]] && continue
-    if [[ ! -f "${src}/${base}" ]]
-    then
+    if [[ ! -f "${src}/${base}" ]]; then
       echo "==> Removing stale: ${subdir}/${base}" >&2
       rm -f "${f}"
       # Also remove the .license sidecar if present
@@ -166,8 +156,7 @@ do
 done
 
 # Show what changed in the dev clone
-if ! git -C "${DEV_DIR}" diff --quiet completions/ manpages/ 2>/dev/null
-then
+if ! git -C "${DEV_DIR}" diff --quiet completions/ manpages/ 2>/dev/null; then
   echo "==> Changes in dev clone:" >&2
   git -C "${DEV_DIR}" diff --stat completions/ manpages/
 fi
@@ -180,12 +169,10 @@ git -C "${TAP_DIR}" restore completions/ manpages/ 2>/dev/null || true
 git -C "${TAP_DIR}" clean -fd completions/ manpages/ 2>/dev/null || true
 
 # If --open-pr, commit changes in the dev clone on a new branch and open a PR.
-if [[ ${OPEN_PR} == true ]]
-then
+if [[ ${OPEN_PR} == true ]]; then
   echo "" >&2
   if git -C "${DEV_DIR}" diff --quiet completions/ manpages/ &&
-     git -C "${DEV_DIR}" diff --cached --quiet completions/ manpages/ 2>/dev/null
-  then
+    git -C "${DEV_DIR}" diff --cached --quiet completions/ manpages/ 2>/dev/null; then
     echo "==> No changes to commit." >&2
     exit 0
   fi
@@ -203,15 +190,12 @@ then
   git -C "${DEV_DIR}" commit -m "Update completions and man pages [bot]"
 
   echo "==> Pushing branch..." >&2
-  if git -C "${DEV_DIR}" push --set-upstream origin "${BRANCH}" 2>/dev/null
-  then
+  if git -C "${DEV_DIR}" push --set-upstream origin "${BRANCH}" 2>/dev/null; then
     # Check if a PR already exists before creating one
     existing_url="$(gh pr list --repo "${GH_REPO}" --head "${BRANCH}" --state open --json url --jq '.[0].url' 2>/dev/null || true)"
-    if [[ -n ${existing_url} ]]
-    then
+    if [[ -n ${existing_url} ]]; then
       echo "==> PR already open: ${existing_url}" >&2
-    elif command -v gh >/dev/null 2>&1
-    then
+    elif command -v gh >/dev/null 2>&1; then
       echo "==> Opening PR via gh..." >&2
       # Backticks in --body are literal markdown, not command substitution
       # shellcheck disable=SC2016

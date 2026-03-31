@@ -21,10 +21,15 @@ module Homebrew
         description <<~EOS
           Generate shell completions and man pages for a tap's commands.
 
-          Reads each `*.rb` file in `cmd/` and writes Bash, ZSH, and Fish completion
-          files into `completions/`, and Ronn man page sources (`.1.md`) and compiled
-          roff (`.1`) into `manpages/`. The tap is auto-detected from the location of
-          this command file. Use `--tap` to override.
+          Reads each `*.rb` file in `cmd/` and `dev-cmd/` and writes Bash, ZSH, and
+          Fish completion files into `completions/`, and Ronn man page sources (`.1.md`)
+          and compiled roff (`.1`) into `manpages/`. Stale files for removed commands are
+          cleaned up automatically. The tap is auto-detected from the location of this
+          command file. Use `--tap` to override.
+
+          Exits non-zero when no files change (like `git diff --exit-code`). This is the
+          same convention used by Homebrew's `generate-man-completions`. Pass
+          `--no-exit-code` to always exit 0.
 
           Pass `--debug` for detailed diagnostics about tap resolution, command
           discovery, and per-file write decisions.
@@ -61,23 +66,18 @@ module Homebrew
         require "manpages/parser/ronn"
         require "manpages/converter/roff"
 
-        dev_cmd_names = Pathname.glob(tap_path/"dev-cmd/*.rb").to_set { |p| p.basename(".rb").to_s }
-        odebug "dev-cmd/ names to exclude: #{dev_cmd_names.sort.to_a}" if dev_cmd_names.any?
-
-        cmd_paths = Pathname.glob(tap_path/"cmd/*.rb").reject do |p|
-          dev_cmd_names.include?(p.basename(".rb").to_s)
-        end
+        cmd_paths = collect_command_paths(tap_path)
 
         if cmd_paths.empty?
-          opoo "No commands found in #{tap.name} cmd/ (after excluding dev-cmd/ mirrors)."
+          opoo "No commands found in #{tap.name} cmd/ or dev-cmd/."
           return
         end
 
-        odebug "Commands: #{cmd_paths.sort.map { |p| p.basename(".rb") }.join(", ")}"
+        odebug "Commands: #{cmd_paths.map { |_name, p| p.basename(".rb") }.sort.join(", ")}"
 
-        cmd_paths.sort.each do |cmd_path|
-          command = cmd_path.basename(".rb").to_s
-          odebug "Processing #{command}:"
+        generated_commands = T.let([], T::Array[String])
+        cmd_paths.sort.each do |command, cmd_path|
+          odebug "Processing #{command} (#{cmd_path}):"
           write_if_changed bash_dir/"brew-#{command}",      bash_content(command)
           write_if_changed zsh_dir/"_brew-#{command}",      zsh_content(command)
           write_if_changed fish_dir/"brew-#{command}.fish", fish_content(command)
@@ -85,6 +85,7 @@ module Homebrew
           md = man_page_markdown(command, cmd_path)
           if md.nil?
             odebug "  skip man page: no parser or usage banner for #{command}"
+            generated_commands << command
             next
           end
 
@@ -93,18 +94,25 @@ module Homebrew
             T.unsafe(Homebrew)::Manpages::Parser::Ronn.parse(md).first,
           )
           write_if_changed man_dir/"brew-#{command}.1", roff if roff
+          generated_commands << command
         end
+
+        remove_stale_files(generated_commands, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
 
         diff = system_command "git", args: [
           "-C", tap_path,
           "diff", "--shortstat", "--patch", "--exit-code", "completions", "manpages"
         ]
 
-        if diff.status.success?
-          ohai "Completions and man pages are already up to date."
-          Homebrew.failed = T.let(true, T::Boolean) unless args.no_exit_code?
+        message = if diff.status.success?
+          "No changes to completions or man pages."
         else
-          ohai "Completions and man pages updated."
+          "Completions and man pages updated."
+        end
+        if diff.status.success? && !args.no_exit_code?
+          ofail message
+        else
+          puts message
         end
       end
 
@@ -127,6 +135,56 @@ module Homebrew
           T.must_because(tap) do
             "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>."
           end
+        end
+      end
+
+      # Collect unique command paths from cmd/ and dev-cmd/.
+      # When the same basename exists in both directories (e.g. a hardlink), prefer dev-cmd/.
+      sig { params(tap_path: Pathname).returns(T::Array[[String, Pathname]]) }
+      def collect_command_paths(tap_path)
+        all = T.let({}, T::Hash[String, Pathname])
+        Pathname.glob(tap_path/"cmd/*.rb").each { |p| all[p.basename(".rb").to_s] = p }
+        Pathname.glob(tap_path/"dev-cmd/*.rb").each { |p| all[p.basename(".rb").to_s] = p }
+        odebug "dev-cmd/ commands: #{Pathname.glob(tap_path/"dev-cmd/*.rb").map { |p| p.basename(".rb") }}" \
+          if (tap_path/"dev-cmd").directory?
+        all.to_a
+      end
+
+      # Remove stale completion and man page files whose commands no longer exist.
+      sig {
+        params(
+          commands: T::Array[String],
+          bash_dir: Pathname,
+          zsh_dir:  Pathname,
+          fish_dir: Pathname,
+          man_dir:  Pathname,
+        ).void
+      }
+      def remove_stale_files(commands, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+        command_set = commands.to_set
+        stale = T.let([], T::Array[Pathname])
+        # Skip .license sidecars — they are managed by scripts/annotate.sh, not this generator.
+        no_license = ->(p) { p.extname != ".license" }
+        stale.concat(Pathname.glob(bash_dir/"brew-*").select(&no_license).reject do |p|
+          command_set.include?(p.basename.to_s.delete_prefix("brew-"))
+        end)
+        stale.concat(Pathname.glob(zsh_dir/"_brew-*").select(&no_license).reject do |p|
+          command_set.include?(p.basename.to_s.delete_prefix("_brew-"))
+        end)
+        stale.concat(Pathname.glob(fish_dir/"brew-*.fish").reject do |p|
+          command_set.include?(p.basename(".fish").to_s.delete_prefix("brew-"))
+        end)
+        stale.concat(Pathname.glob(man_dir/"brew-*.1").reject do |p|
+          command_set.include?(p.basename(".1").to_s.delete_prefix("brew-"))
+        end)
+        stale.concat(Pathname.glob(man_dir/"brew-*.1.md").reject do |p|
+          command_set.include?(p.basename(".1.md").to_s.delete_prefix("brew-"))
+        end)
+        return if stale.empty?
+
+        stale.sort.each do |path|
+          odebug "  removing stale: #{path.basename}"
+          path.delete
         end
       end
 

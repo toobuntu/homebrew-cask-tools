@@ -76,7 +76,7 @@ jobs:
       - name: shell style
         run: |
           shfmt --indent 2 --simplify --case-indent --diff scripts/ .githooks/
-          shellcheck scripts/annotate.sh scripts/run-tests.sh .githooks/pre-commit
+          shellcheck scripts/annotate.sh scripts/run-tests.sh scripts/run-generate-tap-man-completions.sh .githooks/pre-commit
 
   brew_tests:
     if: github.repository_owner == 'toobuntu'

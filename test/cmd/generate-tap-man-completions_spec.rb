@@ -280,7 +280,7 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
     end
 
     it "returns nil on API error" do
-      allow(GitHub).to receive(:fetch_pull_requests).and_raise(GitHub::API::AuthenticationFailedError.new("test"))
+      allow(GitHub).to receive(:fetch_pull_requests).and_raise(RuntimeError.new("API error"))
       expect(cmd.send(:retrieve_pull_requests, "Update completions", "test/repo")).to be_nil
     end
   end
@@ -334,7 +334,7 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
       (tmpdir/"cmd"/"alpha.rb").write("# a command")
       (tmpdir/"dev-cmd"/"beta.rb").write("# a dev-command")
 
-      mock_tap = instance_double(Tap, name: "test/tap", path: tmpdir)
+      mock_tap = instance_double(Tap, name: "test/tap", path: tmpdir, remote_repository: nil)
       allow(Homebrew::EnvConfig).to receive(:developer?).and_return(true)
       allow(Homebrew).to receive(:install_bundler_gems!)
 

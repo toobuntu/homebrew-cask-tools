@@ -149,6 +149,8 @@ module Homebrew
       end
 
       # Remove stale completion and man page files whose commands no longer exist.
+      # Also removes orphaned `.license` sidecars so they don't linger after the
+      # generated file they annotate is deleted.
       sig {
         params(
           commands: T::Array[String],
@@ -161,28 +163,45 @@ module Homebrew
       def remove_stale_files(commands, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
         command_set = commands.to_set
         stale = T.let([], T::Array[Pathname])
-        # Skip .license sidecars — they are managed by scripts/annotate.sh, not this generator.
-        no_license = ->(p) { p.extname != ".license" }
-        stale.concat(Pathname.glob(bash_dir/"brew-*").select(&no_license).reject do |p|
-          command_set.include?(p.basename.to_s.delete_prefix("brew-"))
+        stale.concat(stale_in(bash_dir, "brew-*", command_set) { |p| p.basename.to_s.delete_prefix("brew-") })
+        stale.concat(stale_in(zsh_dir, "_brew-*", command_set) { |p| p.basename.to_s.delete_prefix("_brew-") })
+        stale.concat(stale_in(fish_dir, "brew-*.fish", command_set) do |p|
+          p.basename(".fish").to_s.delete_prefix("brew-")
         end)
-        stale.concat(Pathname.glob(zsh_dir/"_brew-*").select(&no_license).reject do |p|
-          command_set.include?(p.basename.to_s.delete_prefix("_brew-"))
+        stale.concat(stale_in(man_dir, "brew-*.1", command_set) do |p|
+          p.basename(".1").to_s.delete_prefix("brew-")
         end)
-        stale.concat(Pathname.glob(fish_dir/"brew-*.fish").reject do |p|
-          command_set.include?(p.basename(".fish").to_s.delete_prefix("brew-"))
-        end)
-        stale.concat(Pathname.glob(man_dir/"brew-*.1").reject do |p|
-          command_set.include?(p.basename(".1").to_s.delete_prefix("brew-"))
-        end)
-        stale.concat(Pathname.glob(man_dir/"brew-*.1.md").reject do |p|
-          command_set.include?(p.basename(".1.md").to_s.delete_prefix("brew-"))
+        stale.concat(stale_in(man_dir, "brew-*.1.md", command_set) do |p|
+          p.basename(".1.md").to_s.delete_prefix("brew-")
         end)
         return if stale.empty?
 
         stale.sort.each do |path|
           odebug "  removing stale: #{path.basename}"
           path.delete
+          # Remove the .license sidecar if present (managed by scripts/annotate.sh)
+          sidecar = Pathname("#{path}.license")
+          next unless sidecar.exist?
+
+          odebug "  removing stale sidecar: #{sidecar.basename}"
+          sidecar.delete
+        end
+      end
+
+      # Return files in +dir+ matching +glob_pattern+ whose extracted command name
+      # (via the block) is not in +command_set+. Excludes `.license` sidecars — those
+      # are cleaned up alongside their parent file, not independently.
+      sig {
+        params(
+          dir:          Pathname,
+          glob_pattern: String,
+          command_set:  T::Set[String],
+          _block:       T.proc.params(p: Pathname).returns(String),
+        ).returns(T::Array[Pathname])
+      }
+      def stale_in(dir, glob_pattern, command_set, &_block)
+        Pathname.glob(dir/glob_pattern).reject do |p|
+          p.extname == ".license" || command_set.include?(yield(p))
         end
       end
 

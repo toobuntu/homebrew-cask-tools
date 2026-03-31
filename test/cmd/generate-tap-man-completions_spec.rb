@@ -116,7 +116,8 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
       expect(md).to include("## SYNOPSIS")
       expect(md).to include("## DESCRIPTION")
       expect(md).to include("## OPTIONS")
-      expect(md).to include("`--verbose`")
+      expect(md).to include("`-v`, `--verbose`")
+      expect(md).to include("Show verbose output.")
     end
 
     it "includes a title suffix when the first description line ends with a period" do

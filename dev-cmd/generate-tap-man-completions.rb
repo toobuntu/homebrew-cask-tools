@@ -120,7 +120,8 @@ module Homebrew
           puts message
         end
 
-        check_for_duplicate_pull_requests(tap) if args.open_pr? && !args.no_pull_requests? && !diff.status.success?
+        has_changes = !diff.status.success?
+        check_for_duplicate_pull_requests(tap) if args.open_pr? && has_changes
       end
 
       private

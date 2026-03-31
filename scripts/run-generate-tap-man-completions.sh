@@ -34,11 +34,9 @@ then
 fi
 
 cleanup() {
-  local exit_code=$?
   echo "" >&2
   echo "==> Removing hardlink from Homebrew repository..." >&2
   rm -f "${CMD_DST}"
-  exit "${exit_code}"
 }
 trap cleanup EXIT INT TERM
 

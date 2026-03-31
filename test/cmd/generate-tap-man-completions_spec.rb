@@ -120,10 +120,21 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
       expect((bash_dir/"brew-keep").exist?).to be(true)
     end
 
-    it "skips .license sidecar files" do
-      (bash_dir/"brew-old-cmd.license").write("license")
-      cmd.send(:remove_stale_files, ["current"], bash_dir:, zsh_dir:, fish_dir:, man_dir:)
-      expect((bash_dir/"brew-old-cmd.license").exist?).to be(true)
+    it "removes .license sidecars alongside stale files" do
+      (bash_dir/"brew-old-cmd").write("stale")
+      (bash_dir/"brew-old-cmd.license").write("license sidecar")
+      cmd.send(:remove_stale_files, ["current"],
+               bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+      expect((bash_dir/"brew-old-cmd").exist?).to be(false)
+      expect((bash_dir/"brew-old-cmd.license").exist?).to be(false)
+    end
+
+    it "preserves .license sidecars for current commands" do
+      (bash_dir/"brew-keep").write("keep")
+      (bash_dir/"brew-keep.license").write("license")
+      cmd.send(:remove_stale_files, ["keep"], bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+      expect((bash_dir/"brew-keep").exist?).to be(true)
+      expect((bash_dir/"brew-keep.license").exist?).to be(true)
     end
   end
 

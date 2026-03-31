@@ -85,15 +85,13 @@ module Homebrew
           md = man_page_markdown(command, cmd_path)
           if md.nil?
             odebug "  skip man page: no parser or usage banner for #{command}"
-            generated_commands << command
-            next
+          else
+            write_if_changed man_dir/"brew-#{command}.1.md", md
+            roff, = T.unsafe(Homebrew)::Manpages::Converter::Roff.convert(
+              T.unsafe(Homebrew)::Manpages::Parser::Ronn.parse(md).first,
+            )
+            write_if_changed man_dir/"brew-#{command}.1", roff if roff
           end
-
-          write_if_changed man_dir/"brew-#{command}.1.md", md
-          roff, = T.unsafe(Homebrew)::Manpages::Converter::Roff.convert(
-            T.unsafe(Homebrew)::Manpages::Parser::Ronn.parse(md).first,
-          )
-          write_if_changed man_dir/"brew-#{command}.1", roff if roff
           generated_commands << command
         end
 

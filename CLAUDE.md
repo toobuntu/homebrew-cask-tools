@@ -50,8 +50,12 @@ scripts/run-tests.sh
 scripts/run-tests.sh --only=cmd/purge-quarantine:LINE
 scripts/run-tests.sh --only=cmd/generate-tap-man-completions
 
-# Regenerate shell completions, man page sources, and compiled roff after any cmd_args change
+# Regenerate shell completions, man page sources, and compiled roff after any cmd_args change.
+# Run from the development clone; generates into the installed tap repo.
 scripts/run-generate-tap-man-completions.sh
+
+# Same, but also commit, push, and open a PR in the tap repo:
+scripts/run-generate-tap-man-completions.sh --commit
 ```
 
 ## Architecture: tiered bundle discovery

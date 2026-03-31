@@ -81,10 +81,66 @@ for external commands in third-party taps. Key similarities and divergences:
 | **Ronn/roff** | `Manpages::Converter::Roff` and `::Kramdown` | `Manpages::Converter::Roff` only (no HTML/kramdown output) |
 | **Exit behavior** | `ofail` when no changes (matches `git diff --exit-code`) | Same — `ofail` when no changes, `--no-exit-code` to override |
 | **Date-only check** | Detects date-only `.TH` changes, treats as no change | Not needed (no global man page with date stamp) |
-| **Stale cleanup** | Not applicable (writes fixed set of files) | Removes stale files for deleted commands |
+| **Stale cleanup** | Not applicable (writes fixed set of files) | Removes stale files and their `.license` sidecars for deleted commands |
 | **Debug output** | No `odebug` calls | `odebug` throughout for `--debug` diagnostics |
 
-The main divergence is that upstream uses high-level APIs (`Manpages.regenerate_man_pages`,
-`Completions.update_shell_completions!`) that operate on Homebrew's entire command set,
-while this tap must process commands individually using lower-level APIs
-(`CLI::Parser.from_cmd_path`, `Completions.generate_*_subcommand_completion`).
+### Why the high-level APIs cannot be used
+
+At first glance it seems like hardlinking a tap's commands into `$(brew --repo)`
+should let them use the same high-level APIs as upstream. However:
+
+- **`Completions.update_shell_completions!`** calls `Commands.commands(external: false)`
+  — it explicitly excludes external tap commands. Even if a tap command is hardlinked
+  into `$(brew --repo)/Library/Homebrew/cmd/`, the high-level method operates on
+  Homebrew's monolithic `completions/{bash,zsh,fish}/brew{,.fish,_brew}` files (ERB
+  templates), not per-command files.
+
+- **`Manpages.regenerate_man_pages`** generates a single `brew.1` man page from
+  `brew.1.md.erb`. It is not designed for per-command man pages.
+
+- **`Completions.generate_*_subcommand_completion`** (the lower-level per-command
+  method) calls `Commands.command_options(command)`, which calls `Commands.path(command)`,
+  which calls `which(cmd, tap_cmd_directories)`. `which()` requires
+  `File.executable?`, and tap `cmd/` files typically have mode 100644 (not executable).
+  This is why the generator falls back to no-op stubs when `Completions` returns nil.
+
+The generator therefore uses `CLI::Parser.from_cmd_path(path)` to extract options
+directly from each command's `cmd_args` block for man page generation, and relies on
+Homebrew's per-command completion generators where they work (with no-op stubs as
+fallback).
+
+### `--debug` and `--verbose`
+
+Both `--debug` and `--verbose` are inherited from `AbstractCommand` and accepted by
+all brew commands. Neither upstream's `generate-man-completions` nor this tap's
+`generate-tap-man-completions` implements custom `--verbose` behavior. The flags
+have the following effect:
+
+- **`--debug`**: Activates `odebug` output (magenta text to stderr). The generator
+  uses `odebug` throughout to show tap resolution, command discovery, per-file
+  write decisions, and stale file removal. This is the recommended flag for
+  troubleshooting.
+
+- **`--verbose`**: Accepted but has no additional effect in this command. It is
+  available for future use if finer-grained output levels are needed.
+
+## Developer workflow
+
+The generated files (completions and man pages) live in the **Homebrew-managed tap
+repository** (`$(brew --repo toobuntu/cask-tools)`), not in the development clone.
+`brew update` keeps this directory in sync with the remote.
+
+The development clone (e.g. `~/devel/github/homebrew-cask-tools`) contains the source
+code including `dev-cmd/generate-tap-man-completions.rb`. The recommended workflow:
+
+1. **Edit `cmd_args` or add/remove commands** in the development clone.
+2. **Run `scripts/run-generate-tap-man-completions.sh`** from the development clone.
+   The script hardlinks the dev-cmd into Homebrew's core `cmd/` directory (temporarily),
+   runs the command with `--tap=` pointed at the installed tap, and cleans up.
+3. **Review the diff** in the tap repo: `git -C "$(brew --repo toobuntu/cask-tools)" diff`.
+4. **Commit and push** from the tap repo, or use `--commit` to automate it:
+   `scripts/run-generate-tap-man-completions.sh --commit` creates a branch, commits,
+   pushes, and opens a PR via `gh` if available.
+
+The script should **not** be run from `$(brew --repo)` directly — that directory is
+managed by Homebrew and modifications may be lost on `brew update`.

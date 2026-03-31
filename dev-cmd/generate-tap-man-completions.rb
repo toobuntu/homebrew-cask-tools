@@ -31,8 +31,9 @@ module Homebrew
           same convention used by Homebrew's `generate-man-completions`. Pass
           `--no-exit-code` to always exit 0.
 
-          Pass `--debug` for detailed diagnostics about tap resolution, command
-          discovery, and per-file write decisions.
+          Pass `--verbose` for a summary of what was processed (commands found, files
+          written/skipped, stale files removed). Pass `--debug` for detailed diagnostics
+          about tap resolution, command discovery, and per-file write decisions.
         EOS
 
         flag   "--tap=",
@@ -74,28 +75,22 @@ module Homebrew
         end
 
         odebug "Commands: #{cmd_paths.map { |_name, p| p.basename(".rb") }.sort.join(", ")}"
+        ohai "Processing #{cmd_paths.size} command(s) from #{tap.name}" if args.verbose?
 
+        written = T.let(0, Integer)
+        skipped = T.let(0, Integer)
         generated_commands = T.let([], T::Array[String])
         cmd_paths.sort.each do |command, cmd_path|
           odebug "Processing #{command} (#{cmd_path}):"
-          write_if_changed bash_dir/"brew-#{command}",      bash_content(command)
-          write_if_changed zsh_dir/"_brew-#{command}",      zsh_content(command)
-          write_if_changed fish_dir/"brew-#{command}.fish", fish_content(command)
-
-          md = man_page_markdown(command, cmd_path)
-          if md.nil?
-            odebug "  skip man page: no parser or usage banner for #{command}"
-          else
-            write_if_changed man_dir/"brew-#{command}.1.md", md
-            roff, = T.unsafe(Homebrew)::Manpages::Converter::Roff.convert(
-              T.unsafe(Homebrew)::Manpages::Parser::Ronn.parse(md).first,
-            )
-            write_if_changed man_dir/"brew-#{command}.1", roff if roff
-          end
+          w, s = write_completions_and_man_page(command, cmd_path, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+          written += w
+          skipped += s
           generated_commands << command
         end
 
-        remove_stale_files(generated_commands, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+        removed = remove_stale_files(generated_commands, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+
+        ohai "#{written} file(s) written, #{skipped} unchanged, #{removed} stale file(s) removed" if args.verbose?
 
         diff = system_command "git", args: [
           "-C", tap_path,
@@ -150,7 +145,7 @@ module Homebrew
 
       # Remove stale completion and man page files whose commands no longer exist.
       # Also removes orphaned `.license` sidecars so they don't linger after the
-      # generated file they annotate is deleted.
+      # generated file they annotate is deleted. Returns the number of files removed.
       sig {
         params(
           commands: T::Array[String],
@@ -158,7 +153,7 @@ module Homebrew
           zsh_dir:  Pathname,
           fish_dir: Pathname,
           man_dir:  Pathname,
-        ).void
+        ).returns(Integer)
       }
       def remove_stale_files(commands, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
         command_set = commands.to_set
@@ -174,18 +169,22 @@ module Homebrew
         stale.concat(stale_in(man_dir, "brew-*.1.md", command_set) do |p|
           p.basename(".1.md").to_s.delete_prefix("brew-")
         end)
-        return if stale.empty?
+        return 0 if stale.empty?
 
+        count = 0
         stale.sort.each do |path|
           odebug "  removing stale: #{path.basename}"
           path.delete
+          count += 1
           # Remove the .license sidecar if present (managed by scripts/annotate.sh)
           sidecar = Pathname("#{path}.license")
           next unless sidecar.exist?
 
           odebug "  removing stale sidecar: #{sidecar.basename}"
           sidecar.delete
+          count += 1
         end
+        count
       end
 
       # Return files in +dir+ matching +glob_pattern+ whose extracted command name
@@ -205,15 +204,61 @@ module Homebrew
         end
       end
 
-      sig { params(path: Pathname, content: String).void }
+      # Write +content+ to +path+ when the file is new or content has changed.
+      sig { params(path: Pathname, content: String).returns(Symbol) }
       def write_if_changed(path, content)
         if path.exist? && path.read == content
           odebug "  skip (unchanged): #{path.basename}"
-          return
+          return :skipped
         end
 
         odebug "  write: #{path.basename}"
         path.write(content)
+        :written
+      end
+
+      # Generate and write completion and man page files for a single command.
+      # Returns [written, skipped] counts.
+      sig {
+        params(
+          command:  String,
+          cmd_path: Pathname,
+          bash_dir: Pathname,
+          zsh_dir:  Pathname,
+          fish_dir: Pathname,
+          man_dir:  Pathname,
+        ).returns([Integer, Integer])
+      }
+      def write_completions_and_man_page(command, cmd_path, bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+        written = 0
+        skipped = 0
+        [
+          [bash_dir/"brew-#{command}",      bash_content(command)],
+          [zsh_dir/"_brew-#{command}",      zsh_content(command)],
+          [fish_dir/"brew-#{command}.fish", fish_content(command)],
+        ].each do |path, content|
+          result = write_if_changed(path, content)
+          (result == :written) ? written += 1 : skipped += 1
+        end
+
+        md = man_page_markdown(command, cmd_path)
+        if md.nil?
+          odebug "  skip man page: no parser or usage banner for #{command}"
+        else
+          [
+            [man_dir/"brew-#{command}.1.md", md],
+            [man_dir/"brew-#{command}.1", T.let(T.unsafe(Homebrew)::Manpages::Converter::Roff.convert(
+              T.unsafe(Homebrew)::Manpages::Parser::Ronn.parse(md).first,
+            ).first, T.nilable(String))],
+          ].each do |path, content|
+            next unless content
+
+            result = write_if_changed(path, content)
+            (result == :written) ? written += 1 : skipped += 1
+          end
+        end
+
+        [written, skipped]
       end
 
       sig { params(command: String).returns(String) }

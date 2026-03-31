@@ -129,9 +129,9 @@ all brew commands. The flags have the following effect:
 The generated files (completions and man pages) are written to the **Homebrew-managed
 tap repository** (`$(brew --repo toobuntu/cask-tools)`) by the generator, then synced
 back to the **development clone** by `scripts/run-generate-tap-man-completions.sh`.
-After syncing, the tap repo is restored to its clean state so `brew update` sees no
-dirty tree. All git operations (branching, committing, pushing) happen in the dev
-clone, which is the proper place to make changes.
+After syncing, the tap repo is restored to its clean state (via `git restore` +
+`git clean -fd`) so `brew update` sees no dirty tree. All git operations (branching,
+committing, pushing) happen in the dev clone, which is the proper place to make changes.
 
 The development clone (e.g. `~/devel/github/homebrew-cask-tools`) contains the source
 code including `dev-cmd/generate-tap-man-completions.rb`. The recommended workflow:
@@ -141,6 +141,7 @@ code including `dev-cmd/generate-tap-man-completions.rb`. The recommended workfl
    The script hardlinks the dev-cmd into the installed tap's `cmd/` directory
    (temporarily), runs the command with `--tap=` pointed at the installed tap, syncs
    the results back to the dev clone, restores the tap repo, and cleans up the hardlink.
+   All arguments are forwarded to the brew command.
 3. **Review the diff** in the dev clone: `git diff completions/ manpages/`.
 4. **Commit and push** from the dev clone, or use `--open-pr` to automate it:
    `scripts/run-generate-tap-man-completions.sh --open-pr` creates a branch, commits,
@@ -148,9 +149,12 @@ code including `dev-cmd/generate-tap-man-completions.rb`. The recommended workfl
    an existing open PR on the branch.
 5. After the PR is merged, run `brew update` to pull changes to the tap repo.
 
-The `--open-pr`, `--no-fork`, and `--no-pull-requests` flags mirror `brew bump`
-conventions. `--no-pull-requests` skips the check for existing open PRs but cannot
-be combined with `--open-pr`.
+The `--open-pr`, `--no-fork`, and `--no-pull-requests` flags are declared in
+`cmd_args` (so they appear in `brew generate-tap-man-completions --help`, shell
+completions, and man pages) and mirror `brew bump` conventions. `--no-pull-requests`
+skips the duplicate pull request check (using `GitHub.fetch_pull_requests`, following
+the `duplicate_pull_requests` / `maybe_duplicate_pull_requests` pattern from
+`brew bump`). It cannot be combined with `--open-pr`.
 
 The script should **not** be run from `$(brew --repo)` directly — that directory is
 managed by Homebrew and modifications may be lost on `brew update`.

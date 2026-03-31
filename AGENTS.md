@@ -93,11 +93,11 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `scripts/run-generate-tap-man-completions.sh`: Helper script to hardlink `dev-cmd/generate-tap-man-completions.rb`
   into the installed tap's `cmd/` and run the command with `--tap=` pointed at the installed tap.
   Syncs generated files back to the development clone for committing, then restores the tap repo
-  to a clean state.
+  to a clean state (via `git restore` + `git clean -fd`).
   Designed to be run from the development clone. Forwards all arguments to the command.
   Pass `--open-pr` to create a branch, commit, push, and open a PR from the dev clone via `gh`.
-  Pass `--no-fork` to push to origin instead of creating a fork.
-  Pass `--no-pull-requests` to skip checking for existing open PRs (conflicts with `--open-pr`).
+  The `--open-pr`, `--no-pull-requests`, and `--no-fork` flags are declared in `cmd_args`
+  (visible in `--help`, completions, and man pages) and forwarded to the brew command.
   Cleans up hardlinks on exit. See `docs/architecture.md` § Developer workflow for details.
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.

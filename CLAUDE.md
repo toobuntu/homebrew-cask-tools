@@ -14,7 +14,7 @@ This is a Homebrew external tap hosting `brew purge-quarantine` and `brew genera
 `brew purge-quarantine` removes macOS quarantine (`com.apple.quarantine`) and provenance
 (`com.apple.provenance`) extended attributes from installed cask bundles to satisfy Gatekeeper.
 `brew generate-tap-man-completions` is a developer-only command (requires `HOMEBREW_DEVELOPER=1`)
-that generates shell completions and Ronn man page sources for commands in `cmd/`.
+that generates shell completions and Ronn man page sources for commands in `cmd/` and `dev-cmd/`.
 
 Commands are implemented as Ruby files in `cmd/` (user-facing) and `dev-cmd/` (developer-only)
 using Homebrew's `AbstractCommand` infrastructure. Since Homebrew does not support external
@@ -51,7 +51,7 @@ scripts/run-tests.sh --only=cmd/purge-quarantine:LINE
 scripts/run-tests.sh --only=cmd/generate-tap-man-completions
 
 # Regenerate shell completions, man page sources, and compiled roff after any cmd_args change
-brew generate-tap-man-completions
+scripts/run-generate-tap-man-completions.sh
 ```
 
 ## Architecture: tiered bundle discovery
@@ -108,7 +108,7 @@ Files must carry SPDX headers. Run `scripts/annotate.sh` to annotate non-complia
 The `reuse` tool is pre-installed in the Copilot sandbox; do **not** hand-write SPDX headers —
 run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout.
 
-`scripts/annotate.sh` special-cases `.fish` completion files and man page files (`.1`, `.1.md`):
+`scripts/annotate.sh` special-cases all generated files under `completions/` and man page files (`.1`, `.1.md`):
 because the generator overwrites their content, they use `.license` sidecars created with
 `--force-dot-license` rather than inline `#` comment headers.
 

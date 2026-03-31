@@ -34,7 +34,10 @@ stanzas, `uninstall.delete` paths, and `pkgutil` receipt file lists.
 
 Shell completion files live in `completions/{bash,zsh,fish}/` and are generated
 by `dev-cmd/generate-tap-man-completions.rb` (`brew generate-tap-man-completions`).
-This is a developer-only command that requires `HOMEBREW_DEVELOPER=1`.
+This is a developer-only command that requires `HOMEBREW_DEVELOPER=1`. It processes
+commands from both `cmd/` and `dev-cmd/`, generating completions and man pages for
+each. When the same command name exists in both directories (e.g. a hardlink), the
+`dev-cmd/` version is used as the canonical source.
 
 - **ZSH**: Defines `_brew_purge_quarantine()`. ZSH's `_brew` dispatcher automatically calls
   `_brew_<command>` functions, so this provides full `brew purge-quarantine <TAB>` completion.
@@ -63,3 +66,25 @@ command itself, with the `man` bundler gem group (`kramdown`).
 
 Regenerate man page sources and roff after any `cmd_args` change by running
 `brew generate-tap-man-completions`. CI verifies sources are current.
+
+## Relationship to upstream `generate-man-completions`
+
+`brew generate-tap-man-completions` is modelled on Homebrew's built-in
+`brew generate-man-completions` (`dev-cmd/generate-man-completions.rb`), adapted
+for external commands in third-party taps. Key similarities and divergences:
+
+| Aspect | Upstream (`generate-man-completions`) | This tap (`generate-tap-man-completions`) |
+|--------|---------------------------------------|------------------------------------------|
+| **Scope** | All Homebrew internal commands | Commands in a single tap's `cmd/` and `dev-cmd/` |
+| **Completions** | `Completions.update_shell_completions!` (ERB templates) | Per-command files via `Completions.generate_*_subcommand_completion` with fallback stubs |
+| **Man pages** | Single `brew.1` from ERB template via `Manpages.regenerate_man_pages` | Per-command `brew-<name>.1.md` + `.1` via `CLI::Parser.from_cmd_path` |
+| **Ronn/roff** | `Manpages::Converter::Roff` and `::Kramdown` | `Manpages::Converter::Roff` only (no HTML/kramdown output) |
+| **Exit behavior** | `ofail` when no changes (matches `git diff --exit-code`) | Same — `ofail` when no changes, `--no-exit-code` to override |
+| **Date-only check** | Detects date-only `.TH` changes, treats as no change | Not needed (no global man page with date stamp) |
+| **Stale cleanup** | Not applicable (writes fixed set of files) | Removes stale files for deleted commands |
+| **Debug output** | No `odebug` calls | `odebug` throughout for `--debug` diagnostics |
+
+The main divergence is that upstream uses high-level APIs (`Manpages.regenerate_man_pages`,
+`Completions.update_shell_completions!`) that operate on Homebrew's entire command set,
+while this tap must process commands individually using lower-level APIs
+(`CLI::Parser.from_cmd_path`, `Completions.generate_*_subcommand_completion`).

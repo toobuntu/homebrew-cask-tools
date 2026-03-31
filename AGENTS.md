@@ -91,8 +91,10 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `docs/`: Project documentation, including architecture notes (see `docs/architecture.md`).
 - `.gitignore`: Ignores the `cmd/generate-tap-man-completions.rb` hardlink (see dev-cmd above).
 - `scripts/run-generate-tap-man-completions.sh`: Helper script to hardlink `dev-cmd/generate-tap-man-completions.rb`
-  into `$(brew --repo)/Library/Homebrew/cmd/` and run the command. Forwards all arguments to the command.
-  Use instead of running `brew generate-tap-man-completions` directly. Cleans up hardlinks on exit.
+  into `$(brew --repo)/Library/Homebrew/cmd/` and run the command with `--tap=` pointed at the installed tap.
+  Designed to be run from the development clone. Forwards all arguments to the command.
+  Pass `--commit` to create a branch, commit, push, and open a PR in the tap repo via `gh`.
+  Cleans up hardlinks on exit. See `docs/architecture.md` § Developer workflow for details.
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
 - `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this

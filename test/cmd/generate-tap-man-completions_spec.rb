@@ -22,6 +22,25 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
       cmd_with_tap = described_class.new(["--tap=toobuntu/cask-tools"])
       expect(cmd_with_tap.args.tap).to eq("toobuntu/cask-tools")
     end
+
+    it "accepts --open-pr" do
+      cmd_with_flag = described_class.new(["--open-pr"])
+      expect(cmd_with_flag.args.open_pr?).to be(true)
+    end
+
+    it "accepts --no-pull-requests" do
+      cmd_with_flag = described_class.new(["--no-pull-requests"])
+      expect(cmd_with_flag.args.no_pull_requests?).to be(true)
+    end
+
+    it "accepts --no-fork" do
+      cmd_with_flag = described_class.new(["--no-fork"])
+      expect(cmd_with_flag.args.no_fork?).to be(true)
+    end
+
+    it "rejects --open-pr with --no-pull-requests" do
+      expect { described_class.new(["--open-pr", "--no-pull-requests"]) }.to raise_error(Homebrew::CLI::OptionConflictError)
+    end
   end
 
   describe "#write_if_changed" do
@@ -242,6 +261,59 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
       parser = instance_double(Homebrew::CLI::Parser, usage_banner_text: nil)
       allow(Homebrew::CLI::Parser).to receive(:from_cmd_path).and_return(parser)
       expect(cmd.send(:man_page_markdown, "none", Pathname("/fake"))).to be_nil
+    end
+  end
+
+  describe "#retrieve_pull_requests" do
+    it "returns formatted string when PRs are found" do
+      prs = [
+        { "title" => "Update completions", "html_url" => "https://github.com/test/repo/pull/1" },
+      ]
+      allow(GitHub).to receive(:fetch_pull_requests).and_return(prs)
+      result = cmd.send(:retrieve_pull_requests, "Update completions", "test/repo")
+      expect(result).to eq("Update completions (https://github.com/test/repo/pull/1)")
+    end
+
+    it "returns nil when no PRs are found" do
+      allow(GitHub).to receive(:fetch_pull_requests).and_return([])
+      expect(cmd.send(:retrieve_pull_requests, "Update completions", "test/repo")).to be_nil
+    end
+
+    it "returns nil on API error" do
+      allow(GitHub).to receive(:fetch_pull_requests).and_raise(GitHub::API::AuthenticationFailedError.new("test"))
+      expect(cmd.send(:retrieve_pull_requests, "Update completions", "test/repo")).to be_nil
+    end
+  end
+
+  describe "#check_for_duplicate_pull_requests" do
+    let(:mock_tap) { instance_double(Tap, name: "test/tap", remote_repository: "test/homebrew-tap") }
+
+    it "skips check when tap has no remote repository" do
+      tap_no_remote = instance_double(Tap, name: "local/tap", remote_repository: nil)
+      expect(cmd).not_to receive(:retrieve_pull_requests)
+      cmd.send(:check_for_duplicate_pull_requests, tap_no_remote)
+    end
+
+    it "displays duplicate PRs when exact title match is found" do
+      allow(cmd).to receive(:retrieve_pull_requests)
+        .with("Update completions and man pages", "test/homebrew-tap").and_return("PR #1 (url)")
+      expect { cmd.send(:check_for_duplicate_pull_requests, mock_tap) }
+        .to output(/Duplicate pull requests:.*PR #1/).to_stdout
+    end
+
+    it "displays maybe-duplicate PRs when only broad match is found" do
+      allow(cmd).to receive(:retrieve_pull_requests)
+        .with("Update completions and man pages", "test/homebrew-tap").and_return(nil)
+      allow(cmd).to receive(:retrieve_pull_requests)
+        .with("completions", "test/homebrew-tap").and_return("Broad PR (url)")
+      expect { cmd.send(:check_for_duplicate_pull_requests, mock_tap) }
+        .to output(/Maybe duplicate pull requests:.*Broad PR/).to_stdout
+    end
+
+    it "does not output when no PRs are found" do
+      allow(cmd).to receive(:retrieve_pull_requests).and_return(nil)
+      expect { cmd.send(:check_for_duplicate_pull_requests, mock_tap) }
+        .not_to output.to_stdout
     end
   end
 

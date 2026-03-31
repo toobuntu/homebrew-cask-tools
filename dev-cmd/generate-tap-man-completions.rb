@@ -9,6 +9,7 @@ require "abstract_command"
 require "completions"
 require "system_command"
 require "tap"
+require "utils/github"
 
 module Homebrew
   module Cmd
@@ -17,7 +18,9 @@ module Homebrew
       include SystemCommand::Mixin
 
       cmd_args do
-        usage_banner "`generate-tap-man-completions` [`--tap=`<tap>] [`--no-exit-code`]"
+        usage_banner <<~BANNER.chomp
+          `generate-tap-man-completions` [`--tap=`<tap>] [`--no-exit-code`] [`--open-pr`] [`--no-pull-requests`] [`--no-fork`]
+        BANNER
         description <<~EOS
           Generate shell completions and man pages for a tap's commands.
 
@@ -40,6 +43,15 @@ module Homebrew
                description: "Generate completions for <tap> (default: auto-detected from command location)."
         switch "--no-exit-code",
                description: "Exit with code 0 even if no changes were made."
+        switch "--open-pr",
+               description: "Check for duplicate pull requests before allowing a PR to be opened."
+        switch "--no-pull-requests",
+               description: "Do not check for duplicate pull requests."
+        switch "--no-fork",
+               description: "Don't try to fork the repository."
+
+        conflicts "--no-pull-requests", "--open-pr"
+
         named_args :none
       end
 
@@ -107,6 +119,8 @@ module Homebrew
         else
           puts message
         end
+
+        check_for_duplicate_pull_requests(tap) unless args.no_pull_requests?
       end
 
       private
@@ -129,6 +143,43 @@ module Homebrew
             "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>."
           end
         end
+      end
+
+      # Check for open pull requests that may duplicate a completions/man-pages
+      # update, following the same `duplicate_pull_requests` /
+      # `maybe_duplicate_pull_requests` pattern used by `brew bump`.
+      sig { params(tap: Tap).void }
+      def check_for_duplicate_pull_requests(tap)
+        remote_repo = tap.remote_repository
+        unless remote_repo
+          odebug "No remote repository for #{tap.name}; skipping pull request check"
+          return
+        end
+
+        # Exact title match (like brew bump's version-specific search)
+        duplicate_prs = retrieve_pull_requests("Update completions and man pages", remote_repo)
+        # Broader search when exact match finds nothing (like brew bump's maybe-duplicates)
+        maybe_duplicate_prs = duplicate_prs.nil? ? retrieve_pull_requests("completions", remote_repo) : nil
+
+        return if duplicate_prs.nil? && maybe_duplicate_prs.nil?
+
+        if duplicate_prs
+          puts "Duplicate pull requests:       #{duplicate_prs}"
+        elsif maybe_duplicate_prs
+          puts "Duplicate pull requests:       none"
+          puts "Maybe duplicate pull requests: #{maybe_duplicate_prs}"
+        end
+      end
+
+      sig { params(name: String, remote_repo: String).returns(T.nilable(String)) }
+      def retrieve_pull_requests(name, remote_repo)
+        pull_requests = GitHub.fetch_pull_requests(name, remote_repo, state: "open")
+        return if pull_requests.blank?
+
+        pull_requests.map { |pr| "#{pr["title"]} (#{pr["html_url"]})" }.join(", ")
+      rescue => e
+        odebug "Error fetching pull requests: #{e}"
+        nil
       end
 
       # Collect unique command paths from cmd/ and dev-cmd/.

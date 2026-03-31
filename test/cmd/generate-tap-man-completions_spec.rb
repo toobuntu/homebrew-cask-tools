@@ -294,26 +294,26 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
       cmd.send(:check_for_duplicate_pull_requests, tap_no_remote)
     end
 
-    it "displays duplicate PRs when exact title match is found" do
+    it "warns about duplicate PRs when exact title match is found" do
       allow(cmd).to receive(:retrieve_pull_requests)
         .with("Update completions and man pages", "test/homebrew-tap").and_return("PR #1 (url)")
       expect { cmd.send(:check_for_duplicate_pull_requests, mock_tap) }
-        .to output(/Duplicate pull requests:.*PR #1/).to_stdout
+        .to output(/Duplicate pull requests:.*PR #1/).to_stderr
     end
 
-    it "displays maybe-duplicate PRs when only broad match is found" do
+    it "warns about maybe-duplicate PRs when only broad match is found" do
       allow(cmd).to receive(:retrieve_pull_requests)
         .with("Update completions and man pages", "test/homebrew-tap").and_return(nil)
       allow(cmd).to receive(:retrieve_pull_requests)
         .with("completions", "test/homebrew-tap").and_return("Broad PR (url)")
       expect { cmd.send(:check_for_duplicate_pull_requests, mock_tap) }
-        .to output(/Maybe duplicate pull requests:.*Broad PR/).to_stdout
+        .to output(/Maybe duplicate pull requests:.*Broad PR/).to_stderr
     end
 
     it "does not output when no PRs are found" do
       allow(cmd).to receive(:retrieve_pull_requests).and_return(nil)
       expect { cmd.send(:check_for_duplicate_pull_requests, mock_tap) }
-        .not_to output.to_stdout
+        .not_to output.to_stderr
     end
   end
 

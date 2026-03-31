@@ -120,7 +120,7 @@ module Homebrew
           puts message
         end
 
-        check_for_duplicate_pull_requests(tap) unless args.no_pull_requests?
+        check_for_duplicate_pull_requests(tap) if args.open_pr? && !args.no_pull_requests? && !diff.status.success?
       end
 
       private
@@ -164,10 +164,12 @@ module Homebrew
         return if duplicate_prs.nil? && maybe_duplicate_prs.nil?
 
         if duplicate_prs
-          puts "Duplicate pull requests:       #{duplicate_prs}"
+          opoo "Duplicate pull requests:       #{duplicate_prs}"
         elsif maybe_duplicate_prs
-          puts "Duplicate pull requests:       none"
-          puts "Maybe duplicate pull requests: #{maybe_duplicate_prs}"
+          opoo <<~EOS
+            Duplicate pull requests:       none
+            Maybe duplicate pull requests: #{maybe_duplicate_prs}
+          EOS
         end
       end
 

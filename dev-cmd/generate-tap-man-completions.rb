@@ -25,6 +25,9 @@ module Homebrew
           files into `completions/`, and Ronn man page sources (`.1.md`) and compiled
           roff (`.1`) into `manpages/`. The tap is auto-detected from the location of
           this command file. Use `--tap` to override.
+
+          Pass `--debug` for detailed diagnostics about tap resolution, command
+          discovery, and per-file write decisions.
         EOS
 
         flag   "--tap=",
@@ -45,6 +48,8 @@ module Homebrew
 
         tap = resolve_tap
         tap_path = tap.path
+        odebug "Tap: #{tap.name} (#{tap_path})"
+
         bash_dir = tap_path/"completions/bash"
         zsh_dir  = tap_path/"completions/zsh"
         fish_dir = tap_path/"completions/fish"
@@ -57,17 +62,31 @@ module Homebrew
         require "manpages/converter/roff"
 
         dev_cmd_names = Pathname.glob(tap_path/"dev-cmd/*.rb").to_set { |p| p.basename(".rb").to_s }
+        odebug "dev-cmd/ names to exclude: #{dev_cmd_names.sort.to_a}" if dev_cmd_names.any?
+
         cmd_paths = Pathname.glob(tap_path/"cmd/*.rb").reject do |p|
           dev_cmd_names.include?(p.basename(".rb").to_s)
         end
+
+        if cmd_paths.empty?
+          opoo "No commands found in #{tap.name} cmd/ (after excluding dev-cmd/ mirrors)."
+          return
+        end
+
+        odebug "Commands: #{cmd_paths.sort.map { |p| p.basename(".rb") }.join(", ")}"
+
         cmd_paths.sort.each do |cmd_path|
           command = cmd_path.basename(".rb").to_s
+          odebug "Processing #{command}:"
           write_if_changed bash_dir/"brew-#{command}",      bash_content(command)
           write_if_changed zsh_dir/"_brew-#{command}",      zsh_content(command)
           write_if_changed fish_dir/"brew-#{command}.fish", fish_content(command)
 
           md = man_page_markdown(command, cmd_path)
-          next unless md
+          if md.nil?
+            odebug "  skip man page: no parser or usage banner for #{command}"
+            next
+          end
 
           write_if_changed man_dir/"brew-#{command}.1.md", md
           roff, = T.unsafe(Homebrew)::Manpages::Converter::Roff.convert(
@@ -81,15 +100,11 @@ module Homebrew
           "diff", "--shortstat", "--patch", "--exit-code", "completions", "manpages"
         ]
 
-        message = if diff.status.success?
-          "No changes to completions or man pages."
+        if diff.status.success?
+          ohai "Completions and man pages are already up to date."
+          Homebrew.failed = T.let(true, T::Boolean) unless args.no_exit_code?
         else
-          "Completions and man pages updated."
-        end
-        if diff.status.success? && !args.no_exit_code?
-          ofail message
-        else
-          puts message
+          ohai "Completions and man pages updated."
         end
       end
 
@@ -98,14 +113,17 @@ module Homebrew
       sig { returns(Tap) }
       def resolve_tap
         if (tap_arg = args.tap)
+          odebug "Using --tap override: #{tap_arg}"
           Tap.fetch(tap_arg)
         else
           tap_dir = Pathname(__FILE__).dirname.dirname
+          odebug "Auto-detecting tap from #{tap_dir}"
           # Prefer direct match (fast path comparison, no I/O).
           tap = Tap.all.find { |t| t.path == tap_dir }
           # Fallback: command is hardlinked into Homebrew's core cmd/ (e.g., CI);
           # find the tap that has this command in its dev-cmd/ directory.
           tap ||= Tap.all.find { |t| (t.path/"dev-cmd/#{File.basename(__FILE__, ".rb")}.rb").exist? }
+          odebug "Resolved tap: #{tap&.name || "not found"}"
           T.must_because(tap) do
             "Could not auto-detect tap from #{tap_dir}. Use --tap=<user>/<repo>."
           end
@@ -114,8 +132,12 @@ module Homebrew
 
       sig { params(path: Pathname, content: String).void }
       def write_if_changed(path, content)
-        return if path.exist? && path.read == content
+        if path.exist? && path.read == content
+          odebug "  skip (unchanged): #{path.basename}"
+          return
+        end
 
+        odebug "  write: #{path.basename}"
         path.write(content)
       end
 

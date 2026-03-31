@@ -72,8 +72,9 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
 - `dev-cmd/generate-tap-man-completions.rb`: Developer-only command implementing `brew generate-tap-man-completions`.
-  Generates Bash, ZSH, and Fish completion files for all commands in `cmd/`, Ronn man
-  page sources (`.1.md`), and compiled roff (`.1`) into `manpages/`. Accepts `--tap=<user>/<repo>` to override the auto-detected tap.
+  Generates Bash, ZSH, and Fish completion files for all commands in `cmd/` and `dev-cmd/`, Ronn man
+  page sources (`.1.md`), and compiled roff (`.1`) into `manpages/`. Cleans up stale files for
+  removed commands. Accepts `--tap=<user>/<repo>` to override the auto-detected tap.
   Lives in `dev-cmd/` to avoid confusing casual users; requires `HOMEBREW_DEVELOPER=1`.
   Homebrew does not support external `dev-cmd/` in taps, so a `cmd/` hardlink is needed
   locally (see `.gitignore`). Symlinks do not work; Homebrew's command loading resolves
@@ -89,6 +90,9 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   CI verifies sources are not out of date.
 - `docs/`: Project documentation, including architecture notes (see `docs/architecture.md`).
 - `.gitignore`: Ignores the `cmd/generate-tap-man-completions.rb` hardlink (see dev-cmd above).
+- `scripts/run-generate-tap-man-completions.sh`: Helper script to hardlink `dev-cmd/generate-tap-man-completions.rb`
+  into `$(brew --repo)/Library/Homebrew/cmd/` and run the command. Forwards all arguments to the command.
+  Use instead of running `brew generate-tap-man-completions` directly. Cleans up hardlinks on exit.
 - `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
 - `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this
@@ -163,6 +167,6 @@ The `shell_style` CI job uses a Docker container (`ghcr.io/homebrew/brew:main`).
 12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` for cask commands — this allows purging quarantine from casks that have been removed from all taps (a primary use case as Homebrew deprecates Gatekeeper-failing casks). Tab completion for installed casks is provided via the pre-generated files in `completions/`. Note: `named_args :installed_cask` validates against tapped sources at parse time and must not be used for commands that handle deprecated or removed casks.
 13. `include SystemCommand::Mixin` (top-level constant, not `Homebrew::SystemCommand::Mixin`).
 14. All implementations must be compatible with macOS (see macOS Compatibility section above). The agent runs on Ubuntu, but users run this tap on macOS. Avoid GNU-only CLI extensions; use POSIX/BSD-compatible syntax.
-15. Do **not** hand-write SPDX/REUSE headers. Instead run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout the repo. `annotate.sh` special-cases `.fish` completion files and man page (`.1`, `.1.md`) files to use `.license` sidecars (`--force-dot-license`) so their generated content is never altered.
+15. Do **not** hand-write SPDX/REUSE headers. Instead run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout the repo. `annotate.sh` special-cases all generated files under `completions/` and man page (`.1`, `.1.md`) files to use `.license` sidecars (`--force-dot-license`) so their generated content is never altered.
 16. **Output ordering**: `ohai`/`oh1` write to `$stdout`; `opoo`/`ofail` write to `$stderr`. These streams may interleave when both are used in the same code path (e.g., `ohai` inside a loop followed by an `opoo`). When multiple related warning lines must stay together, emit them as a single `opoo <<~EOS … EOS` call rather than separate `opoo` calls, so both lines go to stderr atomically.
 17. **Man pages**: `brew generate-tap-man-completions` generates Ronn man page sources (`manpages/brew-<command>.1.md`) and compiled roff (`manpages/brew-<command>.1`) from each command's `cmd_args`. Regenerate after any `cmd_args` change; CI verifies sources are current.

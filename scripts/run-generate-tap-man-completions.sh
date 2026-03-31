@@ -27,7 +27,8 @@ HOMEBREW_LIB="${BREW_REPO}/Library/Homebrew"
 CMD_SRC="${TAP_DIR}/dev-cmd/generate-tap-man-completions.rb"
 CMD_DST="${HOMEBREW_LIB}/cmd/generate-tap-man-completions.rb"
 
-if [ ! -f "${CMD_SRC}" ]; then
+if [[ ! -f "${CMD_SRC}" ]]
+then
   echo "Error: source file not found: ${CMD_SRC}" >&2
   exit 1
 fi
@@ -54,7 +55,7 @@ cat >&2 <<'WARNING'
 WARNING
 
 echo "==> Hardlinking dev-cmd into Homebrew repository..." >&2
-[ -e "${CMD_DST}" ] && echo "==> (replacing existing ${CMD_DST##*/})" >&2
+[[ -e "${CMD_DST}" ]] && echo "==> (replacing existing ${CMD_DST##*/})" >&2
 ln -f "${CMD_SRC}" "${CMD_DST}"
 
 echo "==> Running: HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions $*" >&2

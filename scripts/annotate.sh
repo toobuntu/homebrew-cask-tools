@@ -10,7 +10,7 @@ set -eu
 files=$(reuse lint --json |
   jq -r '.non_compliant | (.missing_copyright_info + .missing_licensing_info) | unique[]') || true
 
-[ -z "${files}" ] && exit 0
+[[ -z "${files}" ]] && exit 0
 
 annotate() {
   xargs reuse annotate \
@@ -21,16 +21,19 @@ annotate() {
     "$@"
 }
 
-# Fish completion and man page files must keep their generated content intact, so annotate
+# Generated completion and man page files must keep their content intact, so annotate
 # them with a .license sidecar instead of inline SPDX comment headers.
-fish_files=$(printf '%s\n' "${files}" | grep -E '\.fish$' || true)
+# This covers: fish completions, bash completions (no extension), zsh completions
+# (prefixed with _), man pages (.1, .1.md).
+compl_files=$(printf '%s\n' "${files}" | grep -E '(^|/)completions/' || true)
 man_files=$(printf '%s\n' "${files}" | grep -E '\.(1|1\.md)$' || true)
 # Shell scripts with no file extension need --style=python for reuse to infer the # comment style.
 # The pattern (^|/)[^./]+$ matches basenames with no dot (no extension).
-no_ext_files=$(printf '%s\n' "${files}" | grep -vE '\.(fish|1|1\.md)$' | grep -E '(^|/)[^./]+$' || true)
-other_files=$(printf '%s\n' "${files}" | grep -vE '\.(fish|1|1\.md)$' | grep -vE '(^|/)[^./]+$' || true)
+remaining=$(printf '%s\n' "${files}" | grep -vE '(^|/)completions/' | grep -vE '\.(1|1\.md)$' || true)
+no_ext_files=$(printf '%s\n' "${remaining}" | grep -E '(^|/)[^./]+$' || true)
+other_files=$(printf '%s\n' "${remaining}" | grep -vE '(^|/)[^./]+$' || true)
 
-[ -n "${fish_files}" ] && printf '%s\n' "${fish_files}" | annotate --force-dot-license
-[ -n "${man_files}" ] && printf '%s\n' "${man_files}" | annotate --force-dot-license
-[ -n "${no_ext_files}" ] && printf '%s\n' "${no_ext_files}" | annotate --style=python --fallback-dot-license
-[ -n "${other_files}" ] && printf '%s\n' "${other_files}" | annotate --fallback-dot-license
+[[ -n "${compl_files}" ]] && printf '%s\n' "${compl_files}" | annotate --force-dot-license
+[[ -n "${man_files}" ]] && printf '%s\n' "${man_files}" | annotate --force-dot-license
+[[ -n "${no_ext_files}" ]] && printf '%s\n' "${no_ext_files}" | annotate --style=python --fallback-dot-license
+[[ -n "${other_files}" ]] && printf '%s\n' "${other_files}" | annotate --fallback-dot-license

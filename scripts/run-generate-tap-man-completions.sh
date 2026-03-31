@@ -20,17 +20,13 @@
 # Generated files end up in the dev clone's completions/ and manpages/
 # directories, ready for committing and pushing to the remote.
 #
-# Pass --open-pr to create a branch, commit, push, and open a PR from the dev
-# clone. Pass --no-fork to push to origin instead of creating a fork.
-# Pass --no-pull-requests to skip checking for existing PRs on the branch
-# (cannot be combined with --open-pr, matching `brew bump` conventions).
-# These flags mirror `brew bump` conventions.
+# All arguments are forwarded to the brew command. --open-pr is also detected
+# by the script to trigger a git workflow (branch, commit, push, PR) after
+# syncing. --no-pull-requests, --no-fork, --open-pr, --verbose, --debug, and
+# --no-exit-code are all handled by the brew command's cmd_args.
 #
 # Usage:
-#   scripts/run-generate-tap-man-completions.sh [--open-pr] [--no-fork] [--no-pull-requests] [--verbose] [--debug] [--no-exit-code]
-#
-# All arguments except --open-pr, --no-fork, and --no-pull-requests are
-# forwarded to the command.
+#   scripts/run-generate-tap-man-completions.sh [--open-pr] [--no-pull-requests] [--no-fork] [--verbose] [--debug] [--no-exit-code]
 
 set -euo pipefail
 
@@ -56,19 +52,6 @@ detect_tap_name() {
   echo "unknown/${dirname#homebrew-}"
 }
 
-# Check for an existing open PR on the bot branch. Prints the URL if found.
-# Returns 0 if a PR exists, 1 otherwise.
-check_existing_pr() {
-  command -v gh >/dev/null 2>&1 || return 1
-  local url
-  url="$(gh pr list --repo "${GH_REPO}" --head "${BRANCH}" --state open --json url --jq '.[0].url' 2>/dev/null || true)"
-  if [[ -n ${url} ]]; then
-    echo "${url}"
-    return 0
-  fi
-  return 1
-}
-
 TAP_NAME="$(detect_tap_name)"
 TAP_DIR="$(brew --repo "${TAP_NAME}" 2>/dev/null || true)"
 # Convert tap name (toobuntu/cask-tools) to GitHub repo (toobuntu/homebrew-cask-tools).
@@ -89,39 +72,20 @@ if [[ ! -f ${CMD_SRC} ]]; then
   exit 1
 fi
 
-# Parse script-specific flags; forward the rest to the command.
+# Detect --open-pr for the git workflow after syncing. All arguments
+# (including --open-pr) are forwarded to the brew command.
 OPEN_PR=false
-NO_PULL_REQUESTS=false
-BREW_ARGS=()
 for arg in "$@"; do
-  case "${arg}" in
-    --open-pr)
-      OPEN_PR=true
-      ;;
-    --no-fork)
-      # Accepted for brew bump consistency; currently a no-op since we always
-      # push to origin. Reserved for future use with gh repo fork.
-      ;;
-    --no-pull-requests)
-      NO_PULL_REQUESTS=true
-      ;;
-    *)
-      BREW_ARGS+=("${arg}")
-      ;;
-  esac
+  [[ ${arg} == "--open-pr" ]] && OPEN_PR=true
 done
-
-if [[ ${OPEN_PR} == true && ${NO_PULL_REQUESTS} == true ]]; then
-  echo "Error: --open-pr and --no-pull-requests cannot be used together." >&2
-  exit 1
-fi
 
 cleanup() {
   echo "" >&2
   echo "==> Removing hardlink from tap repository..." >&2
   rm -f "${CMD_DST}"
-  # Discard any generated file changes left in the tap repo
-  git -C "${TAP_DIR}" checkout -- completions/ manpages/ 2>/dev/null || true
+  # Discard generated file changes (tracked) and remove new files (untracked)
+  git -C "${TAP_DIR}" restore completions/ manpages/ 2>/dev/null || true
+  git -C "${TAP_DIR}" clean -fd completions/ manpages/ 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -145,8 +109,8 @@ echo "==> Hardlinking dev-cmd into tap repository..." >&2
 [[ -e ${CMD_DST} ]] && echo "==> (replacing existing ${CMD_DST##*/})" >&2
 ln -f "${CMD_SRC}" "${CMD_DST}"
 
-echo "==> Running: HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap=${TAP_NAME} ${BREW_ARGS[*]:-}" >&2
-HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap="${TAP_NAME}" "${BREW_ARGS[@]+"${BREW_ARGS[@]}"}" || true
+echo "==> Running: HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap=${TAP_NAME} $*" >&2
+HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap="${TAP_NAME}" "$@" || true
 
 # Sync generated files back to the dev clone
 echo "==> Syncing completions/ and manpages/ to dev clone..." >&2
@@ -192,17 +156,8 @@ fi
 # The generator wrote into the tap repo; discard those changes so
 # brew update doesn't see a dirty tree.
 echo "==> Restoring tap repository to clean state..." >&2
-git -C "${TAP_DIR}" checkout -- completions/ manpages/ 2>/dev/null || true
-
-# Unless --no-pull-requests is set, check for existing open PRs on the branch.
-if [[ ${NO_PULL_REQUESTS} == false ]]; then
-  # Non-zero return from check_existing_pr (no PR found) is expected, not an error
-  # shellcheck disable=SC2310
-  existing_pr="$(check_existing_pr || true)"
-  if [[ -n ${existing_pr} ]]; then
-    echo "==> Existing open PR: ${existing_pr}" >&2
-  fi
-fi
+git -C "${TAP_DIR}" restore completions/ manpages/ 2>/dev/null || true
+git -C "${TAP_DIR}" clean -fd completions/ manpages/ 2>/dev/null || true
 
 # If --open-pr, commit changes in the dev clone on a new branch and open a PR.
 if [[ ${OPEN_PR} == true ]]; then
@@ -226,15 +181,11 @@ if [[ ${OPEN_PR} == true ]]; then
   git -C "${DEV_DIR}" commit -m "Update completions and man pages [bot]"
 
   echo "==> Pushing branch..." >&2
-  # --no-fork pushes directly to origin (the default for the repo owner).
-  # Without --no-fork, a fork would be used for PRs to upstream — but since
-  # this is typically run by the repo owner, both paths push to origin.
   if git -C "${DEV_DIR}" push --set-upstream origin "${BRANCH}" 2>/dev/null; then
-    # Non-zero return from check_existing_pr (no PR found) is expected, not an error
-    # shellcheck disable=SC2310
-    existing_pr="$(check_existing_pr || true)"
-    if [[ -n ${existing_pr} ]]; then
-      echo "==> PR already open: ${existing_pr}" >&2
+    # Check if a PR already exists before creating one
+    existing_url="$(gh pr list --repo "${GH_REPO}" --head "${BRANCH}" --state open --json url --jq '.[0].url' 2>/dev/null || true)"
+    if [[ -n ${existing_url} ]]; then
+      echo "==> PR already open: ${existing_url}" >&2
     elif command -v gh >/dev/null 2>&1; then
       echo "==> Opening PR via gh..." >&2
       # Backticks in --body are literal markdown, not command substitution

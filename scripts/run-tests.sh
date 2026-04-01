@@ -69,8 +69,10 @@ cat >&2 <<'WARNING'
 WARNING
 
 # Check that source files exist.
-for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}"; do
-  if [ ! -f "${src}" ]; then
+for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}"
+do
+  if [[ ! -f "${src}" ]]
+  then
     echo "Error: source file not found: ${src}" >&2
     exit 1
   fi
@@ -87,15 +89,17 @@ pairs=(
   "${GENTC_CMD_SRC}:${GENTC_CMD_DST}"
   "${GENTC_SPEC_SRC}:${GENTC_SPEC_DST}"
 )
-for pair in "${pairs[@]}"; do
+for pair in "${pairs[@]}"
+do
   src="${pair%%:*}"
   dst="${pair##*:}"
-  [ -e "${dst}" ] && echo "==> (replacing existing ${dst##*/})" >&2
+  [[ -e "${dst}" ]] && echo "==> (replacing existing ${dst##*/})" >&2
   ln -f "${src}" "${dst}"
 done
 
 only="${1:-}"
-if [ -n "${only}" ]; then
+if [[ -n "${only}" ]]
+then
   echo "==> Running: brew tests ${only}" >&2
   brew tests "${only}"
 else

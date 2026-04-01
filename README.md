@@ -31,7 +31,7 @@ brew cask-extract [--no-quarantine] [--version=<version>] [--unversioned] [--for
 
 | Argument / Flag | Description |
 |---|---|
-| `<cask>` | The cask token to extract (required) |
+| `<cask>` | The cask token to extract (required). Use `user/repo/cask` form to extract from a non-default tap. |
 | `<tap>` | The destination tap, e.g. `user/tap` (required) |
 | `--version=<version>` | Extract a specific version from git history |
 | `--no-quarantine` | Add a `postflight` block that removes `com.apple.quarantine` |
@@ -57,6 +57,12 @@ Extract a specific historical version:
 
 ```sh
 brew cask-extract --version=3.4.0 iterm2 user/my-tap
+```
+
+Extract a cask from a non-default tap (e.g. `homebrew/cask-versions`):
+
+```sh
+brew cask-extract homebrew/cask-versions/firefox user/my-tap
 ```
 
 ### How it works

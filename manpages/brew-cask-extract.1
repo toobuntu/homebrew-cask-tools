@@ -6,6 +6,8 @@ brew\-cask\-extract \- Extract a cask from Homebrew\'s git history into a person
 \fBbrew\fP \fBcask\-extract\fP [\fIoptions\fP] \fIcask\fP \fItap\fP
 .SH "DESCRIPTION"
 Extract a cask from Homebrew\[u2019]s git history into a personal tap\. Optionally add a postflight block to remove macOS\[u2019]s quarantine extended attribute so un\-notarized apps can launch without Gatekeeper blocking them\.
+.P
+To extract a cask from a tap other than \fBhomebrew/cask\fP, use the fully\-qualified form \fBuser/repo/cask\fP\&\.
 .SH "OPTIONS"
 .TP
 \fB\-d\fP, \fB\-\-debug\fP

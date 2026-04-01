@@ -6,6 +6,44 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
 # Architecture
 
+## Cask extraction
+
+`brew cask-extract` in `cmd/cask-extract.rb` extracts a cask from Homebrew's git
+history into a personal tap. It uses a two-path strategy:
+
+### Primary path: `brew extract --cask` delegation
+
+When the installed Homebrew supports `brew extract --cask` (detected by checking
+`brew extract --help` output for `--cask`), the command delegates via
+`safe_system HOMEBREW_BREW_FILE, "extract", "--cask", ...`. This forwards the
+`--version` and `--force` flags through to the native implementation.
+
+### Fallback path: manual git history extraction
+
+When `brew extract --cask` is not available, the command falls back to manual
+extraction:
+
+1. Resolves the source tap from the cask specifier (bare token defaults to
+   `homebrew/cask`; fully-qualified `user/repo/token` specifies the source tap).
+2. Searches the source tap's working tree and then git history for the cask file,
+   trying both sharded (`Casks/<letter>/token.rb`) and flat (`Casks/token.rb`) paths.
+3. Parses the version from the cask content via
+   `/^\s*version\s+["']([^"']+)["']/`.
+4. Rewrites `cask "token"` → `cask "token@version"` (unless `--unversioned`).
+5. Applies Homebrew's sharding convention (`font-*` → `Casks/font/`, else
+   `Casks/<first-letter>/`) to determine the destination path.
+6. Writes the cask file to the destination tap.
+
+### Quarantine postflight injection
+
+When `--no-quarantine` is passed, the command post-processes the extracted cask:
+
+1. Scans for `app "Foo.app"` stanzas in the cask content.
+2. Skips if the content already mentions `com.apple.quarantine`.
+3. Inserts a `postflight` block before the closing `end` that runs
+   `/usr/bin/xattr -dr com.apple.quarantine` on each app bundle.
+4. Warns if no `app` stanza is found (manual configuration may be needed).
+
 ## Tiered bundle discovery
 
 `quarantinable_bundles_for` in `cmd/purge-quarantine.rb` uses seven tiers in

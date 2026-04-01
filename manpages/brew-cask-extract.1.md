@@ -12,6 +12,9 @@ Optionally add a postflight block to remove macOS's quarantine
 extended attribute so un-notarized apps can launch without
 Gatekeeper blocking them.
 
+To extract a cask from a tap other than `homebrew/cask`, use the
+fully-qualified form `user/repo/cask`.
+
 ## OPTIONS
 
 `-d`, `--debug`

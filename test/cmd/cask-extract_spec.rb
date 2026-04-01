@@ -12,6 +12,22 @@ require "tmpdir"
 RSpec.describe Homebrew::Cmd::CaskExtract do
   subject(:cmd) { described_class.new(["some-cask", "user/tap"]) }
 
+  describe "#resolve_cask_spec" do
+    it "returns default homebrew/cask tap for a bare token" do
+      expect(cmd.send(:resolve_cask_spec, "silverlock")).to eq(["homebrew/cask", "silverlock"])
+    end
+
+    it "returns the specified tap for a fully-qualified token" do
+      expect(cmd.send(:resolve_cask_spec, "homebrew/cask-versions/firefox"))
+        .to eq(["homebrew/cask-versions", "firefox"])
+    end
+
+    it "returns user tap for a custom fully-qualified token" do
+      expect(cmd.send(:resolve_cask_spec, "my-org/my-casks/my-app"))
+        .to eq(["my-org/my-casks", "my-app"])
+    end
+  end
+
   describe "#parse_version_from_content" do
     it "extracts a double-quoted version string" do
       content = <<~RUBY
@@ -146,13 +162,13 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
         end
       RUBY
 
-      expected_msg = "No app stanza found; quarantine removal may need to be configured manually."
+      expected_msg = "No app stanza found; " \
+                     "quarantine removal may need to be configured manually."
       expect(cmd).to receive(:opoo).with(expected_msg)
       cmd.send(:add_quarantine_postflight, cask_file)
     end
 
     it "warns when no insertion point is found" do
-      # Has an app stanza (on its own line) but no "\nend" at end of file
       cask_file.write("cask \"broken\" do\n  app \"X.app\"\n")
 
       expect(cmd).to receive(:opoo).with(/Could not locate insertion point/)
@@ -205,8 +221,6 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       flat = tmpdir/"Casks"/"silverlock.rb"
       flat.dirname.mkpath
       flat.write('cask "silverlock" do; end')
-      # The combined loop tries the sharded pattern first; mock the git search
-      # for it returning empty so the loop falls through to the flat pattern.
       allow(Utils).to receive(:popen_read).and_return("")
 
       expect(cmd.send(:find_cask_in_history, tap, "silverlock")).to eq('cask "silverlock" do; end')
@@ -217,6 +231,57 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       allow(Utils).to receive(:popen_read).and_return("")
 
       expect(cmd.send(:find_cask_in_history, tap, "nonexistent")).to be_nil
+    end
+  end
+
+  describe "#try_brew_extract_cask" do
+    it "returns false when brew extract does not support --cask" do
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("Usage: brew extract [--version=] formula tap")
+
+      result = cmd.send(:try_brew_extract_cask, "silverlock", "user/tap", "homebrew/cask")
+
+      expect(result).to be(false)
+    end
+
+    it "delegates to brew extract --cask when supported" do
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("Usage: brew extract [--version=] [--cask] formula tap")
+      expect(cmd).to receive(:safe_system).with(
+        HOMEBREW_BREW_FILE, "extract", "--cask", "homebrew/cask/silverlock", "user/tap"
+      )
+
+      result = cmd.send(:try_brew_extract_cask, "silverlock", "user/tap", "homebrew/cask")
+
+      expect(result).to be(true)
+    end
+
+    it "passes --version and --force flags when set" do
+      version_cmd = described_class.new([
+        "silverlock", "user/tap", "--version=3.0", "--force"
+      ])
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("--cask")
+      expect(version_cmd).to receive(:safe_system).with(
+        HOMEBREW_BREW_FILE, "extract", "--cask", "homebrew/cask/silverlock", "user/tap",
+        "--version=3.0", "--force"
+      )
+
+      version_cmd.send(:try_brew_extract_cask, "silverlock", "user/tap", "homebrew/cask")
+    end
+
+    it "returns false on ErrorDuringExecution" do
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("--cask")
+      allow(cmd).to receive(:safe_system).and_raise(ErrorDuringExecution.new(["brew"], status: 1))
+
+      result = cmd.send(:try_brew_extract_cask, "silverlock", "user/tap", "homebrew/cask")
+
+      expect(result).to be(false)
     end
   end
 
@@ -288,6 +353,58 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       result_path = dest_path/"Casks"/"s"/"silverlock.rb"
       expect(result_path).to exist
       expect(result_path.read).to include('cask "silverlock"')
+    end
+
+    it "extracts with an explicit --version override" do
+      extract_cmd = described_class.new([
+        "silverlock", "user/tap", "--version=9.9.9"
+      ])
+
+      source_tap = instance_double(Tap, path: source_path, installed?: true)
+      dest_tap = instance_double(Tap, path: dest_path, installed?: true, to_s: "user/tap")
+
+      allow(Tap).to receive(:fetch).with("user/tap").and_return(dest_tap)
+      allow(Tap).to receive(:fetch).with("homebrew/cask").and_return(source_tap)
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("Usage: brew extract")
+
+      expect { extract_cmd.run }.to output(/Extracted to:/).to_stdout
+
+      result_path = dest_path/"Casks"/"s"/"silverlock@9.9.9.rb"
+      expect(result_path).to exist
+      expect(result_path.read).to include('cask "silverlock@9.9.9"')
+    end
+
+    it "extracts from a non-default source tap via fully-qualified token" do
+      custom_source_path = tmpdir/"custom-source"
+      custom_cask = custom_source_path/"Casks"/"f"/"firefox.rb"
+      custom_cask.dirname.mkpath
+      custom_cask.write(<<~RUBY)
+        cask "firefox" do
+          version "115.0"
+          app "Firefox.app"
+        end
+      RUBY
+
+      extract_cmd = described_class.new([
+        "homebrew/cask-versions/firefox", "user/tap"
+      ])
+
+      custom_tap = instance_double(Tap, path: custom_source_path, installed?: true)
+      dest_tap = instance_double(Tap, path: dest_path, installed?: true, to_s: "user/tap")
+
+      allow(Tap).to receive(:fetch).with("user/tap").and_return(dest_tap)
+      allow(Tap).to receive(:fetch).with("homebrew/cask-versions").and_return(custom_tap)
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("Usage: brew extract")
+
+      expect { extract_cmd.run }.to output(/Extracted to:/).to_stdout
+
+      result_path = dest_path/"Casks"/"f"/"firefox@115.0.rb"
+      expect(result_path).to exist
+      expect(result_path.read).to include('cask "firefox@115.0"')
     end
   end
 end

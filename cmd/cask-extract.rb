@@ -19,6 +19,9 @@ module Homebrew
           Optionally add a postflight block to remove macOS's quarantine
           extended attribute so un-notarized apps can launch without
           Gatekeeper blocking them.
+
+          To extract a cask from a tap other than `homebrew/cask`, use the
+          fully-qualified form `user/repo/cask`.
         EOS
 
         flag   "--version=",
@@ -37,27 +40,38 @@ module Homebrew
 
       sig { override.void }
       def run
-        token = T.must(args.named.first)
+        source_tap_name, token = resolve_cask_spec(T.must(args.named.first))
         destination_tap_name = T.must(args.named.second)
 
         destination_tap = Tap.fetch(destination_tap_name)
         destination_tap.install unless destination_tap.installed?
 
-        if try_brew_extract_cask(token, destination_tap_name)
+        if try_brew_extract_cask(token, destination_tap_name, source_tap_name)
           post_process_extracted_cask(token, destination_tap)
         else
-          fallback_extract(token, destination_tap)
+          fallback_extract(token, destination_tap, source_tap_name)
         end
       end
 
       private
 
-      sig { params(token: String, destination_tap_name: String).returns(T::Boolean) }
-      def try_brew_extract_cask(token, destination_tap_name)
+      sig { params(cask_spec: String).returns([String, String]) }
+      def resolve_cask_spec(cask_spec)
+        parts = cask_spec.split("/")
+        if parts.length == 3
+          ["#{parts[0]}/#{parts[1]}", parts[2]]
+        else
+          ["homebrew/cask", cask_spec]
+        end
+      end
+
+      sig { params(token: String, destination_tap_name: String, source_tap_name: String).returns(T::Boolean) }
+      def try_brew_extract_cask(token, destination_tap_name, source_tap_name)
         help_output = Utils.popen_read(HOMEBREW_BREW_FILE, "extract", "--help")
         return false unless help_output.include?("--cask")
 
-        cmd = [HOMEBREW_BREW_FILE, "extract", "--cask", token, destination_tap_name]
+        qualified_token = "#{source_tap_name}/#{token}"
+        cmd = [HOMEBREW_BREW_FILE, "extract", "--cask", qualified_token, destination_tap_name]
         cmd << "--version=#{args.version}" if args.version
         cmd << "--force" if args.force?
 
@@ -90,12 +104,12 @@ module Homebrew
         ].find(&:exist?)
       end
 
-      sig { params(token: String, destination_tap: Tap).void }
-      def fallback_extract(token, destination_tap)
+      sig { params(token: String, destination_tap: Tap, source_tap_name: String).void }
+      def fallback_extract(token, destination_tap, source_tap_name)
         ohai "Falling back to manual extraction (brew extract --cask not available)"
 
-        source_tap = Tap.fetch("homebrew/cask")
-        odie "Source tap homebrew/cask is not installed." unless source_tap.installed?
+        source_tap = Tap.fetch(source_tap_name)
+        odie "Source tap #{source_tap_name} is not installed." unless source_tap.installed?
 
         content = find_cask_in_history(source_tap, token)
         odie "Could not find cask #{token}!" if content.nil?

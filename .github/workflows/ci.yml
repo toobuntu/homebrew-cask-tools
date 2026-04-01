@@ -131,7 +131,10 @@ jobs:
         run: brew generate-tap-man-completions --no-exit-code
 
       - name: Fail if completions or man page sources are out of date
-        run: git diff --exit-code completions/ manpages/
+        # -I '\.TH ' ignores date-only changes in compiled roff headers
+        # (.TH "CMD" "1" "Month Year" "Homebrew") that occur when the
+        # month rolls over. These are cosmetic and not a source change.
+        run: git diff --exit-code -I '\.TH ' completions/ manpages/
 
       - name: Unlink generate-tap-man-completions from Homebrew
         if: always()

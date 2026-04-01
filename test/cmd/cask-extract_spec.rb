@@ -28,6 +28,24 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
     end
   end
 
+  describe "#extracted_cask_token" do
+    it "returns the bare token when --unversioned is set" do
+      unversioned_cmd = described_class.new(["some-cask", "user/tap", "--unversioned"])
+
+      expect(unversioned_cmd.send(:extracted_cask_token, "some-cask")).to eq("some-cask")
+    end
+
+    it "returns the bare token when no --version is given" do
+      expect(cmd.send(:extracted_cask_token, "some-cask")).to eq("some-cask")
+    end
+
+    it "returns a versioned token when --version is set" do
+      versioned_cmd = described_class.new(["some-cask", "user/tap", "--version=3.0"])
+
+      expect(versioned_cmd.send(:extracted_cask_token, "some-cask")).to eq("some-cask@3.0")
+    end
+  end
+
   describe "#parse_version_from_content" do
     it "extracts a double-quoted version string" do
       content = <<~RUBY
@@ -188,7 +206,7 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       sharded.dirname.mkpath
       sharded.write("cask content")
 
-      expect(cmd.send(:find_extracted_cask, "some-cask", tap)).to eq(sharded)
+      expect(cmd.send(:find_extracted_cask, "some-cask", "some-cask", tap)).to eq(sharded)
     end
 
     it "finds a flat cask file" do
@@ -196,11 +214,27 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       flat.dirname.mkpath
       flat.write("cask content")
 
-      expect(cmd.send(:find_extracted_cask, "some-cask", tap)).to eq(flat)
+      expect(cmd.send(:find_extracted_cask, "some-cask", "some-cask", tap)).to eq(flat)
     end
 
     it "returns nil when Casks directory does not exist" do
-      expect(cmd.send(:find_extracted_cask, "missing", tap)).to be_nil
+      expect(cmd.send(:find_extracted_cask, "missing", "missing", tap)).to be_nil
+    end
+
+    it "finds a font cask in the font shard" do
+      font_path = tmpdir/"Casks"/"font"/"font-fira-code.rb"
+      font_path.dirname.mkpath
+      font_path.write("cask content")
+
+      expect(cmd.send(:find_extracted_cask, "font-fira-code", "font-fira-code", tap)).to eq(font_path)
+    end
+
+    it "finds a versioned cask file when bare token is searched" do
+      versioned = tmpdir/"Casks"/"s"/"some-cask@1.0.rb"
+      versioned.dirname.mkpath
+      versioned.write("cask content")
+
+      expect(cmd.send(:find_extracted_cask, "some-cask", "some-cask", tap)).to eq(versioned)
     end
   end
 
@@ -233,6 +267,14 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       allow(Utils).to receive(:popen_read).and_return("")
 
       expect(cmd.send(:find_cask_in_history, tap, "nonexistent")).to be_nil
+    end
+
+    it "finds a font cask in the font shard" do
+      font_path = tmpdir/"Casks"/"font"/"font-fira-code.rb"
+      font_path.dirname.mkpath
+      font_path.write('cask "font-fira-code" do; end')
+
+      expect(cmd.send(:find_cask_in_history, tap, "font-fira-code")).to eq('cask "font-fira-code" do; end')
     end
   end
 
@@ -284,6 +326,71 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       result = cmd.send(:try_brew_extract_cask, "silverlock", "user/tap", "homebrew/cask")
 
       expect(result).to be(false)
+    end
+  end
+
+  describe "delegation bypass" do
+    it "skips delegation and uses fallback when --unversioned is set" do
+      unversioned_cmd = described_class.new(["silverlock", "user/tap", "--unversioned"])
+
+      source_path = Pathname(Dir.mktmpdir)
+      dest_path = Pathname(Dir.mktmpdir)
+      cask_file = source_path/"Casks"/"s"/"silverlock.rb"
+      cask_file.dirname.mkpath
+      cask_file.write(<<~RUBY)
+        cask "silverlock" do
+          version "1.0"
+          app "Silver Lock.app"
+        end
+      RUBY
+
+      source_tap = instance_double(Tap, path: source_path, installed?: true)
+      dest_tap = instance_double(Tap, path: dest_path, installed?: true, to_s: "user/tap")
+      allow(Tap).to receive(:fetch).with("user/tap").and_return(dest_tap)
+      allow(Tap).to receive(:fetch).with("homebrew/cask").and_return(source_tap)
+      # Delegation would succeed, but --unversioned forces fallback.
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("--cask")
+
+      expect(unversioned_cmd).not_to receive(:try_brew_extract_cask)
+      expect { unversioned_cmd.run }.to output(/Extracted to:/).to_stdout
+
+      expect(dest_path/"Casks"/"s"/"silverlock.rb").to exist
+    ensure
+      FileUtils.rm_rf(source_path)
+      FileUtils.rm_rf(dest_path)
+    end
+
+    it "skips delegation and uses fallback when --no-shard is set" do
+      no_shard_cmd = described_class.new(["silverlock", "user/tap", "--no-shard"])
+
+      source_path = Pathname(Dir.mktmpdir)
+      dest_path = Pathname(Dir.mktmpdir)
+      cask_file = source_path/"Casks"/"s"/"silverlock.rb"
+      cask_file.dirname.mkpath
+      cask_file.write(<<~RUBY)
+        cask "silverlock" do
+          version "1.0"
+          app "Silver Lock.app"
+        end
+      RUBY
+
+      source_tap = instance_double(Tap, path: source_path, installed?: true)
+      dest_tap = instance_double(Tap, path: dest_path, installed?: true, to_s: "user/tap")
+      allow(Tap).to receive(:fetch).with("user/tap").and_return(dest_tap)
+      allow(Tap).to receive(:fetch).with("homebrew/cask").and_return(source_tap)
+      allow(Utils).to receive(:popen_read)
+        .with(HOMEBREW_BREW_FILE, "extract", "--help")
+        .and_return("--cask")
+
+      expect(no_shard_cmd).not_to receive(:try_brew_extract_cask)
+      expect { no_shard_cmd.run }.to output(/Extracted to:/).to_stdout
+
+      expect(dest_path/"Casks"/"silverlock@1.0.rb").to exist
+    ensure
+      FileUtils.rm_rf(source_path)
+      FileUtils.rm_rf(dest_path)
     end
   end
 

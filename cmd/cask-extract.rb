@@ -46,7 +46,10 @@ module Homebrew
         destination_tap = Tap.fetch(destination_tap_name)
         destination_tap.install unless destination_tap.installed?
 
-        if try_brew_extract_cask(token, destination_tap_name, source_tap_name)
+        # --unversioned and --no-shard are only supported in the fallback path;
+        # skip delegation when either is set so their semantics are honoured.
+        if !args.unversioned? && !args.no_shard? &&
+           try_brew_extract_cask(token, destination_tap_name, source_tap_name)
           post_process_extracted_cask(token, destination_tap)
         else
           fallback_extract(token, destination_tap, source_tap_name)
@@ -83,25 +86,46 @@ module Homebrew
 
       sig { params(token: String, destination_tap: Tap).void }
       def post_process_extracted_cask(token, destination_tap)
-        extracted_path = find_extracted_cask(token, destination_tap)
-        odie "Could not find extracted cask file for #{token} in #{destination_tap.path}" unless extracted_path
+        extracted_token = extracted_cask_token(token)
+        extracted_path = find_extracted_cask(extracted_token, token, destination_tap)
+        unless extracted_path
+          odie "Could not find extracted cask file for #{extracted_token} in #{destination_tap.path}"
+        end
 
         warn_maintainer(token)
         add_quarantine_postflight(extracted_path) if args.no_quarantine?
 
         ohai "Extracted to:", extracted_path.to_s
-        puts "Install with: brew install --cask #{destination_tap}/#{token}"
+        puts "Install with: brew install --cask #{destination_tap}/#{extracted_token}"
       end
 
-      sig { params(token: String, tap: Tap).returns(T.nilable(Pathname)) }
-      def find_extracted_cask(token, tap)
+      sig { params(token: String).returns(String) }
+      def extracted_cask_token(token)
+        return token if args.unversioned? || args.version.nil?
+
+        "#{token}@#{args.version}"
+      end
+
+      sig { params(extracted_token: String, bare_token: String, tap: Tap).returns(T.nilable(Pathname)) }
+      def find_extracted_cask(extracted_token, bare_token, tap)
         casks_dir = tap.path/"Casks"
         return unless casks_dir.exist?
 
-        [
-          casks_dir/token[0]/"#{token}.rb",
-          casks_dir/"#{token}.rb",
-        ].find(&:exist?)
+        shard = bare_token.start_with?("font-") ? "font" : bare_token[0]
+        candidates = T.let([
+          casks_dir/shard/"#{extracted_token}.rb",
+          casks_dir/"#{extracted_token}.rb",
+        ], T::Array[Pathname])
+
+        # Also search for versioned variants (token@*.rb) when looking up
+        # a bare token (e.g. after brew extract creates token@version).
+        if extracted_token == bare_token
+          sharded_dir = casks_dir/shard
+          candidates.concat(Pathname.glob(sharded_dir/"#{bare_token}@*.rb")) if sharded_dir.exist?
+          candidates.concat(Pathname.glob(casks_dir/"#{bare_token}@*.rb"))
+        end
+
+        candidates.find(&:exist?)
       end
 
       sig { params(token: String, destination_tap: Tap, source_tap_name: String).void }
@@ -137,9 +161,10 @@ module Homebrew
       sig { params(tap: Tap, token: String).returns(T.nilable(String)) }
       def find_cask_in_history(tap, token)
         tap_path = tap.path
+        shard = token.start_with?("font-") ? "font" : token[0]
 
         patterns = [
-          "Casks/#{token[0]}/#{token}.rb",
+          "Casks/#{shard}/#{token}.rb",
           "Casks/#{token}.rb",
         ]
 

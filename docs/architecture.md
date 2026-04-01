@@ -36,13 +36,20 @@ extraction:
 
 ### Quarantine postflight injection
 
-When `--no-quarantine` is passed, the command post-processes the extracted cask:
+When `--no-quarantine` is passed, the command post-processes the extracted cask
+using [Prism](https://ruby.github.io/prism/) (Ruby's built-in AST parser) for
+deterministic code injection:
 
-1. Scans for `app "Foo.app"` stanzas in the cask content.
-2. Skips if the content already mentions `com.apple.quarantine`.
-3. Inserts a `postflight` block before the closing `end` that runs
-   `/usr/bin/xattr -dr com.apple.quarantine` on each app bundle.
-4. Warns if no `app` stanza is found (manual configuration may be needed).
+1. Parses the cask file into a Prism AST and locates the `cask … do` block.
+2. Extracts `app` stanza arguments from `CallNode` AST nodes (not regex).
+3. Skips if the content already mentions `com.apple.quarantine`.
+4. If a `postflight` block already exists, appends `xattr` removal commands
+   to it (before its closing `end`).
+5. If no `postflight` block exists, inserts a new one at the correct position
+   per Homebrew's [stanza order](https://docs.brew.sh/Cask-Cookbook#stanza-order)
+   — after artifact stanzas (`app`, `pkg`, …) and `preflight`, but before
+   `uninstall`, `zap`, and `caveats`.
+6. Warns if no `app` stanza is found (manual configuration may be needed).
 
 ## Tiered bundle discovery
 

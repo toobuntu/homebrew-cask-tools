@@ -39,6 +39,11 @@ module Homebrew
         named_args number: 2
       end
 
+      # Stanza names that follow postflight in Homebrew's canonical order.
+      STANZAS_AFTER_POSTFLIGHT = T.let([
+        :uninstall_preflight, :uninstall_postflight, :uninstall, :zap, :caveats
+      ].freeze, T::Array[Symbol])
+
       sig { override.void }
       def run
         source_tap_name, token = resolve_cask_spec(T.must(args.named.first))
@@ -217,11 +222,6 @@ module Homebrew
         EOS
       end
 
-      # Stanza names that follow postflight in Homebrew's canonical order.
-      STANZAS_AFTER_POSTFLIGHT = T.let(%i[
-        uninstall_preflight uninstall_postflight uninstall zap caveats
-      ].freeze, T::Array[Symbol])
-
       sig { params(cask_path: Pathname).void }
       def add_quarantine_postflight(cask_path)
         content = cask_path.read
@@ -249,9 +249,9 @@ module Homebrew
 
         xattr_lines = build_xattr_lines(app_names)
 
-        existing_pf = stmts.find { |n|
+        existing_pf = stmts.find do |n|
           n.is_a?(Prism::CallNode) && n.name == :postflight && n.block.is_a?(Prism::BlockNode)
-        }
+        end
 
         modified = if existing_pf
           append_to_postflight(content, T.cast(existing_pf, Prism::CallNode), xattr_lines)
@@ -270,7 +270,7 @@ module Homebrew
       sig { params(program: Prism::ProgramNode).returns(T.nilable(Prism::BlockNode)) }
       def find_cask_block(program)
         program.statements.body.each do |node|
-          next unless node.is_a?(Prism::CallNode) && node.name == :cask
+          next if !node.is_a?(Prism::CallNode) || node.name != :cask
 
           block = node.block
           return block if block.is_a?(Prism::BlockNode)
@@ -288,25 +288,25 @@ module Homebrew
 
       sig { params(stmts: T::Array[Prism::Node]).returns(T::Array[String]) }
       def extract_app_names(stmts)
-        stmts.filter_map { |node|
-          next unless node.is_a?(Prism::CallNode) && node.name == :app
+        stmts.filter_map do |node|
+          next if !node.is_a?(Prism::CallNode) || node.name != :app
 
           first_arg = node.arguments&.arguments&.first
           next unless first_arg.is_a?(Prism::StringNode)
 
           first_arg.content
-        }
+        end
       end
 
       sig { params(app_names: T::Array[String]).returns(String) }
       def build_xattr_lines(app_names)
-        app_names.map { |app|
+        app_names.map do |app|
           <<~RUBY.chomp
             system_command "/usr/bin/xattr",
                            args: ["-dr", "com.apple.quarantine", "\#{appdir}/#{app}"],
                            sudo: false
           RUBY
-        }.join("\n    ")
+        end.join("\n    ")
       end
 
       sig { params(content: String, pf_call: Prism::CallNode, xattr_lines: String).returns(String) }
@@ -320,24 +320,24 @@ module Homebrew
 
       sig {
         params(
-          content:    String,
-          stmts:      T::Array[Prism::Node],
-          cask_block: Prism::BlockNode,
+          content:     String,
+          stmts:       T::Array[Prism::Node],
+          cask_block:  Prism::BlockNode,
           xattr_lines: String,
         ).returns(String)
       }
       def insert_new_postflight(content, stmts, cask_block, xattr_lines)
         # Insert before the first stanza that canonically follows postflight,
         # or before the cask block's closing `end` if no such stanza exists.
-        anchor = stmts.find { |n|
+        anchor = stmts.find do |n|
           n.is_a?(Prism::CallNode) && STANZAS_AFTER_POSTFLIGHT.include?(n.name)
-        }
+        end
 
         offset = if anchor
-                   anchor.location.start_offset
-                 else
-                   cask_block.closing_loc.start_offset
-                 end
+          anchor.location.start_offset
+        else
+          cask_block.closing_loc.start_offset
+        end
 
         line_start = content.rindex("\n", offset - 1)
         insert_pos = line_start ? line_start + 1 : offset

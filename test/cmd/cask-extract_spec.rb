@@ -186,12 +186,49 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       cmd.send(:add_quarantine_postflight, cask_file)
     end
 
-    it "warns when no insertion point is found" do
-      # Has an app stanza on its own line but no "\nend" at end of file
-      cask_file.write("cask \"broken\" do\n  app \"X.app\"\n")
+    it "warns when no cask block can be parsed" do
+      cask_file.write("not ruby at all {{{}}")
 
-      expect(cmd).to receive(:opoo).with(/Could not locate insertion point/)
+      expect(cmd).to receive(:opoo).with(/Could not parse cask block/)
       cmd.send(:add_quarantine_postflight, cask_file)
+    end
+
+    it "appends to an existing postflight block" do
+      cask_file.write(<<~RUBY)
+        cask "some-cask" do
+          version "1.0"
+          app "Some App.app"
+          postflight do
+            system "echo", "hello"
+          end
+        end
+      RUBY
+
+      cmd.send(:add_quarantine_postflight, cask_file)
+
+      result = cask_file.read
+      expect(result).to include("com.apple.quarantine")
+      expect(result).to include("Some App.app")
+      expect(result).to include('"echo"')
+      expect(result.scan("postflight do").length).to eq(1)
+    end
+
+    it "inserts postflight before uninstall to respect stanza order" do
+      cask_file.write(<<~RUBY)
+        cask "some-cask" do
+          version "1.0"
+          app "Some App.app"
+          uninstall quit: "com.example.app"
+        end
+      RUBY
+
+      cmd.send(:add_quarantine_postflight, cask_file)
+
+      result = cask_file.read
+      expect(result).to include("postflight do")
+      pf_pos = T.must(result.index("postflight do"))
+      uninstall_pos = T.must(result.index("uninstall quit:"))
+      expect(pf_pos).to be < uninstall_pos
     end
   end
 

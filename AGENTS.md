@@ -6,8 +6,8 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
 # Agent Instructions for toobuntu/homebrew-cask-tools
 
-This repository provides Homebrew external tap commands: `brew purge-quarantine` and
-`brew generate-tap-man-completions` (developer-only).
+This repository provides Homebrew external tap commands: `brew purge-quarantine`,
+`brew cask-extract`, and `brew generate-tap-man-completions` (developer-only).
 Code quality and style should be at a level suitable for potential inclusion in Homebrew.
 
 Run `brew style --fix --changed && brew typecheck` to verify any file edits before committing.
@@ -55,7 +55,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `Homebrew/style` (MCP) — equivalent to `brew style --fix --changed`
 - `Homebrew/typecheck` (MCP) — equivalent to `brew typecheck`
-- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine` or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
+- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine`, `--only=cmd/cask-extract`, or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
   (requires the cmd/dev-cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 
 ### Development Flow
@@ -71,6 +71,9 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
+- `cmd/cask-extract.rb`: External tap command implementing `brew cask-extract`.
+  Extracts a cask from Homebrew's git history into a personal tap, optionally adding
+  a `postflight` block to remove macOS's quarantine extended attribute.
 - `dev-cmd/generate-tap-man-completions.rb`: Developer-only command implementing `brew generate-tap-man-completions`.
   Generates Bash, ZSH, and Fish completion files for all commands in `cmd/` and `dev-cmd/`, Ronn man
   page sources (`.1.md`), and compiled roff (`.1`) into `manpages/`. Cleans up stale files for
@@ -82,6 +85,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   The `.githooks/post-merge` and `.githooks/post-rewrite` hooks re-create the hardlink
   automatically after `git pull` (set `core.hooksPath = .githooks` once to enable).
 - `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
+- `test/cmd/cask-extract_spec.rb`: RSpec spec for the `cask-extract` command.
 - `test/cmd/generate-tap-man-completions_spec.rb`: RSpec spec for the `generate-tap-man-completions` command.
 - `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-man-completions`
   after any `cmd_args` change. CI verifies these are not out of date.

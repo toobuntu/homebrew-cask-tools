@@ -10,9 +10,12 @@ This file provides technical notes for AI agents and contributors working in thi
 
 ## Repository overview
 
-This is a Homebrew external tap hosting `brew purge-quarantine` and `brew generate-tap-man-completions`.
+This is a Homebrew external tap hosting `brew purge-quarantine`, `brew cask-extract`,
+and `brew generate-tap-man-completions`.
 `brew purge-quarantine` removes macOS quarantine (`com.apple.quarantine`) and provenance
 (`com.apple.provenance`) extended attributes from installed cask bundles to satisfy Gatekeeper.
+`brew cask-extract` extracts a cask from Homebrew's git history into a personal tap,
+optionally adding a `postflight` block to remove macOS's quarantine extended attribute.
 `brew generate-tap-man-completions` is a developer-only command (requires `HOMEBREW_DEVELOPER=1`)
 that generates shell completions and Ronn man page sources for commands in `cmd/` and `dev-cmd/`.
 
@@ -48,6 +51,7 @@ scripts/run-tests.sh
 
 # Run a specific test file or line
 scripts/run-tests.sh --only=cmd/purge-quarantine:LINE
+scripts/run-tests.sh --only=cmd/cask-extract
 scripts/run-tests.sh --only=cmd/generate-tap-man-completions
 
 # Regenerate shell completions, man page sources, and compiled roff after any cmd_args change.

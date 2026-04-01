@@ -39,6 +39,11 @@ PURGE_SPEC_SRC="${TAP_DIR}/test/cmd/purge-quarantine_spec.rb"
 PURGE_CMD_DST="${HOMEBREW_LIB}/cmd/purge-quarantine.rb"
 PURGE_SPEC_DST="${HOMEBREW_LIB}/test/cmd/purge-quarantine_spec.rb"
 
+CEXT_CMD_SRC="${TAP_DIR}/cmd/cask-extract.rb"
+CEXT_SPEC_SRC="${TAP_DIR}/test/cmd/cask-extract_spec.rb"
+CEXT_CMD_DST="${HOMEBREW_LIB}/cmd/cask-extract.rb"
+CEXT_SPEC_DST="${HOMEBREW_LIB}/test/cmd/cask-extract_spec.rb"
+
 GENTC_CMD_SRC="${TAP_DIR}/dev-cmd/generate-tap-man-completions.rb"
 GENTC_SPEC_SRC="${TAP_DIR}/test/cmd/generate-tap-man-completions_spec.rb"
 GENTC_CMD_DST="${HOMEBREW_LIB}/cmd/generate-tap-man-completions.rb"
@@ -49,6 +54,7 @@ cleanup() {
   echo "" >&2
   echo "==> Removing hardlinks from Homebrew repository..." >&2
   rm -f "${PURGE_CMD_DST}" "${PURGE_SPEC_DST}"
+  rm -f "${CEXT_CMD_DST}" "${CEXT_SPEC_DST}"
   rm -f "${GENTC_CMD_DST}" "${GENTC_SPEC_DST}"
   exit "${exit_code}"
 }
@@ -69,7 +75,7 @@ cat >&2 <<'WARNING'
 WARNING
 
 # Check that source files exist.
-for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}"
+for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${CEXT_CMD_SRC}" "${CEXT_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}"
 do
   if [[ ! -f "${src}" ]]
   then
@@ -86,6 +92,8 @@ echo "==> Hardlinking files into Homebrew repository..." >&2
 pairs=(
   "${PURGE_CMD_SRC}:${PURGE_CMD_DST}"
   "${PURGE_SPEC_SRC}:${PURGE_SPEC_DST}"
+  "${CEXT_CMD_SRC}:${CEXT_CMD_DST}"
+  "${CEXT_SPEC_SRC}:${CEXT_SPEC_DST}"
   "${GENTC_CMD_SRC}:${GENTC_CMD_DST}"
   "${GENTC_SPEC_SRC}:${GENTC_SPEC_DST}"
 )
@@ -105,6 +113,8 @@ then
 else
   echo "==> Running: brew tests --only=cmd/purge-quarantine" >&2
   brew tests --only=cmd/purge-quarantine
+  echo "==> Running: brew tests --only=cmd/cask-extract" >&2
+  brew tests --only=cmd/cask-extract
   echo "==> Running: brew tests --only=cmd/generate-tap-man-completions" >&2
   brew tests --only=cmd/generate-tap-man-completions
 fi

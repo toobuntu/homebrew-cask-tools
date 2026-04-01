@@ -40,9 +40,15 @@ detect_tap_name() {
   remote_url="$(git -C "${DEV_DIR}" remote get-url origin 2>/dev/null || true)"
   if [[ -n ${remote_url} ]]
   then
-    # Extract user/repo from SSH or HTTPS URLs
-    tap_repo="$(basename "${remote_url}" .git)"
-    tap_user="$(basename "$(dirname "${remote_url}")")"
+    # Normalize SSH (git@host:user/repo) and HTTPS (https://host/user/repo) URLs
+    # to a host/user/repo path for reliable user/repo extraction.
+    local normalized="${remote_url%.git}"
+    normalized="${normalized#*://}"
+    normalized="${normalized#*@}"
+    # SSH URLs use colon as path separator (git@host:user/repo) — convert to slash
+    normalized="${normalized/://}"
+    tap_repo="$(basename "${normalized}")"
+    tap_user="$(basename "$(dirname "${normalized}")")"
     # Strip the homebrew- prefix from the repo name
     echo "${tap_user}/${tap_repo#homebrew-}"
     return

@@ -1,0 +1,57 @@
+#!/bin/sh
+# Pre-commit hook: lints staged Ruby, shell, and workflow files; checks REUSE compliance.
+# Enable with: git config core.hooksPath .githooks
+
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+set -e
+
+staged() { git diff --cached --name-only --diff-filter=ACM | grep -E "$1" || true; }
+
+# Lint staged Ruby files with brew style and re-stage any auto-fixed files.
+ruby_files=$(staged '\.rb$')
+if [ -n "$ruby_files" ]; then
+  brew style --fix --changed
+  printf '%s\n' "$ruby_files" | xargs -r git add
+fi
+
+# Lint staged shell files with brew style (shfmt + shellcheck); re-stage any auto-fixed files.
+# Also run ksh -n for syntax checking if ksh is available (standard on macOS).
+shell_files=$(staged '\.(sh)$|^\.githooks/')
+if [ -n "$shell_files" ]; then
+  printf '%s\n' "$shell_files" | xargs brew style --fix
+  printf '%s\n' "$shell_files" | xargs -r git add
+  if command -v ksh >/dev/null 2>&1; then
+    printf '%s\n' "$shell_files" | xargs ksh -n
+  fi
+fi
+
+# Lint staged workflow files with actionlint and zizmor if available.
+workflow_files=$(staged '\.github/workflows/.*\.yml$')
+if [ -n "$workflow_files" ]; then
+  if command -v actionlint >/dev/null 2>&1; then
+    printf '%s\n' "$workflow_files" | xargs actionlint
+  else
+    echo "warning: actionlint not found — skipping workflow lint (brew install actionlint)"
+  fi
+  if command -v zizmor >/dev/null 2>&1; then
+    zizmor .
+  else
+    echo "warning: zizmor not found — skipping workflow security scan (brew install zizmor)"
+  fi
+fi
+
+# REUSE compliance check.
+if ! reuse lint --quiet; then
+  reuse lint
+  cat >&2 <<'HINT'
+
+To annotate unannotated files, run:
+
+  scripts/annotate.sh
+
+HINT
+  exit 1
+fi

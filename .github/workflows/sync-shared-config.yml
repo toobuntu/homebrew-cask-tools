@@ -1,0 +1,107 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+name: Sync shared configuration
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # After dependabot.yml for this repository (Friday) and early in the week,
+    # matching Homebrew upstream's schedule. Runs Wednesday 8 AM.
+    - cron: "0 8 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+concurrency:
+  group: "sync-shared-config-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: true
+
+      - name: Configure Git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Download upstream shared configuration files
+        run: |
+          curl -fsSL \
+            "https://raw.githubusercontent.com/Homebrew/.github/main/.github/zizmor.yml" \
+            -o .github/zizmor.yml
+          curl -fsSL \
+            "https://raw.githubusercontent.com/Homebrew/brew/main/.github/actionlint-matcher.json" \
+            -o .github/actionlint-matcher.json
+          curl -fsSL \
+            "https://raw.githubusercontent.com/Homebrew/brew/main/.github/workflows/copilot-setup-steps.yml" \
+            -o .github/workflows/copilot-setup-steps.yml
+
+      - name: Apply tap-specific mutations to copilot-setup-steps.yml
+        run: |
+          f=".github/workflows/copilot-setup-steps.yml"
+          yq -i '(.jobs.copilot-setup-steps.steps[] |
+            select(.uses // "" | test("Homebrew/actions/setup-homebrew@"))).with.core = false' "$f"
+          yq -i '(.jobs.copilot-setup-steps.steps[] |
+            select(.uses // "" | test("Homebrew/actions/setup-homebrew@"))).with.cask = false' "$f"
+          yq -i '(.jobs.copilot-setup-steps.steps[] |
+            select(.uses // "" | test("Homebrew/actions/cache-homebrew-prefix@"))).with.install |=
+            . + " actionlint reuse pinact zizmor"' "$f"
+
+      - name: Verify mutations were applied
+        run: |
+          f=".github/workflows/copilot-setup-steps.yml"
+          grep -q 'core: false' "$f" || { echo "::error::core not set to false"; exit 1; }
+          grep -q 'cask: false' "$f" || { echo "::error::cask not set to false"; exit 1; }
+          grep -q 'actionlint' "$f"  || { echo "::error::extra tools not appended to install list"; exit 1; }
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --name-only
+          fi
+
+      - name: Create or update pull request
+        if: steps.changes.outputs.changed == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git checkout -b sync-shared-config
+          git add .github/zizmor.yml .github/actionlint-matcher.json .github/workflows/copilot-setup-steps.yml
+          git commit -m "Synchronize shared configuration from upstream"
+          git push --force --set-upstream origin sync-shared-config
+
+          if gh api \
+              -X GET \
+              --header "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/pulls" \
+              -f "head=${{ github.repository_owner }}:sync-shared-config" \
+              -f state=open |
+              jq --exit-status 'length == 0'
+          then
+            gh pr create \
+              --head sync-shared-config \
+              --title "Synchronize shared configuration" \
+              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github), \`.github/actionlint-matcher.json\` from [Homebrew/brew](https://github.com/Homebrew/brew), and \`.github/workflows/copilot-setup-steps.yml\` from [Homebrew/brew](https://github.com/Homebrew/brew) (with \`core\`/\`cask\` set to \`false\` and \`actionlint reuse pinact zizmor\` appended to the install list for tap use)."
+          fi

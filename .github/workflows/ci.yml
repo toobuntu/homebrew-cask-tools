@@ -1,0 +1,146 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+name: CI
+
+env:
+  HOMEBREW_DEVELOPER: 1
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALL_FROM_API: 1
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  style:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: macos-latest
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - name: Cache Homebrew Bundler RubyGems
+        id: cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ runner.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ runner.os }}-rubygems-
+
+      - name: Install Homebrew Bundler RubyGems
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install-bundler-gems
+
+      - name: Cache style cache
+        if: runner.os == 'macOS'
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/Library/Caches/Homebrew/style
+          key: macos-style-cache-${{ github.sha }}
+          restore-keys: macos-style-cache-
+
+      - name: brew style
+        run: brew style --changed
+
+  brew_tests:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: macos-latest
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - name: Cache Homebrew Bundler RubyGems
+        id: cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ runner.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ runner.os }}-rubygems-
+
+      - name: Install Homebrew Bundler RubyGems
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install-bundler-gems
+
+      - name: Link tap files into Homebrew for brew tests
+        run: |
+          brew_lib="$(brew --repo)/Library/Homebrew"
+          mkdir -p "${brew_lib}/cmd" "${brew_lib}/test/cmd"
+          ln -f cmd/purge-quarantine.rb "${brew_lib}/cmd/purge-quarantine.rb"
+          ln -f test/cmd/purge-quarantine_spec.rb "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
+          ln -f cmd/cask-extract.rb "${brew_lib}/cmd/cask-extract.rb"
+          ln -f test/cmd/cask-extract_spec.rb "${brew_lib}/test/cmd/cask-extract_spec.rb"
+          ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+          ln -f test/cmd/generate-tap-man-completions_spec.rb "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
+
+      - name: brew tests
+        run: |
+          brew tests --only=cmd/purge-quarantine
+          brew tests --only=cmd/cask-extract
+          brew tests --only=cmd/generate-tap-man-completions
+
+      - name: Unlink tap files from Homebrew
+        if: always()
+        run: |
+          brew_lib="$(brew --repo)/Library/Homebrew"
+          rm -f "${brew_lib}/cmd/purge-quarantine.rb"
+          rm -f "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
+          rm -f "${brew_lib}/cmd/cask-extract.rb"
+          rm -f "${brew_lib}/test/cmd/cask-extract_spec.rb"
+          rm -f "${brew_lib}/cmd/generate-tap-man-completions.rb"
+          rm -f "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
+
+  completions:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: macos-latest
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - name: Cache Homebrew Bundler RubyGems
+        id: cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ runner.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ runner.os }}-rubygems-
+
+      - name: Install Homebrew Bundler RubyGems
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install-bundler-gems
+
+      - name: Link generate-tap-man-completions into Homebrew for brew run
+        run: |
+          brew_lib="$(brew --repo)/Library/Homebrew"
+          mkdir -p "${brew_lib}/cmd"
+          ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+
+      - name: Check completions and man pages are up to date
+        run: brew generate-tap-man-completions --no-exit-code
+
+      - name: Fail if completions or man page sources are out of date
+        # -I '\.TH ' ignores date-only changes in compiled roff headers
+        # (.TH "CMD" "1" "Month Year" "Homebrew") that occur when the
+        # month rolls over. These are cosmetic and not a source change.
+        run: git diff --exit-code -I '\.TH ' completions/ manpages/
+
+      - name: Unlink generate-tap-man-completions from Homebrew
+        if: always()
+        run: rm -f "$(brew --repo)/Library/Homebrew/cmd/generate-tap-man-completions.rb"

@@ -1,33 +1,44 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+# typed: strict
 # frozen_string_literal: true
 
+require "abstract_command"
 require "tap"
 
 module Homebrew
   module Cmd
+    # Extracts a cask into a personal tap, optionally adding quarantine removal.
     class CaskExtract < AbstractCommand
       cmd_args do
+        usage_banner "`cask-extract` [<options>] <cask> <tap>"
         description <<~EOS
-          Extract a cask formula at a given version from this tap's history into another tap.
-          Optionally add a postflight block to remove macOS's quarantine extended attribute.
+          Extract a cask from Homebrew's git history into a personal tap.
+          Optionally add a postflight block to remove macOS's quarantine
+          extended attribute so un-notarized apps can launch without
+          Gatekeeper blocking them.
         EOS
 
-        named_args [:cask, :tap], number: 2
-
         flag   "--version=",
-               description: "Extract this specific version from formula history."
+               description: "Extract the cask at this specific version from git history."
         switch "--no-quarantine",
-               description: "Add a postflight block to remove the quarantine xattr."
+               description: "Add a `postflight` block that removes the quarantine xattr."
         switch "--unversioned",
-               description: "Extract the cask without adding a version suffix."
+               description: "Copy without adding a version suffix to the cask token."
         switch "--force",
-               description: "Overwrite the destination if it already exists."
+               description: "Overwrite the destination file if it already exists."
         switch "--no-shard",
-               description: "Write to a flat Casks/ directory instead of a sharded one."
+               description: "Write to a flat `Casks/` directory instead of a sharded one."
+
+        named_args number: 2
       end
 
+      sig { override.void }
       def run
-        token = args.named[0]
-        destination_tap_name = args.named[1]
+        token = T.must(args.named.first)
+        destination_tap_name = T.must(args.named.second)
 
         destination_tap = Tap.fetch(destination_tap_name)
         destination_tap.install unless destination_tap.installed?
@@ -41,13 +52,13 @@ module Homebrew
 
       private
 
+      sig { params(token: String, destination_tap_name: String).returns(T::Boolean) }
       def try_brew_extract_cask(token, destination_tap_name)
-        # Check whether the installed brew supports `brew extract --cask`.
         help_output = Utils.popen_read(HOMEBREW_BREW_FILE, "extract", "--help")
         return false unless help_output.include?("--cask")
 
         cmd = [HOMEBREW_BREW_FILE, "extract", "--cask", token, destination_tap_name]
-        cmd += ["--version=#{args.version}"] if args.version
+        cmd << "--version=#{args.version}" if args.version
         cmd << "--force" if args.force?
 
         safe_system(*cmd)
@@ -56,37 +67,37 @@ module Homebrew
         false
       end
 
+      sig { params(token: String, destination_tap: Tap).void }
       def post_process_extracted_cask(token, destination_tap)
         extracted_path = find_extracted_cask(token, destination_tap)
-        unless extracted_path
-          odie "Could not find extracted cask file for #{token} in #{destination_tap.path}"
-        end
+        odie "Could not find extracted cask file for #{token} in #{destination_tap.path}" unless extracted_path
 
         warn_maintainer(token)
-        add_quarantine_postflight(extracted_path, token) if args.no_quarantine?
+        add_quarantine_postflight(extracted_path) if args.no_quarantine?
 
         ohai "Extracted to:", extracted_path.to_s
         puts "Install with: brew install --cask #{destination_tap}/#{token}"
       end
 
+      sig { params(token: String, tap: Tap).returns(T.nilable(Pathname)) }
       def find_extracted_cask(token, tap)
         casks_dir = tap.path/"Casks"
-        return nil unless casks_dir.exist?
+        return unless casks_dir.exist?
 
-        # Try sharded path first, then flat
         [
-          casks_dir/"#{token[0]}"/"#{token}.rb",
+          casks_dir/token[0]/"#{token}.rb",
           casks_dir/"#{token}.rb",
         ].find(&:exist?)
       end
 
+      sig { params(token: String, destination_tap: Tap).void }
       def fallback_extract(token, destination_tap)
         ohai "Falling back to manual extraction (brew extract --cask not available)"
 
         source_tap = Tap.fetch("homebrew/cask")
         odie "Source tap homebrew/cask is not installed." unless source_tap.installed?
 
-        content, _source_path = find_cask_in_history(source_tap, token)
+        content = find_cask_in_history(source_tap, token)
         odie "Could not find cask #{token}!" if content.nil?
 
         version = args.version || parse_version_from_content(content)
@@ -97,59 +108,55 @@ module Homebrew
 
         dest_path = destination_cask_path(destination_tap, versioned_token)
 
-        if dest_path.exist? && !args.force?
-          odie "Destination already exists: #{dest_path}\nUse --force to overwrite."
-        end
+        odie "Destination already exists: #{dest_path}\nUse --force to overwrite." if dest_path.exist? && !args.force?
 
         dest_path.dirname.mkpath
         dest_path.write(content)
 
         warn_maintainer(token)
-        add_quarantine_postflight(dest_path, versioned_token) if args.no_quarantine?
+        add_quarantine_postflight(dest_path) if args.no_quarantine?
 
         ohai "Extracted to:", dest_path.to_s
         puts "Install with: brew install --cask #{destination_tap}/#{versioned_token}"
       end
 
+      sig { params(tap: Tap, token: String).returns(T.nilable(String)) }
       def find_cask_in_history(tap, token)
         tap_path = tap.path
 
-        # Search patterns: sharded and flat
         patterns = [
           "Casks/#{token[0]}/#{token}.rb",
           "Casks/#{token}.rb",
         ]
 
-        # Try working tree first
         patterns.each do |pattern|
           full_path = tap_path/pattern
-          return [full_path.read, full_path] if full_path.exist?
-        end
+          return full_path.read if full_path.exist?
 
-        # Search git history
-        patterns.each do |pattern|
           log_output = Utils.popen_read(
             "git", "-C", tap_path.to_s,
             "log", "--all", "--oneline", "--", pattern
           ).strip
           next if log_output.empty?
 
-          commit = log_output.lines.first.split.first
+          commit = T.must(log_output.lines.first).split.first
           content = Utils.popen_read(
             "git", "-C", tap_path.to_s,
             "show", "#{commit}:#{pattern}"
           )
-          return [content, tap_path/pattern] unless content.empty?
+          return content unless content.empty?
         end
 
         nil
       end
 
+      sig { params(content: String).returns(T.nilable(String)) }
       def parse_version_from_content(content)
         match = content.match(/^\s*version\s+["']([^"']+)["']/)
         match&.captures&.first
       end
 
+      sig { params(tap: Tap, token: String).returns(Pathname) }
       def destination_cask_path(tap, token)
         casks_dir = tap.path/"Casks"
 
@@ -158,10 +165,11 @@ module Homebrew
         elsif token.start_with?("font-")
           casks_dir/"font"/"#{token}.rb"
         else
-          casks_dir/"#{token[0]}"/"#{token}.rb"
+          casks_dir/token[0]/"#{token}.rb"
         end
       end
 
+      sig { params(token: String).void }
       def warn_maintainer(token)
         opoo <<~EOS
           You are responsible for maintaining #{token}!
@@ -169,10 +177,10 @@ module Homebrew
         EOS
       end
 
-      def add_quarantine_postflight(cask_path, token)
+      sig { params(cask_path: Pathname).void }
+      def add_quarantine_postflight(cask_path)
         content = cask_path.read
 
-        # Skip if a postflight block mentioning quarantine already exists
         if content.include?("com.apple.quarantine")
           ohai "#{cask_path.basename} already has quarantine handling; skipping."
           return
@@ -194,7 +202,6 @@ module Homebrew
         postflight_lines << "  end"
         postflight_block = "\n#{postflight_lines.join("\n")}\n"
 
-        # Insert the postflight block before the closing `end` of the cask block
         modified = content.sub(/(\nend\s*\z)/, "#{postflight_block}\\1")
 
         if modified == content

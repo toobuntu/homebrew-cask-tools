@@ -162,13 +162,14 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
         end
       RUBY
 
-      expected_msg = "No app stanza found; " \
-                     "quarantine removal may need to be configured manually."
+      expected_msg =
+        "No app stanza found; quarantine removal may need to be configured manually."
       expect(cmd).to receive(:opoo).with(expected_msg)
       cmd.send(:add_quarantine_postflight, cask_file)
     end
 
     it "warns when no insertion point is found" do
+      # Has an app stanza on its own line but no "\nend" at end of file
       cask_file.write("cask \"broken\" do\n  app \"X.app\"\n")
 
       expect(cmd).to receive(:opoo).with(/Could not locate insertion point/)
@@ -221,6 +222,7 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       flat = tmpdir/"Casks"/"silverlock.rb"
       flat.dirname.mkpath
       flat.write('cask "silverlock" do; end')
+      # Sharded pattern tried first; mock git search returning empty to fall through to flat.
       allow(Utils).to receive(:popen_read).and_return("")
 
       expect(cmd.send(:find_cask_in_history, tap, "silverlock")).to eq('cask "silverlock" do; end')

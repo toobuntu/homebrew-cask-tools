@@ -254,7 +254,8 @@ module Homebrew
         end
 
         modified = if existing_pf
-          append_to_postflight(content, T.cast(existing_pf, Prism::CallNode), xattr_lines)
+          pf_block = T.cast(T.cast(existing_pf, Prism::CallNode).block, Prism::BlockNode)
+          append_to_postflight(content, pf_block, xattr_lines)
         else
           insert_new_postflight(content, stmts, cask_block, xattr_lines)
         end
@@ -309,12 +310,9 @@ module Homebrew
         end.join("\n    ")
       end
 
-      sig { params(content: String, pf_call: Prism::CallNode, xattr_lines: String).returns(String) }
-      def append_to_postflight(content, pf_call, xattr_lines)
-        pf_block = T.cast(pf_call.block, Prism::BlockNode)
-        closing_offset = pf_block.closing_loc.start_offset
-        line_start = content.rindex("\n", closing_offset - 1)
-        insert_pos = line_start ? line_start + 1 : closing_offset
+      sig { params(content: String, pf_block: Prism::BlockNode, xattr_lines: String).returns(String) }
+      def append_to_postflight(content, pf_block, xattr_lines)
+        insert_pos = line_start_offset(content, pf_block.closing_loc.start_offset)
         content.dup.insert(insert_pos, "    #{xattr_lines}\n")
       end
 
@@ -339,9 +337,14 @@ module Homebrew
           cask_block.closing_loc.start_offset
         end
 
-        line_start = content.rindex("\n", offset - 1)
-        insert_pos = line_start ? line_start + 1 : offset
+        insert_pos = line_start_offset(content, offset)
         content.dup.insert(insert_pos, "  postflight do\n    #{xattr_lines}\n  end\n")
+      end
+
+      sig { params(content: String, offset: Integer).returns(Integer) }
+      def line_start_offset(content, offset)
+        newline = content.rindex("\n", offset - 1)
+        newline ? newline + 1 : offset
       end
     end
   end

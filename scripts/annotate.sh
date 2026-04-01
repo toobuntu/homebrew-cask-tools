@@ -5,7 +5,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 toobuntu
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
-set -eu
+set -euo pipefail
 
 files=$(reuse lint --json |
   jq -r '.non_compliant | (.missing_copyright_info + .missing_licensing_info) | unique[]') || true

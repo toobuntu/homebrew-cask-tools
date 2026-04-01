@@ -105,6 +105,8 @@ implementations must be compatible with macOS:
 - Ruby code that shells out should use commands available on macOS (`xattr`, `pkgutil`, etc.).
 - Shell scripts with `#!/bin/sh` must be POSIX-compatible; scripts with `#!/usr/bin/env bash`
   may use bash features but must avoid GNU coreutil extensions.
+- `brew style --fix` is canonical for all files (Ruby and shell). It runs RuboCop for Ruby
+  and shfmt + shellcheck for shell scripts. CI enforces this; the pre-commit hook does too.
 
 ## REUSE / licensing
 

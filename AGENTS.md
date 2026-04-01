@@ -103,10 +103,10 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
 - `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this
   instead of hand-writing SPDX headers.
-- `.githooks/pre-commit`: Pre-commit hook — runs style, shellcheck, shfmt, actionlint, and REUSE compliance.
+- `.githooks/pre-commit`: Pre-commit hook — runs `brew style --fix` (Ruby + shell), actionlint, and REUSE compliance.
 - `.githooks/post-merge`: Post-merge hook — re-creates the `cmd/` hardlink for `dev-cmd/` after `git pull` (merge).
 - `.githooks/post-rewrite`: Post-rewrite hook — re-creates the hardlink after `git pull --rebase` or `git rebase`.
-- `.github/workflows/ci.yml`: CI — runs `brew style`, `brew tests`, and checks completions and man page sources are current.
+- `.github/workflows/ci.yml`: CI — runs `brew style --changed` (Ruby + shell), `brew tests`, and checks completions and man page sources are current.
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream
   Homebrew repositories. Uses `yq` for YAML mutations with post-mutation assertions.
@@ -140,22 +140,6 @@ For GitHub Copilot coding agent, add the following JSON in the repository's Copi
   }
 }
 ```
-
-## CI and `setup-homebrew` Container Behaviour
-
-The `shell_style` CI job uses a Docker container (`ghcr.io/homebrew/brew:main`). The
-`Homebrew/actions/setup-homebrew` action behaves differently in containers vs. bare runners:
-
-- **Bare runner** (e.g. `style`, `brew_tests` jobs): `setup-homebrew` detects it is NOT
-  in a container, moves the tap's content to `$GITHUB_WORKSPACE`, and creates a symlink
-  from the tap path back to `$GITHUB_WORKSPACE`. This makes the tap available in the default
-  working directory without a separate checkout step.
-- **Container** (e.g. `shell_style` job): `setup-homebrew` detects `/.dockerenv` or
-  `actions_job|docker` in `/proc/1/cgroup`, sets `HOMEBREW_IN_CONTAINER=1`, uses `setfacl`
-  to fix permissions on runner-mounted directories, and **skips the `GITHUB_WORKSPACE`
-  symlinking step entirely** (see `if [[ -z "${HOMEBREW_IN_CONTAINER-}" ]]` in the action
-  source). The repo must therefore be checked out with an explicit `actions/checkout` step,
-  which is why the `shell_style` job has one and the others do not.
 
 ## Key Guidelines
 

@@ -50,40 +50,7 @@ jobs:
           restore-keys: macos-style-cache-
 
       - name: brew style
-        run: |
-          # Shell formatting is checked by the shell_style job (raw shfmt + shellcheck).
-          # Homebrew's shfmt wrapper (wrap_then_do) uses different conventions than
-          # raw shfmt, so only check Ruby files here to avoid conflicts.
-          changed_rb="$(git diff --name-only origin/main -- '*.rb')"
-          if [ -n "${changed_rb}" ]; then
-            echo "${changed_rb}" | xargs brew style
-          fi
-
-  shell_style:
-    if: github.repository_owner == 'toobuntu'
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/homebrew/brew:main
-    steps:
-      - name: Set up Homebrew
-        id: set-up-homebrew
-        uses: Homebrew/actions/setup-homebrew@main
-        with:
-          core: false
-          cask: false
-
-      - uses: Homebrew/actions/cache-homebrew-prefix@main
-        with:
-          install: shellcheck shfmt
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: shell style
-        run: |
-          shfmt --indent 2 --simplify --case-indent --diff scripts/ .githooks/
-          shellcheck scripts/annotate.sh scripts/run-tests.sh scripts/run-generate-tap-man-completions.sh .githooks/pre-commit
+        run: brew style --changed
 
   brew_tests:
     if: github.repository_owner == 'toobuntu'

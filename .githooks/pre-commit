@@ -17,19 +17,14 @@ if [ -n "$ruby_files" ]; then
   printf '%s\n' "$ruby_files" | xargs -r git add
 fi
 
-# Lint staged shell files with shellcheck and shfmt; re-stage any auto-fixed files.
+# Lint staged shell files with brew style (shfmt + shellcheck); re-stage any auto-fixed files.
 # Also run ksh -n for syntax checking if ksh is available (standard on macOS).
 shell_files=$(staged '\.(sh)$|^\.githooks/')
 if [ -n "$shell_files" ]; then
-  if command -v shfmt >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1; then
-    printf '%s\n' "$shell_files" | xargs shfmt --indent 2 --simplify --case-indent --write
-    printf '%s\n' "$shell_files" | xargs -r git add
-    printf '%s\n' "$shell_files" | xargs shellcheck
-    if command -v ksh >/dev/null 2>&1; then
-      printf '%s\n' "$shell_files" | xargs ksh -n
-    fi
-  else
-    echo "warning: shfmt/shellcheck not found — skipping shell lint (brew install shfmt shellcheck)"
+  printf '%s\n' "$shell_files" | xargs brew style --fix
+  printf '%s\n' "$shell_files" | xargs -r git add
+  if command -v ksh >/dev/null 2>&1; then
+    printf '%s\n' "$shell_files" | xargs ksh -n
   fi
 fi
 

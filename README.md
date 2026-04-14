@@ -103,6 +103,65 @@ Please use this command only with software you trust.
 
 ---
 
+## `brew man`
+
+Display a man page bundled with an installed formula.
+
+Homebrew kegs are not on the default `MANPATH`, so `man` does not find their
+pages. When multiple providers ship the same page name, `man` silently returns
+the first match. This command resolves man pages **by formula** and makes
+ambiguity visible.
+
+### Usage
+
+```sh
+brew man [<options>] <formula> [<manpage>]
+```
+
+### Arguments and flags
+
+| Argument / Flag | Description |
+|---|---|
+| `<formula>` | The installed formula whose keg to search (required) |
+| `[<manpage>]` | Man page name to look up (defaults to `<formula>`) |
+| `--html`, `-H` | Render the man page as HTML and open it in a browser |
+| `--list` | List all locations where the named man page is found |
+| `--select` | Interactively select which copy of the man page to view |
+
+### Examples
+
+Show the man page for `git` from its Homebrew keg:
+
+```sh
+brew man git
+```
+
+Show a different page bundled with a formula (e.g. `gitk` from the `git` keg):
+
+```sh
+brew man git gitk
+```
+
+Render the man page as HTML and open it in a browser:
+
+```sh
+brew man --html curl
+```
+
+List every location where the `grep` man page is found (system + all formula kegs):
+
+```sh
+brew man --list grep
+```
+
+Interactively choose which copy of the `ssh` man page to view:
+
+```sh
+brew man --select ssh
+```
+
+---
+
 ## `brew generate-tap-man-completions` (developer only)
 
 A developer-only command that generates Bash, ZSH, and Fish shell completions and

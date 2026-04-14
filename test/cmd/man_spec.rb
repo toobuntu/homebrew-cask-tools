@@ -116,6 +116,12 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(cmd.send(:collect_manpages, "nonexistent")).to eq([])
     end
 
+    it "dies when man is not found" do
+      allow(cmd).to receive(:which).with("man").and_return(nil)
+
+      expect { cmd.send(:collect_manpages, "testcmd") }.to raise_error(SystemExit)
+    end
+
     it "deduplicates results by realpath" do
       real_man = tmpdir/"opt/openssl@3/share/man/man1"
       real_man.mkpath

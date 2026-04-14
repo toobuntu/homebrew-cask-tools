@@ -136,35 +136,36 @@ module Homebrew
         seen = T.let([], T::Array[String])
 
         system_manpath.each do |dir|
-          result = Utils.popen_read({ "MANPATH" => dir.to_s }, man_cmd.to_s, "-w", name).strip
-          next if result.empty?
-
-          path = Pathname(result)
-          next unless path.exist?
-
-          real = path.realpath.to_s
-          next if seen.include?(real)
-
-          seen << real
-          choices << ["system", path]
+          path = resolve_manpage(man_cmd, dir, name, seen)
+          choices << ["system", path] if path
         end
 
         formula_man_dirs.each do |formula, man1_dir|
-          manpath = man1_dir.parent
-          result = Utils.popen_read({ "MANPATH" => manpath.to_s }, man_cmd.to_s, "-w", name).strip
-          next if result.empty?
-
-          path = Pathname(result)
-          next unless path.exist?
-
-          real = path.realpath.to_s
-          next if seen.include?(real)
-
-          seen << real
-          choices << [formula, path]
+          path = resolve_manpage(man_cmd, man1_dir.parent, name, seen)
+          choices << [formula, path] if path
         end
 
         choices
+      end
+
+      # Resolves a man page within a single MANPATH directory using `man -w`,
+      # deduplicating by realpath. Returns nil if not found or already seen.
+      sig {
+        params(man_cmd: Pathname, manpath_dir: Pathname, name: String,
+               seen: T::Array[String]).returns(T.nilable(Pathname))
+      }
+      def resolve_manpage(man_cmd, manpath_dir, name, seen)
+        result = Utils.popen_read({ "MANPATH" => manpath_dir.to_s }, man_cmd.to_s, "-w", name).strip
+        return if result.empty?
+
+        path = Pathname(result)
+        return unless path.exist?
+
+        real = path.realpath.to_s
+        return if seen.include?(real)
+
+        seen << real
+        path
       end
 
       # Renders a man page file, either via man(1) or as HTML in a browser.

@@ -65,21 +65,11 @@ RSpec.describe Homebrew::Cmd::Man do
   end
 
   describe "#list_manpages" do
-    let(:tmpdir) { Pathname(Dir.mktmpdir) }
-
-    after { FileUtils.rm_rf(tmpdir) }
-
     it "lists system and formula man pages" do
-      sys_man = tmpdir/"sys/man1"
-      sys_man.mkpath
-      FileUtils.touch(sys_man/"testcmd.1")
-
-      formula_man = tmpdir/"opt/test-formula/share/man/man1"
-      formula_man.mkpath
-      FileUtils.touch(formula_man/"testcmd.1")
-
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["test-formula", Pathname("/opt/homebrew/opt/test-formula/share/man/man1/testcmd.1")],
+      ])
 
       expect { cmd.send(:list_manpages, "testcmd") }
         .to output(/system:.*testcmd\.1.*test-formula:.*testcmd\.1/m).to_stdout
@@ -94,84 +84,121 @@ RSpec.describe Homebrew::Cmd::Man do
     it "returns system and formula matches as label/path pairs" do
       sys_man = tmpdir/"sys/man1"
       sys_man.mkpath
-      FileUtils.touch(sys_man/"testcmd.1")
+      manfile_sys = sys_man/"testcmd.1"
+      FileUtils.touch(manfile_sys)
 
       formula_man = tmpdir/"opt/test-formula/share/man/man1"
       formula_man.mkpath
-      FileUtils.touch(formula_man/"testcmd.1")
+      manfile_formula = formula_man/"testcmd.1"
+      FileUtils.touch(manfile_formula)
 
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
       stub_const("HOMEBREW_PREFIX", tmpdir)
+
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"sys").to_s }, "/usr/bin/man", "-w", "testcmd")
+        .and_return(manfile_sys.to_s)
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"opt/test-formula/share/man").to_s }, "/usr/bin/man", "-w", "testcmd")
+        .and_return(manfile_formula.to_s)
 
       result = cmd.send(:collect_manpages, "testcmd")
       expect(result.map(&:first)).to eq(["system", "test-formula"])
     end
 
     it "returns empty array when no matches exist" do
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(cmd).to receive(:system_manpath).and_return([])
       stub_const("HOMEBREW_PREFIX", tmpdir)
       (tmpdir/"opt").mkpath
 
       expect(cmd.send(:collect_manpages, "nonexistent")).to eq([])
     end
+
+    it "deduplicates results by realpath" do
+      real_man = tmpdir/"opt/openssl@3/share/man/man1"
+      real_man.mkpath
+      manfile = real_man/"openssl.1"
+      FileUtils.touch(manfile)
+
+      FileUtils.ln_sf(tmpdir/"opt/openssl@3", tmpdir/"opt/openssl")
+
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(cmd).to receive(:system_manpath).and_return([])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"opt/openssl/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return((tmpdir/"opt/openssl/share/man/man1/openssl.1").to_s)
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return((tmpdir/"opt/openssl@3/share/man/man1/openssl.1").to_s)
+
+      result = cmd.send(:collect_manpages, "openssl")
+      expect(result.length).to eq(1)
+    end
+
+    it "finds pages across multiple formula kegs" do
+      libressl_man = tmpdir/"opt/libressl/share/man/man1"
+      libressl_man.mkpath
+      libressl_file = libressl_man/"openssl.1"
+      FileUtils.touch(libressl_file)
+
+      openssl_man = tmpdir/"opt/openssl@3/share/man/man1"
+      openssl_man.mkpath
+      openssl_file = openssl_man/"openssl.1"
+      FileUtils.touch(openssl_file)
+
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(cmd).to receive(:system_manpath).and_return([])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"opt/libressl/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return(libressl_file.to_s)
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return(openssl_file.to_s)
+
+      result = cmd.send(:collect_manpages, "openssl")
+      expect(result.map(&:first)).to contain_exactly("libressl", "openssl@3")
+    end
   end
 
   describe "#interactive_manpage" do
-    let(:tmpdir) { Pathname(Dir.mktmpdir) }
-
-    after { FileUtils.rm_rf(tmpdir) }
-
     it "dies when no man pages are found" do
-      allow(cmd).to receive(:system_manpath).and_return([])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
-      (tmpdir/"opt").mkpath
+      allow(cmd).to receive(:collect_manpages).with("nonexistent").and_return([])
 
       expect { cmd.send(:interactive_manpage, "nonexistent") }
         .to raise_error(SystemExit)
     end
 
     it "shows selector and prompts even for a single match" do
-      sys_man = tmpdir/"sys/man1"
-      sys_man.mkpath
-      manfile = sys_man/"testcmd.1"
-      FileUtils.touch(manfile)
-
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
-      (tmpdir/"opt").mkpath
+      manfile = Pathname("/usr/share/man/man1/testcmd.1")
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([["system", manfile]])
       allow($stdin).to receive(:gets).and_return("1\n")
 
       expect(cmd.send(:interactive_manpage, "testcmd")).to eq(manfile)
     end
 
     it "prompts and returns the selected man page when multiple matches exist" do
-      sys_man = tmpdir/"sys/man1"
-      sys_man.mkpath
-      manfile = sys_man/"testcmd.1"
-      FileUtils.touch(manfile)
-
-      formula_man = tmpdir/"opt/pkg/share/man/man1"
-      formula_man.mkpath
-      FileUtils.touch(formula_man/"testcmd.1")
-
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
+      sys_manfile = Pathname("/usr/share/man/man1/testcmd.1")
+      formula_manfile = Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", sys_manfile],
+        ["pkg", formula_manfile],
+      ])
       allow($stdin).to receive(:gets).and_return("1\n")
 
-      expect(cmd.send(:interactive_manpage, "testcmd")).to eq(manfile)
+      expect(cmd.send(:interactive_manpage, "testcmd")).to eq(sys_manfile)
     end
 
     it "dies on invalid selection" do
-      sys_man = tmpdir/"sys/man1"
-      sys_man.mkpath
-      FileUtils.touch(sys_man/"testcmd.1")
-
-      formula_man = tmpdir/"opt/pkg/share/man/man1"
-      formula_man.mkpath
-      FileUtils.touch(formula_man/"testcmd.1")
-
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
+      ])
       allow($stdin).to receive(:gets).and_return("99\n")
 
       expect { cmd.send(:interactive_manpage, "testcmd") }
@@ -179,16 +206,10 @@ RSpec.describe Homebrew::Cmd::Man do
     end
 
     it "dies when stdin returns nil (EOF)" do
-      sys_man = tmpdir/"sys/man1"
-      sys_man.mkpath
-      FileUtils.touch(sys_man/"testcmd.1")
-
-      formula_man = tmpdir/"opt/pkg/share/man/man1"
-      formula_man.mkpath
-      FileUtils.touch(formula_man/"testcmd.1")
-
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
+      ])
       allow($stdin).to receive(:gets).and_return(nil)
 
       expect { cmd.send(:interactive_manpage, "testcmd") }

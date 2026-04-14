@@ -95,16 +95,11 @@ module Homebrew
       # Lists all locations where a man(1) page is found.
       sig { params(name: String).void }
       def list_manpages(name)
+        results = collect_manpages(name)
+
         ohai "#{name}(1) found in:"
-
-        system_manpath.each do |dir|
-          file = dir/"man1/#{name}.1"
-          puts "  system: #{file}" if file.exist?
-        end
-
-        formula_man_dirs.each do |formula, dir|
-          file = dir/"#{name}.1"
-          puts "  #{formula}: #{file}" if file.exist?
+        results.each do |label, file|
+          puts "  #{label}: #{file}"
         end
       end
 
@@ -130,18 +125,43 @@ module Homebrew
       end
 
       # Returns all locations where a man(1) page is found, as [label, Pathname] pairs.
+      # Uses `man -w` per MANPATH entry for robust page resolution (handles
+      # compressed pages, symlinks, and platform-specific man page locations).
       sig { params(name: String).returns(T::Array[[String, Pathname]]) }
       def collect_manpages(name)
+        man_cmd = which("man")
+        odie "`man` is required but not found on PATH." if man_cmd.nil?
+
         choices = T.let([], T::Array[[String, Pathname]])
+        seen = T.let([], T::Array[String])
 
         system_manpath.each do |dir|
-          file = dir/"man1/#{name}.1"
-          choices << ["system", file] if file.exist?
+          result = Utils.popen_read({ "MANPATH" => dir.to_s }, man_cmd.to_s, "-w", name).strip
+          next if result.empty?
+
+          path = Pathname(result)
+          next unless path.exist?
+
+          real = path.realpath.to_s
+          next if seen.include?(real)
+
+          seen << real
+          choices << ["system", path]
         end
 
-        formula_man_dirs.each do |formula, dir|
-          file = dir/"#{name}.1"
-          choices << [formula, file] if file.exist?
+        formula_man_dirs.each do |formula, man1_dir|
+          manpath = man1_dir.parent
+          result = Utils.popen_read({ "MANPATH" => manpath.to_s }, man_cmd.to_s, "-w", name).strip
+          next if result.empty?
+
+          path = Pathname(result)
+          next unless path.exist?
+
+          real = path.realpath.to_s
+          next if seen.include?(real)
+
+          seen << real
+          choices << [formula, path]
         end
 
         choices

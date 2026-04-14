@@ -208,7 +208,7 @@ module Homebrew
       def formula_man_dirs
         man_section_glob = HOMEBREW_PREFIX/"opt/*/share/man/man*"
         seen = T.let(Set.new, T::Set[String])
-        Pathname.glob(man_section_glob).filter_map do |section_dir|
+        Pathname.glob(man_section_glob).sort.filter_map do |section_dir|
           man_dir = section_dir.parent
           formula_name = man_dir.parent.parent.basename.to_s
           next if seen.include?(formula_name)

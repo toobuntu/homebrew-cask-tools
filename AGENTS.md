@@ -114,6 +114,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream
   Homebrew repositories. Uses `yq` for YAML mutations with post-mutation assertions.
+  Requires a GitHub App token to push workflow files — see `docs/architecture.md` § CI setup.
 - `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
 - `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
 - `.github/workflows/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.

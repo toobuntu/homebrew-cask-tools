@@ -162,6 +162,49 @@ all brew commands. The flags have the following effect:
   write decisions, and stale file removal. This is the recommended flag for
   troubleshooting.
 
+## CI setup
+
+### `sync-shared-config` GitHub App
+
+The `sync-shared-config` workflow downloads upstream Homebrew configuration files and
+opens a pull request when they differ from the committed copies. It must push
+`.github/workflows/copilot-setup-steps.yml`, and GitHub's API [unconditionally rejects
+pushes to `.github/workflows/` files when the token lacks the `workflows`
+scope](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes).
+`GITHUB_TOKEN` (a short-lived installation token scoped to the Actions app) is never
+granted that scope, so the workflow uses a dedicated GitHub App token instead.
+
+#### Create the GitHub App
+
+1. Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
+   (or follow the [GitHub docs: Creating a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)).
+2. Fill in the required fields (name, homepage URL). Leave webhook disabled.
+3. Under **Repository permissions**, grant:
+   | Permission | Access |
+   |---|---|
+   | **Contents** | Read & Write |
+   | **Pull requests** | Read & Write |
+4. Leave all other permissions at their default (No access).
+5. Click **Create GitHub App**, then generate a **private key** on the app's settings page
+   and download the `.pem` file.
+
+#### Install the app on this repository
+
+1. On the app's settings page, click **Install App** and select the repository.
+   Restrict the installation to **Only select repositories** and choose this repo.
+
+#### Add repository secrets
+
+In the repository's **Settings → Secrets and variables → Actions**, create:
+
+| Secret name | Value |
+|---|---|
+| `SYNC_APP_ID` | The numeric App ID shown at the top of the app's settings page |
+| `SYNC_APP_PRIVATE_KEY` | The contents of the downloaded `.pem` file |
+
+The `actions/create-github-app-token` action in the workflow exchanges these credentials
+for a short-lived token with the exact permissions above, scoped to this repository only.
+
 ## Developer workflow
 
 The generated files (completions and man pages) are written to the **Homebrew-managed

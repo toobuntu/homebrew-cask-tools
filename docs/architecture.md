@@ -196,3 +196,40 @@ the `duplicate_pull_requests` / `maybe_duplicate_pull_requests` pattern from
 
 The script should **not** be run from `$(brew --repo)` directly — that directory is
 managed by Homebrew and modifications may be lost on `brew update`.
+
+### Copilot sandbox: dev repo = tap repo
+
+In the GitHub Copilot coding agent sandbox, `Homebrew/actions/setup-homebrew` installs
+the tap by symlinking `$(brew --repo toobuntu/cask-tools)` directly to the checked-out
+repository. This means the development clone and the installed tap resolve to the
+**same directory and the same inodes**. This causes two problems with
+`scripts/run-generate-tap-man-completions.sh`:
+
+1. **`cp` "same file" error** — the sync step copies files from `TAP_DIR` to `DEV_DIR`,
+   but since they are the same directory (same inodes), `cp` errors with
+   `'src' and 'dst' are the same file`. The generated files are already in place.
+
+2. **`git restore` reverts dev repo changes** — the cleanup step runs
+   `git -C TAP_DIR restore completions/ manpages/` to discard generated changes in
+   the tap repo. Since the tap and dev repos share the same git tree, this also
+   reverts changes intended for the dev repo. Any `cmd/*.rb` files that were modified
+   and share an inode with the tap will also be reverted.
+
+**Workaround for AI agents**: skip `scripts/run-generate-tap-man-completions.sh` and
+run the generator directly:
+
+```sh
+# 1. Hardlink dev-cmd into Homebrew's internal cmd/ so brew can discover it
+brew_lib="$(brew --repo)/Library/Homebrew"
+ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+
+# 2. Run the generator pointed at the tap
+HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap=toobuntu/cask-tools
+
+# 3. Remove the hardlink
+rm -f "${brew_lib}/cmd/generate-tap-man-completions.rb"
+```
+
+Since the tap repo **is** the dev repo, generated files land directly in the working
+tree — no sync or restore is needed. Do **not** run `git restore` on the tap repo
+after generating.

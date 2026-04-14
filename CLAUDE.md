@@ -11,11 +11,13 @@ This file provides technical notes for AI agents and contributors working in thi
 ## Repository overview
 
 This is a Homebrew external tap hosting `brew purge-quarantine`, `brew cask-extract`,
-and `brew generate-tap-man-completions`.
+`brew man`, and `brew generate-tap-man-completions`.
 `brew purge-quarantine` removes macOS quarantine (`com.apple.quarantine`) and provenance
 (`com.apple.provenance`) extended attributes from installed cask bundles to satisfy Gatekeeper.
 `brew cask-extract` extracts a cask from Homebrew's git history into a personal tap,
 optionally adding a `postflight` block to remove macOS's quarantine extended attribute.
+`brew man` displays man pages bundled with installed formulae, resolving pages that are
+not on the default `MANPATH` (e.g. keg-only formulae).
 `brew generate-tap-man-completions` is a developer-only command (requires `HOMEBREW_DEVELOPER=1`)
 that generates shell completions and Ronn man page sources for commands in `cmd/` and `dev-cmd/`.
 
@@ -52,6 +54,7 @@ scripts/run-tests.sh
 # Run a specific test file or line
 scripts/run-tests.sh --only=cmd/purge-quarantine:LINE
 scripts/run-tests.sh --only=cmd/cask-extract
+scripts/run-tests.sh --only=cmd/man
 scripts/run-tests.sh --only=cmd/generate-tap-man-completions
 
 # Regenerate shell completions, man page sources, and compiled roff after any cmd_args change.
@@ -61,6 +64,25 @@ scripts/run-generate-tap-man-completions.sh
 # Same, but also commit, push, and open a PR from the dev clone:
 scripts/run-generate-tap-man-completions.sh --open-pr
 ```
+
+### Regenerating completions in the Copilot sandbox
+
+In the Copilot coding agent sandbox, the dev repo and the installed tap are the
+**same directory** (symlinked by `setup-homebrew`). Do **not** use
+`scripts/run-generate-tap-man-completions.sh` — it will fail with `cp` "same file"
+errors and `git restore` will revert your uncommitted changes.
+
+Instead, run the generator directly:
+
+```sh
+brew_lib="$(brew --repo)/Library/Homebrew"
+ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap=toobuntu/cask-tools
+rm -f "${brew_lib}/cmd/generate-tap-man-completions.rb"
+```
+
+Generated files land directly in the working tree — no sync step is needed.
+See `docs/architecture.md` § "Copilot sandbox" for details.
 
 ## Architecture: tiered bundle discovery
 

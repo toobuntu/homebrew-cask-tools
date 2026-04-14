@@ -184,6 +184,8 @@ granted that scope, so the workflow uses a dedicated GitHub App token instead.
    |---|---|
    | **Contents** | Read & Write |
    | **Pull requests** | Read & Write |
+   | **Workflows** | Read & Write |
+   | **Metadata** | Read-only (automatically selected) |
 4. Leave all other permissions at their default (No access).
 5. Click **Create GitHub App**, then generate a **private key** on the app's settings page
    and download the `.pem` file.
@@ -203,7 +205,8 @@ In the repository's **Settings → Secrets and variables → Actions**, create:
 | `SYNC_APP_PRIVATE_KEY` | The contents of the downloaded `.pem` file |
 
 The `actions/create-github-app-token` action in the workflow exchanges these credentials
-for a short-lived token with the exact permissions above, scoped to this repository only.
+for a short-lived token with the exact permissions above (Contents, Pull Requests, and Workflows),
+scoped to this repository only.
 
 ## Developer workflow
 

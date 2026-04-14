@@ -31,10 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: none
     steps:
       # A GitHub App token is required because GITHUB_TOKEN cannot push
-      # workflow files (.github/workflows/*). The app needs Contents (R/W)
-      # and Pull Requests (R/W) repository permissions.
+      # workflow files (.github/workflows/*). The app needs Contents (R/W),
+      # Pull Requests (R/W), and Workflows (R/W) repository permissions.
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3

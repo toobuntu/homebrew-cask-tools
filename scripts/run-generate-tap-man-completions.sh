@@ -76,9 +76,9 @@ fi
 # coding agent sandbox, where setup-homebrew symlinks the tap to the checkout).
 # In this case the sync and restore steps must be skipped.
 SAME_DIR=false
-dev_real="$(cd "${DEV_DIR}" && pwd -P)" || true
-tap_real="$(cd "${TAP_DIR}" && pwd -P)" || true
-if [[ "${dev_real}" == "${tap_real}" ]]
+dev_real="$(cd "${DEV_DIR}" && pwd -P)" || dev_real=""
+tap_real="$(cd "${TAP_DIR}" && pwd -P)" || tap_real=""
+if [[ -n "${dev_real}" && "${dev_real}" == "${tap_real}" ]]
 then
   SAME_DIR=true
 fi

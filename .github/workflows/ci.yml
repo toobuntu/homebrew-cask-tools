@@ -83,6 +83,8 @@ jobs:
           ln -f test/cmd/purge-quarantine_spec.rb "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
           ln -f cmd/cask-extract.rb "${brew_lib}/cmd/cask-extract.rb"
           ln -f test/cmd/cask-extract_spec.rb "${brew_lib}/test/cmd/cask-extract_spec.rb"
+          ln -f cmd/man.rb "${brew_lib}/cmd/man.rb"
+          ln -f test/cmd/man_spec.rb "${brew_lib}/test/cmd/man_spec.rb"
           ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
           ln -f test/cmd/generate-tap-man-completions_spec.rb "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
 
@@ -90,6 +92,7 @@ jobs:
         run: |
           brew tests --only=cmd/purge-quarantine
           brew tests --only=cmd/cask-extract
+          brew tests --only=cmd/man
           brew tests --only=cmd/generate-tap-man-completions
 
       - name: Unlink tap files from Homebrew
@@ -100,6 +103,8 @@ jobs:
           rm -f "${brew_lib}/test/cmd/purge-quarantine_spec.rb"
           rm -f "${brew_lib}/cmd/cask-extract.rb"
           rm -f "${brew_lib}/test/cmd/cask-extract_spec.rb"
+          rm -f "${brew_lib}/cmd/man.rb"
+          rm -f "${brew_lib}/test/cmd/man_spec.rb"
           rm -f "${brew_lib}/cmd/generate-tap-man-completions.rb"
           rm -f "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
 

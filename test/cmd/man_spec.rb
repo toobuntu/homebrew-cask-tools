@@ -28,13 +28,32 @@ RSpec.describe Homebrew::Cmd::Man do
 
     after { FileUtils.rm_rf(tmpdir) }
 
-    it "returns formula name and man1 dir for installed formulae" do
+    it "returns formula name and man dir for installed formulae with man1" do
       man1_dir = tmpdir/"opt/some-pkg/share/man/man1"
       man1_dir.mkpath
 
       stub_const("HOMEBREW_PREFIX", tmpdir)
       result = cmd.send(:formula_man_dirs)
-      expect(result).to include(["some-pkg", man1_dir])
+      expect(result).to include(["some-pkg", man1_dir.parent])
+    end
+
+    it "returns formula name and man dir for formulae with non-man1 sections" do
+      man3_dir = tmpdir/"opt/openssl/share/man/man3"
+      man3_dir.mkpath
+
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      result = cmd.send(:formula_man_dirs)
+      expect(result).to include(["openssl", man3_dir.parent])
+    end
+
+    it "deduplicates formulae with multiple man sections" do
+      (tmpdir/"opt/curl/share/man/man1").mkpath
+      (tmpdir/"opt/curl/share/man/man3").mkpath
+
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      result = cmd.send(:formula_man_dirs)
+      formula_names = result.map(&:first)
+      expect(formula_names.count("curl")).to eq(1)
     end
 
     it "returns empty array when no formulae have man pages" do
@@ -58,6 +77,7 @@ RSpec.describe Homebrew::Cmd::Man do
 
       formula = instance_double(Formula, opt_prefix: tmpdir)
       allow(Formula).to receive(:[]).with("some-formula").and_return(formula)
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(Utils).to receive(:popen_read).and_return(manfile.to_s)
 
       expect(cmd.send(:find_formula_manpage, "some-formula", "some-formula")).to eq(manfile)
@@ -73,6 +93,15 @@ RSpec.describe Homebrew::Cmd::Man do
 
       expect { cmd.send(:list_manpages, "testcmd") }
         .to output(/system:.*testcmd\.1.*test-formula:.*testcmd\.1/m).to_stdout
+    end
+
+    it "does not hardcode a man section in the header" do
+      allow(cmd).to receive(:collect_manpages).with("openssl").and_return([
+        ["openssl@3", Pathname("/opt/homebrew/opt/openssl@3/share/man/man3/openssl.3")],
+      ])
+
+      expect { cmd.send(:list_manpages, "openssl") }
+        .to output(/openssl found in:/).to_stdout
     end
   end
 
@@ -262,6 +291,24 @@ RSpec.describe Homebrew::Cmd::Man do
       allow(cmd).to receive(:which).with("mandoc").and_return(nil)
 
       expect { cmd.send(:render_html, manpage) }.to raise_error(SystemExit)
+    end
+  end
+
+  describe "#require_man_cmd" do
+    it "returns the man command path" do
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      expect(cmd.send(:require_man_cmd)).to eq(Pathname("/usr/bin/man"))
+    end
+
+    it "caches the result across multiple calls" do
+      expect(cmd).to receive(:which).with("man").once.and_return(Pathname("/usr/bin/man"))
+      cmd.send(:require_man_cmd)
+      cmd.send(:require_man_cmd)
+    end
+
+    it "dies when man is not found" do
+      allow(cmd).to receive(:which).with("man").and_return(nil)
+      expect { cmd.send(:require_man_cmd) }.to raise_error(SystemExit)
     end
   end
 end

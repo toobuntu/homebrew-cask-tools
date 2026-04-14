@@ -214,7 +214,7 @@ In the repository's **Settings → Secrets and variables → Actions**, create:
 | `SYNC_APP_PRIVATE_KEY` | The base64-encoded private key (see below) |
 
 When storing a private key as a secret, encode it in base64 first (GNU coreutils
-will line-wrap long tokens, so delete any newlines):
+`base64` will line-wrap long output by default, so remove any newlines):
 
 ```sh
 cat private-key.pem | base64 | tr -d "\n"

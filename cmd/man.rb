@@ -133,7 +133,7 @@ module Homebrew
         odie "`man` is required but not found on PATH." if man_cmd.nil?
 
         choices = T.let([], T::Array[[String, Pathname]])
-        seen = T.let([], T::Array[String])
+        seen = T.let(Set.new, T::Set[String])
 
         system_manpath.each do |dir|
           path = resolve_manpage(man_cmd, dir, name, seen)
@@ -152,7 +152,7 @@ module Homebrew
       # deduplicating by realpath. Returns nil if not found or already seen.
       sig {
         params(man_cmd: Pathname, manpath_dir: Pathname, name: String,
-               seen: T::Array[String]).returns(T.nilable(Pathname))
+               seen: T::Set[String]).returns(T.nilable(Pathname))
       }
       def resolve_manpage(man_cmd, manpath_dir, name, seen)
         result = Utils.popen_read({ "MANPATH" => manpath_dir.to_s }, man_cmd.to_s, "-w", name).strip
@@ -164,7 +164,7 @@ module Homebrew
         real = path.realpath.to_s
         return if seen.include?(real)
 
-        seen << real
+        seen.add(real)
         path
       end
 

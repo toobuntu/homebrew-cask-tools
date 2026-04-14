@@ -28,8 +28,8 @@ module Homebrew
           In `--list` mode, shows all locations where a given man page is found
           (both system paths and Homebrew formula kegs).
 
-          In `--select` mode, uses `fzf` to interactively choose which copy of
-          a man page to open. Requires `fzf` to be installed.
+          In `--select` mode, presents a numbered list to interactively choose
+          which copy of a man page to view.
         EOS
 
         switch "--html", "-H",
@@ -37,7 +37,7 @@ module Homebrew
         switch "--list",
                description: "List all locations where the named man page is found."
         switch "--select",
-               description: "Interactively select which copy of the man page to view with `fzf`."
+               description: "Interactively select which copy of the man page to view."
 
         conflicts "--html", "--list"
         conflicts "--html", "--select"
@@ -48,7 +48,6 @@ module Homebrew
 
       MAN_PATH = T.let("/usr/bin/man", String)
       MANDOC_PATH = T.let("/usr/bin/mandoc", String)
-      OPEN_PATH = T.let("/usr/bin/open", String)
 
       sig { override.void }
       def run
@@ -99,30 +98,36 @@ module Homebrew
         end
       end
 
-      # Interactively selects a man page using fzf.
+      # Interactively selects a man page from a numbered list.
       sig { params(name: String).returns(Pathname) }
       def select_manpage(name)
-        odie "fzf not installed. Install it with: brew install fzf" unless which("fzf")
-
-        choices = T.let([], T::Array[String])
+        choices = T.let([], T::Array[[String, Pathname]])
 
         system_manpath.each do |dir|
           file = dir/"man1/#{name}.1"
-          choices << "system:#{file}" if file.exist?
+          choices << ["system", file] if file.exist?
         end
 
         formula_man_dirs.each do |formula, dir|
           file = dir/"#{name}.1"
-          choices << "#{formula}:#{file}" if file.exist?
+          choices << [formula, file] if file.exist?
         end
 
         odie "No man pages found for: #{name}" if choices.empty?
 
-        result = Utils.popen_read("fzf", input: choices.join("\n")).strip
-        odie "No selection made." if result.empty?
+        choices.each_with_index do |(label, file), i|
+          puts "  #{i + 1}) #{label}: #{file}"
+        end
 
-        path_str = T.must(result.split(":", 2).last)
-        Pathname(path_str)
+        $stdout.write "Choose [1-#{choices.length}]: "
+        $stdout.flush
+        input = $stdin.gets
+        odie "No selection made." if input.nil?
+
+        index = input.strip.to_i - 1
+        odie "Invalid selection." if index.negative? || index >= choices.length
+
+        T.must(choices[index]).last
       end
 
       # Renders a man page file, either via man(1) or as HTML in a browser.
@@ -146,24 +151,10 @@ module Homebrew
           tmpfile.write(html)
           tmpfile.close
 
-          browser = resolve_browser
-          if browser
-            safe_system browser, tmpfile.path
-          else
-            safe_system OPEN_PATH, tmpfile.path
-          end
+          exec_browser tmpfile.path
         ensure
           tmpfile.close!
         end
-      end
-
-      # Resolves the browser to use, following Homebrew's environment model:
-      # 1. HOMEBREW_BROWSER from shell environment (including brew.env)
-      # 2. BROWSER from shell environment
-      # Falls back to nil (caller uses system default via /usr/bin/open).
-      sig { returns(T.nilable(String)) }
-      def resolve_browser
-        Homebrew::EnvConfig.browser || ENV["BROWSER"].presence
       end
 
       # Returns the list of system man directories from manpath(1).

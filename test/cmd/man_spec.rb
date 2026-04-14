@@ -12,32 +12,6 @@ require "tmpdir"
 RSpec.describe Homebrew::Cmd::Man do
   subject(:cmd) { described_class.new(["some-formula"]) }
 
-  describe "#resolve_browser" do
-    it "returns HOMEBREW_BROWSER when set" do
-      with_env("HOMEBREW_BROWSER" => "/usr/bin/firefox") do
-        expect(cmd.send(:resolve_browser)).to eq("/usr/bin/firefox")
-      end
-    end
-
-    it "falls back to BROWSER when HOMEBREW_BROWSER is unset" do
-      with_env("HOMEBREW_BROWSER" => nil, "BROWSER" => "/usr/bin/chromium") do
-        expect(cmd.send(:resolve_browser)).to eq("/usr/bin/chromium")
-      end
-    end
-
-    it "returns nil when neither HOMEBREW_BROWSER nor BROWSER is set" do
-      with_env("HOMEBREW_BROWSER" => nil, "BROWSER" => nil) do
-        expect(cmd.send(:resolve_browser)).to be_nil
-      end
-    end
-
-    it "prefers HOMEBREW_BROWSER over BROWSER" do
-      with_env("HOMEBREW_BROWSER" => "/usr/bin/firefox", "BROWSER" => "/usr/bin/chromium") do
-        expect(cmd.send(:resolve_browser)).to eq("/usr/bin/firefox")
-      end
-    end
-  end
-
   describe "#system_manpath" do
     it "returns an array of Pathname objects" do
       allow(Utils).to receive(:popen_read).with("/usr/bin/manpath").and_return("/usr/share/man:/usr/local/share/man")
@@ -112,8 +86,56 @@ RSpec.describe Homebrew::Cmd::Man do
   end
 
   describe "#select_manpage" do
-    it "dies when fzf is not installed" do
-      allow(cmd).to receive(:which).with("fzf").and_return(nil)
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "dies when no man pages are found" do
+      allow(cmd).to receive(:system_manpath).and_return([])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+
+      expect { cmd.send(:select_manpage, "nonexistent") }
+        .to raise_error(SystemExit)
+    end
+
+    it "returns the selected man page path" do
+      sys_man = tmpdir/"sys/man1"
+      sys_man.mkpath
+      manfile = sys_man/"testcmd.1"
+      FileUtils.touch(manfile)
+
+      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+      allow($stdin).to receive(:gets).and_return("1\n")
+
+      expect(cmd.send(:select_manpage, "testcmd")).to eq(manfile)
+    end
+
+    it "dies on invalid selection" do
+      sys_man = tmpdir/"sys/man1"
+      sys_man.mkpath
+      FileUtils.touch(sys_man/"testcmd.1")
+
+      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+      allow($stdin).to receive(:gets).and_return("99\n")
+
+      expect { cmd.send(:select_manpage, "testcmd") }
+        .to raise_error(SystemExit)
+    end
+
+    it "dies when stdin returns nil (EOF)" do
+      sys_man = tmpdir/"sys/man1"
+      sys_man.mkpath
+      FileUtils.touch(sys_man/"testcmd.1")
+
+      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+      allow($stdin).to receive(:gets).and_return(nil)
 
       expect { cmd.send(:select_manpage, "testcmd") }
         .to raise_error(SystemExit)

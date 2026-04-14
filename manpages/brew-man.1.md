@@ -17,8 +17,8 @@ in a browser.
 In `--list` mode, shows all locations where a given man page is found
 (both system paths and Homebrew formula kegs).
 
-In `--select` mode, uses `fzf` to interactively choose which copy of
-a man page to open. Requires `fzf` to be installed.
+In `--select` mode, presents a numbered list to interactively choose
+which copy of a man page to view.
 
 ## OPTIONS
 
@@ -48,5 +48,5 @@ a man page to open. Requires `fzf` to be installed.
 
 `--select`
 
-: Interactively select which copy of the man page to view with `fzf`.
+: Interactively select which copy of the man page to view.
 

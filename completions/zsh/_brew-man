@@ -7,6 +7,6 @@ _brew_man() {
     '(--list --select)--html[Render the man page as HTML and open it in a browser]' \
     '(--html --select)--list[List all locations where the named man page is found]' \
     '--quiet[Make some output more quiet]' \
-    '(--html --list)--select[Interactively select which copy of the man page to view with `fzf`]' \
+    '(--html --list)--select[Interactively select which copy of the man page to view]' \
     '--verbose[Make some output more verbose]'
 }

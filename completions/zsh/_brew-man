@@ -8,5 +8,7 @@ _brew_man() {
     '(--html --list)--interactive[Interactively resolve ambiguity when multiple copies of a man page are found]' \
     '(--html --interactive)--list[List all locations where the named man page is found]' \
     '--quiet[Make some output more quiet]' \
-    '--verbose[Make some output more verbose]'
+    '--verbose[Make some output more verbose]' \
+    - installed_formula \
+    '*:installed_formula:__brew_installed_formulae'
 }

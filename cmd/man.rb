@@ -55,7 +55,7 @@ module Homebrew
         conflicts "--html", "--interactive"
         conflicts "--list", "--interactive"
 
-        named_args min: 1
+        named_args :installed_formula, min: 1
       end
 
       sig { override.void }

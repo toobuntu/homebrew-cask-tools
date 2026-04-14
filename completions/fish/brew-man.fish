@@ -7,3 +7,4 @@ __fish_brew_complete_arg 'man' -l interactive -d 'Interactively resolve ambiguit
 __fish_brew_complete_arg 'man' -l list -d 'List all locations where the named man page is found'
 __fish_brew_complete_arg 'man' -l quiet -d 'Make some output more quiet'
 __fish_brew_complete_arg 'man' -l verbose -d 'Make some output more verbose'
+__fish_brew_complete_arg 'man' -a '(__fish_brew_suggest_formulae_installed)'

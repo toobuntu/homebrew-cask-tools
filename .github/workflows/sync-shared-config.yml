@@ -30,12 +30,22 @@ jobs:
     if: github.repository_owner == 'toobuntu'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
+      # A GitHub App token is required because GITHUB_TOKEN cannot push
+      # workflow files (.github/workflows/*). The app needs Contents (R/W)
+      # and Pull Requests (R/W) repository permissions.
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
+        with:
+          app-id: ${{ secrets.SYNC_APP_ID }}
+          private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: true
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Configure Git user
         run: |
@@ -85,23 +95,10 @@ jobs:
       - name: Create or update pull request
         if: steps.changes.outputs.changed == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git checkout -b sync-shared-config
-
-          # GITHUB_TOKEN cannot push workflow files (.github/workflows/*).
-          # Discard workflow-file changes to avoid push rejection.
-          if ! git diff --quiet -- .github/workflows/copilot-setup-steps.yml; then
-            echo "::warning::Skipping .github/workflows/copilot-setup-steps.yml — GITHUB_TOKEN cannot push workflow files. Update it manually."
-            git checkout -- .github/workflows/copilot-setup-steps.yml
-          fi
-
-          git add .github/zizmor.yml .github/actionlint-matcher.json
-          if git diff --cached --quiet; then
-            echo "Only workflow files changed — nothing to push with GITHUB_TOKEN."
-            exit 0
-          fi
-
+          git add .github/zizmor.yml .github/actionlint-matcher.json .github/workflows/copilot-setup-steps.yml
           git commit -m "Synchronize shared configuration from upstream"
           git push --force --set-upstream origin sync-shared-config
 
@@ -116,5 +113,5 @@ jobs:
             gh pr create \
               --head sync-shared-config \
               --title "Synchronize shared configuration" \
-              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github) and \`.github/actionlint-matcher.json\` from [Homebrew/brew](https://github.com/Homebrew/brew). Note: \`.github/workflows/copilot-setup-steps.yml\` cannot be pushed with GITHUB_TOKEN (requires \`workflows\` permission). If the upstream file has changed, update it manually."
+              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github), \`.github/actionlint-matcher.json\` from [Homebrew/brew](https://github.com/Homebrew/brew), and \`.github/workflows/copilot-setup-steps.yml\` from [Homebrew/brew](https://github.com/Homebrew/brew) (with \`core\`/\`cask\` set to \`false\` and \`actionlint reuse pinact zizmor\` appended to the install list for tap use)."
           fi

@@ -114,16 +114,26 @@ ambiguity visible.
 
 ### Usage
 
+Normal / HTML mode (looks up a page from a specific formula's keg):
+
 ```sh
-brew man [<options>] <formula> [<manpage>]
+brew man [--html] <formula> [<manpage>]
+```
+
+List / select mode (searches across all installed formula kegs and system paths):
+
+```sh
+brew man --list <manpage>
+brew man --select <manpage>
 ```
 
 ### Arguments and flags
 
 | Argument / Flag | Description |
 |---|---|
-| `<formula>` | The installed formula whose keg to search (required) |
+| `<formula>` | The installed formula whose keg to search (normal/HTML mode) |
 | `[<manpage>]` | Man page name to look up (defaults to `<formula>`) |
+| `<manpage>` | Man page name to search for (list/select mode) |
 | `--html`, `-H` | Render the man page as HTML and open it in a browser |
 | `--list` | List all locations where the named man page is found |
 | `--select` | Interactively select which copy of the man page to view |

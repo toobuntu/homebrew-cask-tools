@@ -89,7 +89,7 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
-  describe "#list_manpages", :integration_test do
+  describe "#list_manpages" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
 
     after { FileUtils.rm_rf(tmpdir) }

@@ -163,7 +163,7 @@ module Homebrew
       # Falls back to nil (caller uses system default via /usr/bin/open).
       sig { returns(T.nilable(String)) }
       def resolve_browser
-        Homebrew::EnvConfig.browser || ENV.fetch("BROWSER", nil).presence
+        Homebrew::EnvConfig.browser || ENV["BROWSER"].presence
       end
 
       # Returns the list of system man directories from manpath(1).

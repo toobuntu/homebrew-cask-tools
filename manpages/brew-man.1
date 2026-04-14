@@ -3,17 +3,19 @@
 .SH NAME
 brew\-man \- Display a man page bundled with an installed formula
 .SH "SYNOPSIS"
-\fBbrew\fP \fBman\fP [\fIoptions\fP] \fIformula\fP [\fImanpage\fP]
+\fBbrew\fP \fBman\fP [\fIoptions\fP] \fIformula\fP [\fImanpage\fP] \fBman\fP (\fB\-\-list\fP|\fB\-\-interactive\fP) \fImanpage\fP
 .SH "DESCRIPTION"
 Display a man page bundled with an installed formula\.
 .P
-Homebrew kegs are not on the default \fBMANPATH\fP, so \fBman\fP does not find their pages\. When multiple providers ship the same page name, \fBman\fP silently returns the first match\. This command resolves man pages \fBby formula\fP and makes ambiguity visible\.
+Homebrew kegs (especially keg\-only formulae) are not on the default \fBMANPATH\fP, so \fBman\fP does not reliably find their pages\. When multiple providers ship the same page name, \fBman\fP silently returns the first match\. This command resolves man pages \fBby formula\fP and makes ambiguity explicit\.
 .P
-In normal mode, shows the man page for \fImanpage\fP (defaulting to the formula name) from \fIformula\fP\[u2019]s keg using the system \fBman\fP viewer\. With \fB\-\-html\fP, renders the man page via \fBmandoc \-T html\fP and opens it in a browser\.
+With an explicit \fIformula\fP and optional \fImanpage\fP (defaulting to the formula name), always opens that formula\[u2019]s copy using the system \fBman\fP viewer\. With \fB\-\-html\fP, renders the man page via \fBmandoc \-T html\fP and opens it in a browser (respecting \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
 .P
-In \fB\-\-list\fP mode, shows all locations where a given man page is found (both system paths and Homebrew formula kegs)\.
+With a single \fImanpage\fP argument (no explicit formula), searches all installed formula kegs and system paths\. If exactly one copy is found, opens it\. If multiple copies are found, exits with an actionable error listing all matches and suggesting next steps\.
 .P
-In \fB\-\-select\fP mode, presents a numbered list to interactively choose which copy of a man page to view\.
+With \fB\-\-list\fP, shows all locations where a given man page is found (both system paths and Homebrew formula kegs)\.
+.P
+With \fB\-\-interactive\fP, presents a numbered list to interactively resolve ambiguity when multiple copies of a man page are found\.
 .SH "OPTIONS"
 .TP
 \fB\-d\fP, \fB\-\-debug\fP
@@ -29,10 +31,10 @@ Make some output more verbose\.
 Show this message\.
 .TP
 \fB\-H\fP, \fB\-\-html\fP
-Render the man page as HTML and open it in a browser\.
+Render the man page as HTML and open it in a browser (respects \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
 .TP
-\fB\-\-list\fP
+\fB\-l\fP, \fB\-\-list\fP
 List all locations where the named man page is found\.
 .TP
-\fB\-\-select\fP
-Interactively select which copy of the man page to view\.
+\fB\-i\fP, \fB\-\-interactive\fP
+Interactively resolve ambiguity when multiple copies of a man page are found\.

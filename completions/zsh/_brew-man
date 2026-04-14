@@ -4,9 +4,9 @@ _brew_man() {
   _arguments \
     '--debug[Display any debugging information]' \
     '--help[Show this message]' \
-    '(--list --select)--html[Render the man page as HTML and open it in a browser]' \
-    '(--html --select)--list[List all locations where the named man page is found]' \
+    '(--list --interactive)--html[Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`)]' \
+    '(--html --list)--interactive[Interactively resolve ambiguity when multiple copies of a man page are found]' \
+    '(--html --interactive)--list[List all locations where the named man page is found]' \
     '--quiet[Make some output more quiet]' \
-    '(--html --list)--select[Interactively select which copy of the man page to view]' \
     '--verbose[Make some output more verbose]'
 }

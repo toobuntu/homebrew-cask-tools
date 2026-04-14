@@ -107,67 +107,100 @@ Please use this command only with software you trust.
 
 Display a man page bundled with an installed formula.
 
-Homebrew kegs are not on the default `MANPATH`, so `man` does not find their
-pages. When multiple providers ship the same page name, `man` silently returns
-the first match. This command resolves man pages **by formula** and makes
-ambiguity visible.
+Homebrew kegs (especially keg-only formulae) are not on the default `MANPATH`,
+so `man` does not reliably find their pages. When multiple providers ship the
+same page name, `man` silently returns the first match. This command resolves
+man pages **by formula** and makes ambiguity explicit.
 
 ### Usage
 
-Normal / HTML mode (looks up a page from a specific formula's keg):
+Explicit formula (always deterministic — looks up from a specific formula's keg):
 
 ```sh
 brew man [--html] <formula> [<manpage>]
 ```
 
-List / select mode (searches across all installed formula kegs and system paths):
+Single manpage argument (searches all formula kegs and system paths):
 
 ```sh
+brew man <manpage>
 brew man --list <manpage>
-brew man --select <manpage>
+brew man --interactive <manpage>
 ```
 
 ### Arguments and flags
 
 | Argument / Flag | Description |
 |---|---|
-| `<formula>` | The installed formula whose keg to search (normal/HTML mode) |
+| `<formula>` | The installed formula whose keg to search (explicit mode) |
 | `[<manpage>]` | Man page name to look up (defaults to `<formula>`) |
-| `<manpage>` | Man page name to search for (list/select mode) |
-| `--html`, `-H` | Render the man page as HTML and open it in a browser |
-| `--list` | List all locations where the named man page is found |
-| `--select` | Interactively select which copy of the man page to view |
+| `<manpage>` | Man page name to search for (single-arg / list / interactive mode) |
+| `--html`, `-H` | Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`) |
+| `--list`, `-l` | List all locations where the named man page is found |
+| `--interactive`, `-i` | Interactively resolve ambiguity when multiple copies are found |
+
+### Behavior
+
+| Invocation | Behavior |
+|---|---|
+| `brew man <manpage>` | Search all kegs + system. If one match: open it. If multiple: exit with actionable error. |
+| `brew man --interactive <manpage>` | Same search; if multiple matches, prompts for selection. |
+| `brew man <formula> <manpage>` | Always opens from the named formula's keg (bypasses ambiguity). |
+| `brew man --list <manpage>` | List every location where the page is found. |
 
 ### Examples
 
-Show the man page for `git` from its Homebrew keg:
+When `libressl` (keg-only) and `openssl@3` both ship an `openssl(1)` page,
+`brew man openssl` exits with an actionable error:
 
-```sh
-brew man git
+```console
+$ brew man openssl
+Error: multiple matches found for 'openssl':
+
+  system:    /usr/share/man/man1/openssl.1
+  libressl:  /opt/homebrew/opt/libressl/share/man/man1/openssl.1
+  openssl@3: /opt/homebrew/opt/openssl@3/share/man/man1/openssl.1
+
+Use one of:
+  brew man <formula> openssl
+  brew man --interactive openssl
+  brew man --list openssl
 ```
 
-Show a different page bundled with a formula (e.g. `gitk` from the `git` keg):
+Open the man page for `openssl` from the `libressl` keg explicitly:
 
 ```sh
-brew man git gitk
+brew man libressl openssl
 ```
 
-Render the man page as HTML and open it in a browser:
+Open `openssl(1)` from the `openssl@3` keg explicitly:
+
+```sh
+brew man openssl@3 openssl
+```
+
+Let `brew man` search automatically when there is only one match:
+
+```sh
+brew man gitk
+```
+
+Interactively choose which copy of `openssl(1)` to view:
+
+```sh
+brew man --interactive openssl
+```
+
+Render the `curl` man page as HTML and open in a browser:
 
 ```sh
 brew man --html curl
 ```
 
-List every location where the `grep` man page is found (system + all formula kegs):
+List every location where the `openssl` man page is found:
 
 ```sh
-brew man --list grep
-```
-
-Interactively choose which copy of the `ssh` man page to view:
-
-```sh
-brew man --select ssh
+brew man --list openssl
 ```
 
 ---

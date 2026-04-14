@@ -7,9 +7,9 @@ _brew_man() {
       --debug
       --help
       --html
+      --interactive
       --list
       --quiet
-      --select
       --verbose
       "
       return

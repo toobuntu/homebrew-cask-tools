@@ -86,7 +86,37 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
-  describe "#select_manpage" do
+  describe "#collect_manpages" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "returns system and formula matches as label/path pairs" do
+      sys_man = tmpdir/"sys/man1"
+      sys_man.mkpath
+      FileUtils.touch(sys_man/"testcmd.1")
+
+      formula_man = tmpdir/"opt/test-formula/share/man/man1"
+      formula_man.mkpath
+      FileUtils.touch(formula_man/"testcmd.1")
+
+      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+
+      result = cmd.send(:collect_manpages, "testcmd")
+      expect(result.map(&:first)).to eq(["system", "test-formula"])
+    end
+
+    it "returns empty array when no matches exist" do
+      allow(cmd).to receive(:system_manpath).and_return([])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+
+      expect(cmd.send(:collect_manpages, "nonexistent")).to eq([])
+    end
+  end
+
+  describe "#resolve_manpage" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
 
     after { FileUtils.rm_rf(tmpdir) }
@@ -96,11 +126,10 @@ RSpec.describe Homebrew::Cmd::Man do
       stub_const("HOMEBREW_PREFIX", tmpdir)
       (tmpdir/"opt").mkpath
 
-      expect { cmd.send(:select_manpage, "nonexistent") }
-        .to raise_error(SystemExit)
+      expect { cmd.send(:resolve_manpage, "nonexistent") }.to raise_error(SystemExit)
     end
 
-    it "returns the selected man page path" do
+    it "returns the single match directly" do
       sys_man = tmpdir/"sys/man1"
       sys_man.mkpath
       manfile = sys_man/"testcmd.1"
@@ -109,9 +138,68 @@ RSpec.describe Homebrew::Cmd::Man do
       allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
       stub_const("HOMEBREW_PREFIX", tmpdir)
       (tmpdir/"opt").mkpath
+
+      expect(cmd.send(:resolve_manpage, "testcmd")).to eq(manfile)
+    end
+
+    it "dies with actionable error when multiple matches exist" do
+      sys_man = tmpdir/"sys/man1"
+      sys_man.mkpath
+      FileUtils.touch(sys_man/"openssl.1")
+
+      formula_man = tmpdir/"opt/libressl/share/man/man1"
+      formula_man.mkpath
+      FileUtils.touch(formula_man/"openssl.1")
+
+      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+
+      expect { cmd.send(:resolve_manpage, "openssl") }.to raise_error(SystemExit)
+    end
+  end
+
+  describe "#interactive_manpage" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "dies when no man pages are found" do
+      allow(cmd).to receive(:system_manpath).and_return([])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+
+      expect { cmd.send(:interactive_manpage, "nonexistent") }
+        .to raise_error(SystemExit)
+    end
+
+    it "returns the single match without prompting" do
+      sys_man = tmpdir/"sys/man1"
+      sys_man.mkpath
+      manfile = sys_man/"testcmd.1"
+      FileUtils.touch(manfile)
+
+      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+
+      expect(cmd.send(:interactive_manpage, "testcmd")).to eq(manfile)
+    end
+
+    it "prompts and returns the selected man page when multiple matches exist" do
+      sys_man = tmpdir/"sys/man1"
+      sys_man.mkpath
+      manfile = sys_man/"testcmd.1"
+      FileUtils.touch(manfile)
+
+      formula_man = tmpdir/"opt/pkg/share/man/man1"
+      formula_man.mkpath
+      FileUtils.touch(formula_man/"testcmd.1")
+
+      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
       allow($stdin).to receive(:gets).and_return("1\n")
 
-      expect(cmd.send(:select_manpage, "testcmd")).to eq(manfile)
+      expect(cmd.send(:interactive_manpage, "testcmd")).to eq(manfile)
     end
 
     it "dies on invalid selection" do
@@ -119,12 +207,15 @@ RSpec.describe Homebrew::Cmd::Man do
       sys_man.mkpath
       FileUtils.touch(sys_man/"testcmd.1")
 
+      formula_man = tmpdir/"opt/pkg/share/man/man1"
+      formula_man.mkpath
+      FileUtils.touch(formula_man/"testcmd.1")
+
       allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-      (tmpdir/"opt").mkpath
       allow($stdin).to receive(:gets).and_return("99\n")
 
-      expect { cmd.send(:select_manpage, "testcmd") }
+      expect { cmd.send(:interactive_manpage, "testcmd") }
         .to raise_error(SystemExit)
     end
 
@@ -133,12 +224,15 @@ RSpec.describe Homebrew::Cmd::Man do
       sys_man.mkpath
       FileUtils.touch(sys_man/"testcmd.1")
 
+      formula_man = tmpdir/"opt/pkg/share/man/man1"
+      formula_man.mkpath
+      FileUtils.touch(formula_man/"testcmd.1")
+
       allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-      (tmpdir/"opt").mkpath
       allow($stdin).to receive(:gets).and_return(nil)
 
-      expect { cmd.send(:select_manpage, "testcmd") }
+      expect { cmd.send(:interactive_manpage, "testcmd") }
         .to raise_error(SystemExit)
     end
   end

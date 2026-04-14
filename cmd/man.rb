@@ -17,37 +17,43 @@ module Homebrew
       include SystemCommand::Mixin
 
       cmd_args do
-        usage_banner "`man` [<options>] <formula> [<manpage>]"
+        usage_banner "`man` [<options>] <formula> [<manpage>]\n" \
+                     "`man` (`--list`|`--interactive`) <manpage>"
         description <<~EOS
           Display a man page bundled with an installed formula.
 
-          Homebrew kegs are not on the default `MANPATH`, so `man` does not find
-          their pages. When multiple providers ship the same page name, `man`
-          silently returns the first match. This command resolves man pages
-          **by formula** and makes ambiguity visible.
+          Homebrew kegs (especially keg-only formulae) are not on the default
+          `MANPATH`, so `man` does not reliably find their pages. When multiple
+          providers ship the same page name, `man` silently returns the first
+          match. This command resolves man pages **by formula** and makes
+          ambiguity explicit.
 
-          In normal mode, shows the man page for <manpage> (defaulting to the
-          formula name) from <formula>'s keg using the system `man` viewer.
-          With `--html`, renders the man page via `mandoc -T html` and opens it
-          in a browser.
+          By default, `brew man <formula>` resolves man pages within the
+          specified formula only. The optional <manpage> argument defaults to
+          the formula name. With `--html`, renders the man page via
+          `mandoc -T html` and opens it in a browser (respecting
+          `HOMEBREW_BROWSER` or `BROWSER`).
 
-          In `--list` mode, shows all locations where a given man page is found
-          (both system paths and Homebrew formula kegs).
+          Use `--list` or `--interactive` to search across system and other
+          Homebrew formulae. With `--list`, shows all locations where a given
+          man page is found (both system paths and Homebrew formula kegs).
 
-          In `--select` mode, presents a numbered list to interactively choose
-          which copy of a man page to view.
+          With `--interactive`, presents a numbered list with origin labels
+          to interactively select which copy of a man page to view.
         EOS
 
         switch "--html", "-H",
-               description: "Render the man page as HTML and open it in a browser."
-        switch "--list",
+               description: "Render the man page as HTML and open it in a browser " \
+                            "(respects `HOMEBREW_BROWSER` or `BROWSER`)."
+        switch "--list", "-l",
                description: "List all locations where the named man page is found."
-        switch "--select",
-               description: "Interactively select which copy of the man page to view."
+        switch "--interactive", "-i",
+               description: "Interactively resolve ambiguity when multiple copies " \
+                            "of a man page are found."
 
         conflicts "--html", "--list"
-        conflicts "--html", "--select"
-        conflicts "--list", "--select"
+        conflicts "--html", "--interactive"
+        conflicts "--list", "--interactive"
 
         named_args min: 1
       end
@@ -56,8 +62,8 @@ module Homebrew
       def run
         if args.list?
           list_manpages(T.must(args.named.first))
-        elsif args.select?
-          file = select_manpage(T.must(args.named.first))
+        elsif args.interactive?
+          file = interactive_manpage(T.must(args.named.first))
           render(file)
         else
           formula_name = T.must(args.named.first)
@@ -102,21 +108,10 @@ module Homebrew
         end
       end
 
-      # Interactively selects a man page from a numbered list.
+      # Interactively selects a man page from a numbered list with origin labels.
       sig { params(name: String).returns(Pathname) }
-      def select_manpage(name)
-        choices = T.let([], T::Array[[String, Pathname]])
-
-        system_manpath.each do |dir|
-          file = dir/"man1/#{name}.1"
-          choices << ["system", file] if file.exist?
-        end
-
-        formula_man_dirs.each do |formula, dir|
-          file = dir/"#{name}.1"
-          choices << [formula, file] if file.exist?
-        end
-
+      def interactive_manpage(name)
+        choices = collect_manpages(name)
         odie "No man pages found for: #{name}" if choices.empty?
 
         choices.each_with_index do |(label, file), i|
@@ -132,6 +127,24 @@ module Homebrew
         odie "Invalid selection." if index.negative? || index >= choices.length
 
         T.must(choices[index]).last
+      end
+
+      # Returns all locations where a man(1) page is found, as [label, Pathname] pairs.
+      sig { params(name: String).returns(T::Array[[String, Pathname]]) }
+      def collect_manpages(name)
+        choices = T.let([], T::Array[[String, Pathname]])
+
+        system_manpath.each do |dir|
+          file = dir/"man1/#{name}.1"
+          choices << ["system", file] if file.exist?
+        end
+
+        formula_man_dirs.each do |formula, dir|
+          file = dir/"#{name}.1"
+          choices << [formula, file] if file.exist?
+        end
+
+        choices
       end
 
       # Renders a man page file, either via man(1) or as HTML in a browser.

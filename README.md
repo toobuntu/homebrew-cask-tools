@@ -103,6 +103,87 @@ Please use this command only with software you trust.
 
 ---
 
+## `brew man`
+
+Display a man page bundled with an installed formula.
+
+Homebrew kegs (especially keg-only formulae) are not on the default `MANPATH`,
+so `man` does not reliably find their pages. When multiple providers ship the
+same page name, `man` silently returns the first match. This command resolves
+man pages **by formula** and makes ambiguity explicit.
+
+### Usage
+
+```
+brew man [--html] <formula> [<manpage>]
+brew man --list <manpage>
+brew man --interactive <manpage>
+```
+
+By default, `brew man <formula>` resolves man pages within the specified
+formula only. Use `--list` or `--interactive` to search across system and
+other Homebrew formulae.
+
+### Arguments and flags
+
+| Argument / Flag | Description |
+|---|---|
+| `<formula>` | The installed formula whose keg to search (default mode) |
+| `[<manpage>]` | Man page name to look up (defaults to `<formula>`) |
+| `<manpage>` | Man page name to search for (`--list` / `--interactive` mode) |
+| `--html`, `-H` | Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`) |
+| `--list`, `-l` | List all locations where the named man page is found |
+| `--interactive`, `-i` | Present a numbered list with origin labels for interactive selection |
+
+### Behavior
+
+| Mode | Scope | Behavior |
+|---|---|---|
+| `brew man <formula>` | Formula-scoped | Opens `<formula>(1)` from the named formula's keg |
+| `brew man <formula> <manpage>` | Formula-scoped | Opens `<manpage>(1)` from the named formula's keg |
+| `brew man --list <manpage>` | Global | Lists every location (system + all formula kegs) where the page is found |
+| `brew man --interactive <manpage>` | Global | Presents a numbered list with origin labels for interactive selection |
+
+### Examples
+
+Open `openssl(1)` from the `libressl` (keg-only) formula's keg:
+
+```sh
+brew man libressl openssl
+```
+
+Open `openssl(1)` from the `openssl@3` formula's keg:
+
+```sh
+brew man openssl@3 openssl
+```
+
+Open `curl(1)` from the `curl` formula's keg (man page defaults to formula name):
+
+```sh
+brew man curl
+```
+
+List every location where `openssl(1)` is found (system, libressl, openssl@3):
+
+```sh
+brew man --list openssl
+```
+
+Interactively choose which copy of `openssl(1)` to view:
+
+```sh
+brew man --interactive openssl
+```
+
+Render the `curl` man page as HTML and open in a browser:
+
+```sh
+brew man --html curl
+```
+
+---
+
 ## `brew generate-tap-man-completions` (developer only)
 
 A developer-only command that generates Bash, ZSH, and Fish shell completions and

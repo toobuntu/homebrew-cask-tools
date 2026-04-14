@@ -88,7 +88,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           git checkout -b sync-shared-config
-          git add .github/zizmor.yml .github/actionlint-matcher.json .github/workflows/copilot-setup-steps.yml
+
+          # GITHUB_TOKEN cannot push workflow files (.github/workflows/*).
+          # Discard workflow-file changes to avoid push rejection.
+          if ! git diff --quiet -- .github/workflows/copilot-setup-steps.yml; then
+            echo "::warning::Skipping .github/workflows/copilot-setup-steps.yml — GITHUB_TOKEN cannot push workflow files. Update it manually."
+            git checkout -- .github/workflows/copilot-setup-steps.yml
+          fi
+
+          git add .github/zizmor.yml .github/actionlint-matcher.json
+          if git diff --cached --quiet; then
+            echo "Only workflow files changed — nothing to push with GITHUB_TOKEN."
+            exit 0
+          fi
+
           git commit -m "Synchronize shared configuration from upstream"
           git push --force --set-upstream origin sync-shared-config
 
@@ -103,5 +116,5 @@ jobs:
             gh pr create \
               --head sync-shared-config \
               --title "Synchronize shared configuration" \
-              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github), \`.github/actionlint-matcher.json\` from [Homebrew/brew](https://github.com/Homebrew/brew), and \`.github/workflows/copilot-setup-steps.yml\` from [Homebrew/brew](https://github.com/Homebrew/brew) (with \`core\`/\`cask\` set to \`false\` and \`actionlint reuse pinact zizmor\` appended to the install list for tap use)."
+              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github) and \`.github/actionlint-matcher.json\` from [Homebrew/brew](https://github.com/Homebrew/brew). Note: \`.github/workflows/copilot-setup-steps.yml\` cannot be pushed with GITHUB_TOKEN (requires \`workflows\` permission). If the upstream file has changed, update it manually."
           fi

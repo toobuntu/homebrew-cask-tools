@@ -14,6 +14,7 @@ RSpec.describe Homebrew::Cmd::Man do
 
   describe "#system_manpath" do
     it "returns an array of Pathname objects" do
+      allow(cmd).to receive(:which).with("manpath").and_return(Pathname("/usr/bin/manpath"))
       allow(Utils).to receive(:popen_read).with("/usr/bin/manpath").and_return("/usr/share/man:/usr/local/share/man")
 
       result = cmd.send(:system_manpath)
@@ -139,6 +140,48 @@ RSpec.describe Homebrew::Cmd::Man do
 
       expect { cmd.send(:select_manpage, "testcmd") }
         .to raise_error(SystemExit)
+    end
+  end
+
+  describe "#render_html" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "writes mandoc HTML output to a temp file and opens it in the browser" do
+      manpage = tmpdir/"testcmd.1"
+      manpage.write(".TH testcmd 1\n")
+      html_output = "<html><body>rendered man page</body></html>"
+
+      allow(cmd).to receive(:which).with("mandoc").and_return(Pathname("/usr/bin/mandoc"))
+      allow(Utils).to receive(:popen_read).and_return(html_output)
+
+      rendered_content = T.let(nil, T.nilable(String))
+      allow(cmd).to receive(:exec_browser) { |path| rendered_content = File.read(path) }
+
+      cmd.send(:render_html, manpage)
+
+      expect(rendered_content).to eq(html_output)
+    end
+
+    it "exits when mandoc returns empty output" do
+      manpage = tmpdir/"testcmd.1"
+      manpage.write(".TH testcmd 1\n")
+
+      allow(cmd).to receive(:which).with("mandoc").and_return(Pathname("/usr/bin/mandoc"))
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect(cmd).not_to receive(:exec_browser)
+      expect { cmd.send(:render_html, manpage) }.to raise_error(SystemExit)
+    end
+
+    it "exits when mandoc is not found" do
+      manpage = tmpdir/"testcmd.1"
+      manpage.write(".TH testcmd 1\n")
+
+      allow(cmd).to receive(:which).with("mandoc").and_return(nil)
+
+      expect { cmd.send(:render_html, manpage) }.to raise_error(SystemExit)
     end
   end
 end

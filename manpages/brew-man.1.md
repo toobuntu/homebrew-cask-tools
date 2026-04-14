@@ -9,6 +9,11 @@ brew-man(1) -- Display a man page bundled with an installed formula
 
 Display a man page bundled with an installed formula.
 
+Homebrew kegs are not on the default `MANPATH`, so `man` does not find
+their pages. When multiple providers ship the same page name, `man`
+silently returns the first match. This command resolves man pages
+**by formula** and makes ambiguity visible.
+
 In normal mode, shows the man page for <manpage> (defaulting to the
 formula name) from <formula>'s keg using the system `man` viewer.
 With `--html`, renders the man page via `mandoc -T html` and opens it

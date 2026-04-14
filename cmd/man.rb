@@ -8,6 +8,7 @@
 require "abstract_command"
 require "formula"
 require "system_command"
+require "tempfile"
 
 module Homebrew
   module Cmd
@@ -19,6 +20,11 @@ module Homebrew
         usage_banner "`man` [<options>] <formula> [<manpage>]"
         description <<~EOS
           Display a man page bundled with an installed formula.
+
+          Homebrew kegs are not on the default `MANPATH`, so `man` does not find
+          their pages. When multiple providers ship the same page name, `man`
+          silently returns the first match. This command resolves man pages
+          **by formula** and makes ambiguity visible.
 
           In normal mode, shows the man page for <manpage> (defaulting to the
           formula name) from <formula>'s keg using the system `man` viewer.
@@ -46,13 +52,8 @@ module Homebrew
         named_args min: 1
       end
 
-      MAN_PATH = T.let("/usr/bin/man", String)
-      MANDOC_PATH = T.let("/usr/bin/mandoc", String)
-
       sig { override.void }
       def run
-        raise UsageError, "`brew man` is only supported on macOS." unless OS.mac?
-
         if args.list?
           list_manpages(T.must(args.named.first))
         elsif args.select?
@@ -75,8 +76,11 @@ module Homebrew
         prefix = formula.opt_prefix
         odie "Formula not installed: #{formula_name}" unless prefix.exist?
 
+        man_cmd = which("man")
+        odie "`man` is required but not found on PATH." if man_cmd.nil?
+
         manpath = prefix/"share/man"
-        result = Utils.popen_read({ "MANPATH" => manpath.to_s }, MAN_PATH, "-w", page).strip
+        result = Utils.popen_read({ "MANPATH" => manpath.to_s }, man_cmd.to_s, "-w", page).strip
         odie "Man page not found: #{page} in #{formula_name}" if result.empty?
 
         Pathname(result)
@@ -136,16 +140,21 @@ module Homebrew
         if args.html?
           render_html(file)
         else
-          safe_system MAN_PATH, file.to_s
+          man_cmd = which("man")
+          odie "`man` is required but not found on PATH." if man_cmd.nil?
+          safe_system man_cmd.to_s, file.to_s
         end
       end
 
       # Renders the man page as HTML and opens it in a browser.
       sig { params(file: Pathname).void }
       def render_html(file)
+        mandoc_cmd = which("mandoc")
+        odie "`mandoc` is required for --html but not found on PATH." if mandoc_cmd.nil?
+
         tmpfile = Tempfile.new(["brew-man-", ".html"])
         begin
-          html = Utils.popen_read(MANDOC_PATH, "-T", "html", file.to_s)
+          html = Utils.popen_read(mandoc_cmd.to_s, "-T", "html", file.to_s)
           odie "mandoc failed to render #{file}" if html.empty?
 
           tmpfile.write(html)
@@ -160,7 +169,9 @@ module Homebrew
       # Returns the list of system man directories from manpath(1).
       sig { returns(T::Array[Pathname]) }
       def system_manpath
-        Utils.popen_read("/usr/bin/manpath").strip.split(":").map { |d| Pathname(d) }
+        manpath_cmd = which("manpath")
+        odie "`manpath` is required but not found on PATH." if manpath_cmd.nil?
+        Utils.popen_read(manpath_cmd.to_s).strip.split(":").map { |d| Pathname(d) }
       end
 
       # Returns pairs of [formula_name, man1_dir] for all installed formulae

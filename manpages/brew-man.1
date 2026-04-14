@@ -7,6 +7,8 @@ brew\-man \- Display a man page bundled with an installed formula
 .SH "DESCRIPTION"
 Display a man page bundled with an installed formula\.
 .P
+Homebrew kegs are not on the default \fBMANPATH\fP, so \fBman\fP does not find their pages\. When multiple providers ship the same page name, \fBman\fP silently returns the first match\. This command resolves man pages \fBby formula\fP and makes ambiguity visible\.
+.P
 In normal mode, shows the man page for \fImanpage\fP (defaulting to the formula name) from \fIformula\fP\[u2019]s keg using the system \fBman\fP viewer\. With \fB\-\-html\fP, renders the man page via \fBmandoc \-T html\fP and opens it in a browser\.
 .P
 In \fB\-\-list\fP mode, shows all locations where a given man page is found (both system paths and Homebrew formula kegs)\.

@@ -116,48 +116,6 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
-  describe "#resolve_manpage" do
-    let(:tmpdir) { Pathname(Dir.mktmpdir) }
-
-    after { FileUtils.rm_rf(tmpdir) }
-
-    it "dies when no man pages are found" do
-      allow(cmd).to receive(:system_manpath).and_return([])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
-      (tmpdir/"opt").mkpath
-
-      expect { cmd.send(:resolve_manpage, "nonexistent") }.to raise_error(SystemExit)
-    end
-
-    it "returns the single match directly" do
-      sys_man = tmpdir/"sys/man1"
-      sys_man.mkpath
-      manfile = sys_man/"testcmd.1"
-      FileUtils.touch(manfile)
-
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
-      (tmpdir/"opt").mkpath
-
-      expect(cmd.send(:resolve_manpage, "testcmd")).to eq(manfile)
-    end
-
-    it "dies with actionable error when multiple matches exist" do
-      sys_man = tmpdir/"sys/man1"
-      sys_man.mkpath
-      FileUtils.touch(sys_man/"openssl.1")
-
-      formula_man = tmpdir/"opt/libressl/share/man/man1"
-      formula_man.mkpath
-      FileUtils.touch(formula_man/"openssl.1")
-
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
-      stub_const("HOMEBREW_PREFIX", tmpdir)
-
-      expect { cmd.send(:resolve_manpage, "openssl") }.to raise_error(SystemExit)
-    end
-  end
-
   describe "#interactive_manpage" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
 
@@ -172,7 +130,7 @@ RSpec.describe Homebrew::Cmd::Man do
         .to raise_error(SystemExit)
     end
 
-    it "returns the single match without prompting" do
+    it "shows selector and prompts even for a single match" do
       sys_man = tmpdir/"sys/man1"
       sys_man.mkpath
       manfile = sys_man/"testcmd.1"
@@ -181,6 +139,7 @@ RSpec.describe Homebrew::Cmd::Man do
       allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
       stub_const("HOMEBREW_PREFIX", tmpdir)
       (tmpdir/"opt").mkpath
+      allow($stdin).to receive(:gets).and_return("1\n")
 
       expect(cmd.send(:interactive_manpage, "testcmd")).to eq(manfile)
     end

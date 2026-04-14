@@ -114,75 +114,60 @@ man pages **by formula** and makes ambiguity explicit.
 
 ### Usage
 
-Explicit formula (always deterministic — looks up from a specific formula's keg):
-
-```sh
-brew man [--html] <formula> [<manpage>]
 ```
-
-Single manpage argument (searches all formula kegs and system paths):
-
-```sh
-brew man <manpage>
+brew man [--html] <formula> [<manpage>]
 brew man --list <manpage>
 brew man --interactive <manpage>
 ```
+
+By default, `brew man <formula>` resolves man pages within the specified
+formula only. Use `--list` or `--interactive` to search across system and
+other Homebrew formulae.
 
 ### Arguments and flags
 
 | Argument / Flag | Description |
 |---|---|
-| `<formula>` | The installed formula whose keg to search (explicit mode) |
+| `<formula>` | The installed formula whose keg to search (default mode) |
 | `[<manpage>]` | Man page name to look up (defaults to `<formula>`) |
-| `<manpage>` | Man page name to search for (single-arg / list / interactive mode) |
+| `<manpage>` | Man page name to search for (`--list` / `--interactive` mode) |
 | `--html`, `-H` | Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`) |
 | `--list`, `-l` | List all locations where the named man page is found |
-| `--interactive`, `-i` | Interactively resolve ambiguity when multiple copies are found |
+| `--interactive`, `-i` | Present a numbered list with origin labels for interactive selection |
 
 ### Behavior
 
-| Invocation | Behavior |
-|---|---|
-| `brew man <manpage>` | Search all kegs + system. If one match: open it. If multiple: exit with actionable error. |
-| `brew man --interactive <manpage>` | Same search; if multiple matches, prompts for selection. |
-| `brew man <formula> <manpage>` | Always opens from the named formula's keg (bypasses ambiguity). |
-| `brew man --list <manpage>` | List every location where the page is found. |
+| Mode | Scope | Behavior |
+|---|---|---|
+| `brew man <formula>` | Formula-scoped | Opens `<formula>(1)` from the named formula's keg |
+| `brew man <formula> <manpage>` | Formula-scoped | Opens `<manpage>(1)` from the named formula's keg |
+| `brew man --list <manpage>` | Global | Lists every location (system + all formula kegs) where the page is found |
+| `brew man --interactive <manpage>` | Global | Presents a numbered list with origin labels for interactive selection |
 
 ### Examples
 
-When `libressl` (keg-only) and `openssl@3` both ship an `openssl(1)` page,
-`brew man openssl` exits with an actionable error:
-
-```console
-$ brew man openssl
-Error: multiple matches found for 'openssl':
-
-  system:    /usr/share/man/man1/openssl.1
-  libressl:  /opt/homebrew/opt/libressl/share/man/man1/openssl.1
-  openssl@3: /opt/homebrew/opt/openssl@3/share/man/man1/openssl.1
-
-Use one of:
-  brew man <formula> openssl
-  brew man --interactive openssl
-  brew man --list openssl
-```
-
-Open the man page for `openssl` from the `libressl` keg explicitly:
+Open `openssl(1)` from the `libressl` (keg-only) formula's keg:
 
 ```sh
 brew man libressl openssl
 ```
 
-Open `openssl(1)` from the `openssl@3` keg explicitly:
+Open `openssl(1)` from the `openssl@3` formula's keg:
 
 ```sh
 brew man openssl@3 openssl
 ```
 
-Let `brew man` search automatically when there is only one match:
+Open `curl(1)` from the `curl` formula's keg (man page defaults to formula name):
 
 ```sh
-brew man gitk
+brew man curl
+```
+
+List every location where `openssl(1)` is found (system, libressl, openssl@3):
+
+```sh
+brew man --list openssl
 ```
 
 Interactively choose which copy of `openssl(1)` to view:
@@ -195,12 +180,6 @@ Render the `curl` man page as HTML and open in a browser:
 
 ```sh
 brew man --html curl
-```
-
-List every location where the `openssl` man page is found:
-
-```sh
-brew man --list openssl
 ```
 
 ---

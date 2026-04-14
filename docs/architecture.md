@@ -202,11 +202,21 @@ In the repository's **Settings → Secrets and variables → Actions**, create:
 | Secret name | Value |
 |---|---|
 | `SYNC_APP_ID` | The numeric App ID shown at the top of the app's settings page |
-| `SYNC_APP_PRIVATE_KEY` | The contents of the downloaded `.pem` file |
+| `SYNC_APP_PRIVATE_KEY` | The private key (see below) |
+
+When storing a private key as a secret, encode it in base64 first so that
+newlines do not cause issues (delete any trailing newline the encoder adds):
+
+```sh
+cat private-key.pem | base64 | tr -d "\n"
+```
+
+Use the resulting base64-encoded string as the value for `SYNC_APP_PRIVATE_KEY`.
 
 The `actions/create-github-app-token` action in the workflow exchanges these credentials
-for a short-lived token with the exact permissions above (Contents, Pull Requests, and Workflows),
-scoped to this repository only.
+for a short-lived token scoped to this repository only. The `permission-*` inputs further
+restrict the token to only the permissions this workflow requires (Contents, Metadata,
+Pull Requests, and Workflows write access).
 
 ## Developer workflow
 

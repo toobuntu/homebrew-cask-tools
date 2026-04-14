@@ -176,24 +176,33 @@ granted that scope, so the workflow uses a dedicated GitHub App token instead.
 
 #### Create the GitHub App
 
-1. Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
-   (or follow the [GitHub docs: Creating a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)).
-2. Fill in the required fields (name, homepage URL). Leave webhook disabled.
-3. Under **Repository permissions**, grant:
+Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
+(or follow the [GitHub docs: Creating a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)).
+
+1. **GitHub App Name**: Choose a name, such as "Token Generator."
+2. **Description**: Something like "GitHub App to generate short-lived tokens for
+   workflows."
+3. **Homepage URL**: You can use a placeholder URL or a link to this repository.
+4. **Webhook Active**: Inactive. The app does not need to receive webhook events.
+5. Under **Repository permissions**, grant:
+
    | Permission | Access |
    |---|---|
    | **Contents** | Read & Write |
    | **Pull requests** | Read & Write |
    | **Workflows** | Read & Write |
    | **Metadata** | Read-only (automatically selected) |
-4. Leave all other permissions at their default (No access).
-5. Click **Create GitHub App**, then generate a **private key** on the app's settings page
+
+6. Leave all other permissions at their default (No access).
+7. **Where can this GitHub App be installed?**: Only on this account.
+8. The **Identifying and authorizing users** section is not relevant for this use case.
+9. Click **Create GitHub App**, then generate a **private key** on the app's settings page
    and download the `.pem` file.
 
 #### Install the app on this repository
 
-1. On the app's settings page, click **Install App** and select the repository.
-   Restrict the installation to **Only select repositories** and choose this repo.
+On the app's settings page, click **Install App** and select the repository.
+Restrict the installation to **Only select repositories** and choose this repo.
 
 #### Add repository secrets
 
@@ -202,16 +211,18 @@ In the repository's **Settings → Secrets and variables → Actions**, create:
 | Secret name | Value |
 |---|---|
 | `SYNC_APP_ID` | The numeric App ID shown at the top of the app's settings page |
-| `SYNC_APP_PRIVATE_KEY` | The private key (see below) |
+| `SYNC_APP_PRIVATE_KEY` | The base64-encoded private key (see below) |
 
-When storing a private key as a secret, encode it in base64 first so that
-newlines do not cause issues (delete any trailing newline the encoder adds):
+When storing a private key as a secret, encode it in base64 first (GNU coreutils
+will line-wrap long tokens, so delete any newlines):
 
 ```sh
 cat private-key.pem | base64 | tr -d "\n"
 ```
 
 Use the resulting base64-encoded string as the value for `SYNC_APP_PRIVATE_KEY`.
+GitHub will automatically decode the base64-encoded value and provide it as the
+original private key to the workflow.
 
 The `actions/create-github-app-token` action in the workflow exchanges these credentials
 for a short-lived token scoped to this repository only. The `permission-*` inputs further

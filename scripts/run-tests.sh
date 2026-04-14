@@ -49,6 +49,11 @@ GENTC_SPEC_SRC="${TAP_DIR}/test/cmd/generate-tap-man-completions_spec.rb"
 GENTC_CMD_DST="${HOMEBREW_LIB}/cmd/generate-tap-man-completions.rb"
 GENTC_SPEC_DST="${HOMEBREW_LIB}/test/cmd/generate-tap-man-completions_spec.rb"
 
+MAN_CMD_SRC="${TAP_DIR}/cmd/man.rb"
+MAN_SPEC_SRC="${TAP_DIR}/test/cmd/man_spec.rb"
+MAN_CMD_DST="${HOMEBREW_LIB}/cmd/man.rb"
+MAN_SPEC_DST="${HOMEBREW_LIB}/test/cmd/man_spec.rb"
+
 cleanup() {
   local exit_code=$?
   echo "" >&2
@@ -56,6 +61,7 @@ cleanup() {
   rm -f "${PURGE_CMD_DST}" "${PURGE_SPEC_DST}"
   rm -f "${CEXT_CMD_DST}" "${CEXT_SPEC_DST}"
   rm -f "${GENTC_CMD_DST}" "${GENTC_SPEC_DST}"
+  rm -f "${MAN_CMD_DST}" "${MAN_SPEC_DST}"
   exit "${exit_code}"
 }
 trap cleanup EXIT INT TERM
@@ -75,7 +81,7 @@ cat >&2 <<'WARNING'
 WARNING
 
 # Check that source files exist.
-for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${CEXT_CMD_SRC}" "${CEXT_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}"
+for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${CEXT_CMD_SRC}" "${CEXT_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}" "${MAN_CMD_SRC}" "${MAN_SPEC_SRC}"
 do
   if [[ ! -f "${src}" ]]
   then
@@ -96,6 +102,8 @@ pairs=(
   "${CEXT_SPEC_SRC}:${CEXT_SPEC_DST}"
   "${GENTC_CMD_SRC}:${GENTC_CMD_DST}"
   "${GENTC_SPEC_SRC}:${GENTC_SPEC_DST}"
+  "${MAN_CMD_SRC}:${MAN_CMD_DST}"
+  "${MAN_SPEC_SRC}:${MAN_SPEC_DST}"
 )
 for pair in "${pairs[@]}"
 do
@@ -117,4 +125,6 @@ else
   brew tests --only=cmd/cask-extract
   echo "==> Running: brew tests --only=cmd/generate-tap-man-completions" >&2
   brew tests --only=cmd/generate-tap-man-completions
+  echo "==> Running: brew tests --only=cmd/man" >&2
+  brew tests --only=cmd/man
 fi

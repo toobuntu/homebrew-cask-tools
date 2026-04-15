@@ -235,7 +235,11 @@ module Homebrew
         cask_block = find_cask_block(parsed.value)
 
         unless cask_block
-          opoo "Could not parse cask block in #{cask_path.basename}."
+          if parsed.errors.empty?
+            opoo "Could not find a `cask` block in #{cask_path.basename}."
+          else
+            opoo "Could not parse cask block in #{cask_path.basename}."
+          end
           return
         end
 
@@ -289,14 +293,23 @@ module Homebrew
 
       sig { params(stmts: T::Array[Prism::Node]).returns(T::Array[String]) }
       def extract_app_names(stmts)
-        stmts.filter_map do |node|
-          next if !node.is_a?(Prism::CallNode) || node.name != :app
+        stmts.flat_map { |node| extract_app_names_from_node(node) }
+      end
 
+      sig { params(node: Prism::Node).returns(T::Array[String]) }
+      def extract_app_names_from_node(node)
+        app_names = T.let([], T::Array[String])
+
+        if node.is_a?(Prism::CallNode) && node.name == :app
           first_arg = node.arguments&.arguments&.first
-          next unless first_arg.is_a?(Prism::StringNode)
-
-          first_arg.content
+          app_names << first_arg.content if first_arg.is_a?(Prism::StringNode)
         end
+
+        node.compact_child_nodes.each do |child|
+          app_names.concat(extract_app_names_from_node(child))
+        end
+
+        app_names
       end
 
       sig { params(app_names: T::Array[String]).returns(String) }
@@ -312,8 +325,15 @@ module Homebrew
 
       sig { params(content: String, pf_block: Prism::BlockNode, xattr_lines: String).returns(String) }
       def append_to_postflight(content, pf_block, xattr_lines)
-        insert_pos = line_start_offset(content, pf_block.closing_loc.start_offset)
-        content.dup.insert(insert_pos, "    #{xattr_lines}\n")
+        closing_offset = pf_block.closing_loc.start_offset
+        line_start = line_start_offset(content, closing_offset)
+        prefix = content[line_start...closing_offset]
+
+        if T.must(prefix).strip.empty?
+          content.dup.insert(line_start, "    #{xattr_lines}\n")
+        else
+          content.dup.insert(closing_offset, "\n    #{xattr_lines}\n  ")
+        end
       end
 
       sig {

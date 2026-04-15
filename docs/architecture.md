@@ -41,10 +41,12 @@ using [Prism](https://ruby.github.io/prism/) (Ruby's built-in AST parser) for
 deterministic code injection:
 
 1. Parses the cask file into a Prism AST and locates the `cask … do` block.
-2. Extracts `app` stanza arguments from `CallNode` AST nodes (not regex).
+2. Recursively extracts `app` stanza arguments from `CallNode` AST nodes,
+   including those nested inside `on_arm do`, `on_intel do`, or `if` blocks.
 3. Skips if the content already mentions `com.apple.quarantine`.
 4. If a `postflight` block already exists, appends `xattr` removal commands
-   to it (before its closing `end`).
+   to it (before its closing `end`), handling both multi-line and single-line
+   postflight blocks.
 5. If no `postflight` block exists, inserts a new one at the correct position
    per Homebrew's [stanza order](https://docs.brew.sh/Cask-Cookbook#stanza-order)
    — after artifact stanzas (`app`, `pkg`, …) and `preflight`, but before

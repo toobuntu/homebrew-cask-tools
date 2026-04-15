@@ -193,6 +193,13 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       cmd.send(:add_quarantine_postflight, cask_file)
     end
 
+    it "warns when valid Ruby has no cask block" do
+      cask_file.write("puts 'hello world'\n")
+
+      expect(cmd).to receive(:opoo).with(/Could not find a `cask` block/)
+      cmd.send(:add_quarantine_postflight, cask_file)
+    end
+
     it "appends to an existing postflight block" do
       cask_file.write(<<~RUBY)
         cask "some-cask" do
@@ -229,6 +236,45 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       pf_pos = T.must(result.index("postflight do"))
       uninstall_pos = T.must(result.index("uninstall quit:"))
       expect(pf_pos).to be < uninstall_pos
+    end
+
+    it "finds app stanzas inside nested blocks" do
+      cask_file.write(<<~RUBY)
+        cask "arch-app" do
+          version "1.0"
+          on_arm do
+            app "Arm App.app"
+          end
+          on_intel do
+            app "Intel App.app"
+          end
+        end
+      RUBY
+
+      cmd.send(:add_quarantine_postflight, cask_file)
+
+      result = cask_file.read
+      expect(result).to include("postflight do")
+      expect(result).to include("Arm App.app")
+      expect(result).to include("Intel App.app")
+      expect(result.scan("system_command").length).to eq(2)
+    end
+
+    it "appends inside a single-line postflight block" do
+      cask_file.write(<<~RUBY)
+        cask "some-cask" do
+          version "1.0"
+          app "Some App.app"
+          postflight do; system "echo", "done"; end
+        end
+      RUBY
+
+      cmd.send(:add_quarantine_postflight, cask_file)
+
+      result = cask_file.read
+      expect(result).to include("com.apple.quarantine")
+      expect(result).to include('"echo"')
+      expect(result.scan("postflight do").length).to eq(1)
     end
   end
 

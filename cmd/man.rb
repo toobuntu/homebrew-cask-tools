@@ -194,12 +194,17 @@ module Homebrew
         end
       end
 
-      # Returns the list of system man directories from manpath(1).
+      # Returns the list of system man directories from manpath(1),
+      # excluding directories under HOMEBREW_PREFIX (which are Homebrew-managed
+      # and should be attributed to their providing formula, not "system").
       sig { returns(T::Array[Pathname]) }
       def system_manpath
         manpath_cmd = which("manpath")
         odie "`manpath` is required but not found on PATH." if manpath_cmd.nil?
+
+        prefix = "#{HOMEBREW_PREFIX}/"
         Utils.popen_read(manpath_cmd.to_s).strip.split(":").map { |d| Pathname(d) }
+                                                           .reject { |d| d.to_s.start_with?(prefix) }
       end
 
       # Returns pairs of [formula_name, man_dir] for all installed formulae

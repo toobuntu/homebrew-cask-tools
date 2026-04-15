@@ -21,6 +21,16 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(result).to all(be_a(Pathname))
       expect(result.map(&:to_s)).to eq(["/usr/share/man", "/usr/local/share/man"])
     end
+
+    it "excludes directories under HOMEBREW_PREFIX" do
+      allow(cmd).to receive(:which).with("manpath").and_return(Pathname("/usr/bin/manpath"))
+      stub_const("HOMEBREW_PREFIX", Pathname("/opt/homebrew"))
+      allow(Utils).to receive(:popen_read).with("/usr/bin/manpath")
+                                          .and_return("/usr/share/man:/opt/homebrew/share/man:/usr/local/share/man")
+
+      result = cmd.send(:system_manpath)
+      expect(result.map(&:to_s)).to eq(["/usr/share/man", "/usr/local/share/man"])
+    end
   end
 
   describe "#formula_man_dirs" do
@@ -198,6 +208,35 @@ RSpec.describe Homebrew::Cmd::Man do
 
       result = cmd.send(:collect_manpages, "openssl")
       expect(result.map(&:first)).to contain_exactly("libressl", "openssl@3")
+    end
+
+    it "labels Homebrew-linked pages by formula when HOMEBREW_PREFIX is in manpath" do
+      brew_man = tmpdir/"share/man"
+      (brew_man/"man1").mkpath
+
+      formula_man = tmpdir/"opt/openssl@3/share/man/man1"
+      formula_man.mkpath
+      formula_file = formula_man/"openssl.1ssl"
+      FileUtils.touch(formula_file)
+      FileUtils.ln_sf(formula_file, brew_man/"man1/openssl.1ssl")
+
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(cmd).to receive(:which).with("manpath").and_return(Pathname("/usr/bin/manpath"))
+      allow(Utils).to receive(:popen_read).with("/usr/bin/manpath")
+                                          .and_return("#{brew_man}:/usr/share/man")
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => "/usr/share/man" }, "/usr/bin/man", "-w", "openssl")
+        .and_return("")
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return(formula_file.to_s)
+
+      result = cmd.send(:collect_manpages, "openssl")
+      labels = result.map(&:first)
+      expect(labels).not_to include("system")
+      expect(labels).to include("openssl@3")
     end
   end
 

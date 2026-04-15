@@ -12,17 +12,6 @@ require "tmpdir"
 RSpec.describe Homebrew::Cmd::Man do
   subject(:cmd) { described_class.new(["some-formula"]) }
 
-  describe "#system_manpath" do
-    it "returns an array of Pathname objects" do
-      allow(cmd).to receive(:which).with("manpath").and_return(Pathname("/usr/bin/manpath"))
-      allow(Utils).to receive(:popen_read).with("/usr/bin/manpath").and_return("/usr/share/man:/usr/local/share/man")
-
-      result = cmd.send(:system_manpath)
-      expect(result).to all(be_a(Pathname))
-      expect(result.map(&:to_s)).to eq(["/usr/share/man", "/usr/local/share/man"])
-    end
-  end
-
   describe "#formula_man_dirs" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
 
@@ -82,6 +71,48 @@ RSpec.describe Homebrew::Cmd::Man do
 
       expect(cmd.send(:find_formula_manpage, "some-formula", "some-formula")).to eq(manfile)
     end
+
+    it "finds a page with a section suffix via glob fallback" do
+      man1_dir = tmpdir/"share/man/man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1ssl"
+      FileUtils.touch(manfile)
+
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      allow(Formula).to receive(:[]).with("libressl").and_return(formula)
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect(cmd.send(:find_formula_manpage, "libressl", "openssl.1ssl")).to eq(manfile)
+    end
+
+    it "finds a compressed page via glob fallback" do
+      man1_dir = tmpdir/"share/man/man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"testcmd.1.gz"
+      FileUtils.touch(manfile)
+
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      allow(Formula).to receive(:[]).with("test-formula").and_return(formula)
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect(cmd.send(:find_formula_manpage, "test-formula", "testcmd.1")).to eq(manfile)
+    end
+
+    it "finds a subsection page when given partial section" do
+      man1_dir = tmpdir/"share/man/man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1ssl"
+      FileUtils.touch(manfile)
+
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      allow(Formula).to receive(:[]).with("openssl@3").and_return(formula)
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect(cmd.send(:find_formula_manpage, "openssl@3", "openssl.1")).to eq(manfile)
+    end
   end
 
   describe "#list_manpages" do
@@ -122,15 +153,10 @@ RSpec.describe Homebrew::Cmd::Man do
       FileUtils.touch(manfile_formula)
 
       allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
-      allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
       allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"sys").to_s }, "/usr/bin/man", "-w", "testcmd")
-        .and_return(manfile_sys.to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/test-formula/share/man").to_s }, "/usr/bin/man", "-w", "testcmd")
-        .and_return(manfile_formula.to_s)
+        .with("/usr/bin/man", "-w", "-a", "testcmd")
+        .and_return("#{manfile_sys}\n")
 
       result = cmd.send(:collect_manpages, "testcmd")
       expect(result.map(&:first)).to eq(["test-formula", "system"])
@@ -138,17 +164,13 @@ RSpec.describe Homebrew::Cmd::Man do
 
     it "returns empty array when no matches exist" do
       allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
-      allow(cmd).to receive(:system_manpath).and_return([])
       stub_const("HOMEBREW_PREFIX", tmpdir)
       (tmpdir/"opt").mkpath
+      allow(Utils).to receive(:popen_read)
+        .with("/usr/bin/man", "-w", "-a", "nonexistent")
+        .and_return("")
 
       expect(cmd.send(:collect_manpages, "nonexistent")).to eq([])
-    end
-
-    it "dies when man is not found" do
-      allow(cmd).to receive(:which).with("man").and_return(nil)
-
-      expect { cmd.send(:collect_manpages, "testcmd") }.to raise_error(SystemExit)
     end
 
     it "deduplicates results by realpath" do
@@ -160,15 +182,10 @@ RSpec.describe Homebrew::Cmd::Man do
       FileUtils.ln_sf(tmpdir/"opt/openssl@3", tmpdir/"opt/openssl")
 
       allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
-      allow(cmd).to receive(:system_manpath).and_return([])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
       allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return((tmpdir/"opt/openssl/share/man/man1/openssl.1").to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return((tmpdir/"opt/openssl@3/share/man/man1/openssl.1").to_s)
+        .with("/usr/bin/man", "-w", "-a", "openssl")
+        .and_return("")
 
       result = cmd.send(:collect_manpages, "openssl")
       expect(result.length).to eq(1)
@@ -186,45 +203,83 @@ RSpec.describe Homebrew::Cmd::Man do
       FileUtils.touch(openssl_file)
 
       allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
-      allow(cmd).to receive(:system_manpath).and_return([])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
       allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/libressl/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return(libressl_file.to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return(openssl_file.to_s)
+        .with("/usr/bin/man", "-w", "-a", "openssl")
+        .and_return("")
 
       result = cmd.send(:collect_manpages, "openssl")
       expect(result.map(&:first)).to contain_exactly("libressl", "openssl@3")
     end
 
-    it "labels Homebrew-linked pages by formula when HOMEBREW_PREFIX is in manpath" do
-      brew_man = tmpdir/"share/man"
-      (brew_man/"man1").mkpath
-
+    it "labels Homebrew-linked pages by formula when man -wa finds the link" do
       formula_man = tmpdir/"opt/openssl@3/share/man/man1"
       formula_man.mkpath
       formula_file = formula_man/"openssl.1ssl"
       FileUtils.touch(formula_file)
-      FileUtils.ln_sf(formula_file, brew_man/"man1/openssl.1ssl")
+
+      brew_man = tmpdir/"share/man/man1"
+      brew_man.mkpath
+      FileUtils.ln_sf(formula_file, brew_man/"openssl.1ssl")
 
       allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
-      allow(cmd).to receive(:system_manpath).and_return([brew_man])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
       allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return(formula_file.to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => brew_man.to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return((brew_man/"man1/openssl.1ssl").to_s)
+        .with("/usr/bin/man", "-w", "-a", "openssl")
+        .and_return("#{brew_man}/openssl.1ssl\n")
 
       result = cmd.send(:collect_manpages, "openssl")
       labels = result.map(&:first)
       expect(labels).to include("openssl@3")
       expect(labels).not_to include("system")
+    end
+
+    it "includes compressed system man pages found by man -wa" do
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      (tmpdir/"opt").mkpath
+
+      gz_file = tmpdir/"sys/man1/testcmd.1.gz"
+      (tmpdir/"sys/man1").mkpath
+      FileUtils.touch(gz_file)
+
+      allow(Utils).to receive(:popen_read)
+        .with("/usr/bin/man", "-w", "-a", "testcmd")
+        .and_return("#{gz_file}\n")
+
+      result = cmd.send(:collect_manpages, "testcmd")
+      expect(result).to eq([["system", gz_file]])
+    end
+
+    it "finds formula pages when name already includes a section suffix" do
+      formula_man = tmpdir/"opt/openssl@3/share/man/man1"
+      formula_man.mkpath
+      manfile = formula_man/"openssl.1ssl"
+      FileUtils.touch(manfile)
+
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      allow(Utils).to receive(:popen_read)
+        .with("/usr/bin/man", "-w", "-a", "openssl.1ssl")
+        .and_return("")
+
+      result = cmd.send(:collect_manpages, "openssl.1ssl")
+      expect(result).to eq([["openssl@3", manfile]])
+    end
+
+    it "skips broken symlinks in formula kegs" do
+      formula_man = tmpdir/"opt/broken-pkg/share/man/man1"
+      formula_man.mkpath
+      FileUtils.ln_sf(tmpdir/"nonexistent", formula_man/"testcmd.1")
+
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      allow(Utils).to receive(:popen_read)
+        .with("/usr/bin/man", "-w", "-a", "testcmd")
+        .and_return("")
+
+      result = cmd.send(:collect_manpages, "testcmd")
+      expect(result).to eq([])
     end
   end
 

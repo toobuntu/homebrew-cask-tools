@@ -121,34 +121,19 @@ RSpec.describe Homebrew::Cmd::Man do
       manfile_formula = formula_man/"testcmd.1"
       FileUtils.touch(manfile_formula)
 
-      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(cmd).to receive(:system_manpath).and_return([tmpdir/"sys"])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"sys").to_s }, "/usr/bin/man", "-w", "testcmd")
-        .and_return(manfile_sys.to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/test-formula/share/man").to_s }, "/usr/bin/man", "-w", "testcmd")
-        .and_return(manfile_formula.to_s)
 
       result = cmd.send(:collect_manpages, "testcmd")
       expect(result.map(&:first)).to eq(["test-formula", "system"])
     end
 
     it "returns empty array when no matches exist" do
-      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(cmd).to receive(:system_manpath).and_return([])
       stub_const("HOMEBREW_PREFIX", tmpdir)
       (tmpdir/"opt").mkpath
 
       expect(cmd.send(:collect_manpages, "nonexistent")).to eq([])
-    end
-
-    it "dies when man is not found" do
-      allow(cmd).to receive(:which).with("man").and_return(nil)
-
-      expect { cmd.send(:collect_manpages, "testcmd") }.to raise_error(SystemExit)
     end
 
     it "deduplicates results by realpath" do
@@ -159,16 +144,8 @@ RSpec.describe Homebrew::Cmd::Man do
 
       FileUtils.ln_sf(tmpdir/"opt/openssl@3", tmpdir/"opt/openssl")
 
-      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(cmd).to receive(:system_manpath).and_return([])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return((tmpdir/"opt/openssl/share/man/man1/openssl.1").to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return((tmpdir/"opt/openssl@3/share/man/man1/openssl.1").to_s)
 
       result = cmd.send(:collect_manpages, "openssl")
       expect(result.length).to eq(1)
@@ -185,16 +162,8 @@ RSpec.describe Homebrew::Cmd::Man do
       openssl_file = openssl_man/"openssl.1"
       FileUtils.touch(openssl_file)
 
-      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(cmd).to receive(:system_manpath).and_return([])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/libressl/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return(libressl_file.to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return(openssl_file.to_s)
 
       result = cmd.send(:collect_manpages, "openssl")
       expect(result.map(&:first)).to contain_exactly("libressl", "openssl@3")
@@ -210,16 +179,8 @@ RSpec.describe Homebrew::Cmd::Man do
       FileUtils.touch(formula_file)
       FileUtils.ln_sf(formula_file, brew_man/"man1/openssl.1ssl")
 
-      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
       allow(cmd).to receive(:system_manpath).and_return([brew_man])
       stub_const("HOMEBREW_PREFIX", tmpdir)
-
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return(formula_file.to_s)
-      allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => brew_man.to_s }, "/usr/bin/man", "-w", "openssl")
-        .and_return((brew_man/"man1/openssl.1ssl").to_s)
 
       result = cmd.send(:collect_manpages, "openssl")
       labels = result.map(&:first)

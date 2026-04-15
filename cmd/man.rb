@@ -127,36 +127,31 @@ module Homebrew
       # labeling them "system".
       sig { params(name: String).returns(T::Array[[String, Pathname]]) }
       def collect_manpages(name)
-        man_cmd = require_man_cmd
-
         choices = T.let([], T::Array[[String, Pathname]])
         seen = T.let(Set.new, T::Set[String])
 
         formula_man_dirs.each do |formula, man_dir|
-          path = resolve_manpage(man_cmd, man_dir, name, seen)
+          path = resolve_manpage(man_dir, name, seen)
           choices << [formula, path] if path
         end
 
         system_manpath.each do |dir|
-          path = resolve_manpage(man_cmd, dir, name, seen)
+          path = resolve_manpage(dir, name, seen)
           choices << ["system", path] if path
         end
 
         choices
       end
 
-      # Resolves a man page within a single MANPATH directory using `man -w`,
+      # Resolves a man page within a single MANPATH directory via filesystem glob,
       # deduplicating by realpath. Returns nil if not found or already seen.
       sig {
-        params(man_cmd: Pathname, manpath_dir: Pathname, name: String,
+        params(manpath_dir: Pathname, name: String,
                seen: T::Set[String]).returns(T.nilable(Pathname))
       }
-      def resolve_manpage(man_cmd, manpath_dir, name, seen)
-        result = Utils.popen_read({ "MANPATH" => manpath_dir.to_s }, man_cmd.to_s, "-w", name).strip
-        return if result.empty?
-
-        path = Pathname(result)
-        return unless path.exist?
+      def resolve_manpage(manpath_dir, name, seen)
+        path = Pathname.glob(manpath_dir/"man*/#{name}.[0-9]*").min
+        return if path.nil? || !path.exist?
 
         real = path.realpath.to_s
         return if seen.include?(real)

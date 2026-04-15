@@ -119,7 +119,7 @@ module Homebrew
         # man(1) cannot resolve filenames that include a section suffix
         # (e.g. openssl.1ssl). Fall back to a direct filesystem search
         # that also handles compressed pages (.gz, .bz2, .xz, .zst, …).
-        escaped = page.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+        escaped = escape_glob(page)
         match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}").select(&:file?).min ||
                 Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}.*").select(&:file?).min ||
                 Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}*").select(&:file?).min
@@ -129,7 +129,7 @@ module Homebrew
         if match.nil? && page.match?(/\.\d+[a-z]*$/i)
           base = page.sub(/\.\d+[a-z]*$/i, "")
           odebug "Trying base name '#{base}' (stripped section suffix from '#{page}')"
-          escaped_base = base.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+          escaped_base = escape_glob(base)
           match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_base}.[0-9]*").select(&:file?).min
         end
 
@@ -138,7 +138,7 @@ module Homebrew
         if match.nil? && page == formula_name
           odebug "No man page '#{page}' in #{formula_name}, checking formula binaries"
           formula_binaries(prefix).each do |bin_name|
-            escaped_bin = bin_name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+            escaped_bin = escape_glob(bin_name)
             match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_bin}").select(&:file?).min ||
                     Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_bin}.[0-9]*").select(&:file?).min
             if match
@@ -219,7 +219,7 @@ module Homebrew
         # man(1) does internally since kegs have no mandoc.db. The glob
         # pattern `.[0-9]*` matches compressed pages and non-standard
         # suffixes (.1ssl, .3pm, etc.).
-        escaped = name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+        escaped = escape_glob(name)
         formula_man_dirs.each do |formula, man_dir|
           path = Pathname.glob(man_dir/"man*/#{escaped}.[0-9]*").min
           # Name may already include a section suffix (e.g. openssl.1ssl);
@@ -252,7 +252,7 @@ module Homebrew
             man_dir = opt_dir/"share/man"
             next unless man_dir.directory?
 
-            escaped_fn = fname.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+            escaped_fn = escape_glob(fname)
             path = Pathname.glob(man_dir/"man*/#{escaped_fn}.[0-9]*").min ||
                    Pathname.glob(man_dir/"man*/#{escaped_fn}").min
             next if path.nil? || !path.exist?
@@ -367,6 +367,12 @@ module Homebrew
         @require_man_cmd ||= T.let(which("man"), T.nilable(Pathname))
         odie "`man` is required but not found on PATH." if @require_man_cmd.nil?
         T.must(@require_man_cmd)
+      end
+
+      # Escapes glob metacharacters in a string for safe use in Pathname.glob.
+      sig { params(str: String).returns(String) }
+      def escape_glob(str)
+        str.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
       end
     end
   end

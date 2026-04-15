@@ -101,7 +101,8 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `scripts/run-generate-tap-man-completions.sh`: Helper script to hardlink `dev-cmd/generate-tap-man-completions.rb`
   into the installed tap's `cmd/` and run the command with `--tap=` pointed at the installed tap.
   Syncs generated files back to the development clone for committing, then restores the tap repo
-  to a clean state (via `git restore` + `git clean -fd`).
+  to a clean state (via `git restore` + `git clean -fd`). Detects when the dev clone and tap repo
+  are the same directory (e.g. Copilot sandbox) and skips the sync/restore steps.
   Designed to be run from the development clone. Forwards all arguments to the command.
   Pass `--open-pr` to create a branch, commit, push, and open a PR from the dev clone via `gh`.
   The `--open-pr`, `--no-pull-requests`, and `--no-fork` flags are declared in `cmd_args`

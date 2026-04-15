@@ -68,17 +68,12 @@ scripts/run-generate-tap-man-completions.sh --open-pr
 ### Regenerating completions in the Copilot sandbox
 
 In the Copilot coding agent sandbox, the dev repo and the installed tap are the
-**same directory** (symlinked by `setup-homebrew`). Do **not** use
-`scripts/run-generate-tap-man-completions.sh` — it will fail with `cp` "same file"
-errors and `git restore` will revert your uncommitted changes.
-
-Instead, run the generator directly:
+**same directory** (symlinked by `setup-homebrew`).
+`scripts/run-generate-tap-man-completions.sh` detects this layout and automatically
+skips the sync and restore steps that would otherwise fail. You can use it normally:
 
 ```sh
-brew_lib="$(brew --repo)/Library/Homebrew"
-ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
-HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions --tap=toobuntu/cask-tools
-rm -f "${brew_lib}/cmd/generate-tap-man-completions.rb"
+scripts/run-generate-tap-man-completions.sh
 ```
 
 Generated files land directly in the working tree — no sync step is needed.

@@ -24,7 +24,7 @@ module Homebrew
           `.saver`, `.webplugin`, and other artifact types).
         EOS
 
-        named_args min: 1
+        named_args :installed_cask, min: 1
       end
 
       BUNDLE_EXTENSIONS = T.let(

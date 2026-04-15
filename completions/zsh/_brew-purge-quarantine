@@ -5,5 +5,7 @@ _brew_purge_quarantine() {
     '--debug[Display any debugging information]' \
     '--help[Show this message]' \
     '--quiet[Make some output more quiet]' \
-    '--verbose[Make some output more verbose]'
+    '--verbose[Make some output more verbose]' \
+    - installed_cask \
+    '*:installed_cask:__brew_installed_casks'
 }

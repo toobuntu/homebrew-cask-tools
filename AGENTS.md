@@ -119,6 +119,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `.github/workflows/actionlint.yml`: CI — runs `actionlint` and `zizmor` code scanning.
 - `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream
   Homebrew repositories. Uses `yq` for YAML mutations with post-mutation assertions.
+  Requires a GitHub App token to push workflow files — see `docs/architecture.md` § CI setup.
 - `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
 - `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
 - `.github/workflows/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.
@@ -163,7 +164,7 @@ For GitHub Copilot coding agent, add the following JSON in the repository's Copi
 9. Inline new or existing methods as methods or local variables unless they are reused 2+ times or needed for unit tests.
 10. Use Sorbet `sig` type signatures and `# typed: strict` for all non-spec Ruby files.
 11. Never use `# typed: strict` in RSpec `*_spec.rb` files.
-12. Named arguments in `AbstractCommand` subclasses: use `named_args min: 1` for cask commands — this allows purging quarantine from casks that have been removed from all taps (a primary use case as Homebrew deprecates Gatekeeper-failing casks). Tab completion for installed casks is provided via the pre-generated files in `completions/`. Note: `named_args :installed_cask` validates against tapped sources at parse time and must not be used for commands that handle deprecated or removed casks.
+12. Named arguments in `AbstractCommand` subclasses: use `named_args :installed_cask, min: 1` for cask commands that operate on installed casks — this provides tab completion via Homebrew's `__brew_complete_installed_casks` (which lists Caskroom directories, without loading cask definitions) and works for casks that have been removed from all taps. The `:installed_cask` type only affects completion hints and usage banners; it does not validate cask names against tapped sources at parse time.
 13. `include SystemCommand::Mixin` (top-level constant, not `Homebrew::SystemCommand::Mixin`).
 14. All implementations must be compatible with macOS (see macOS Compatibility section above). The agent runs on Ubuntu, but users run this tap on macOS. Avoid GNU-only CLI extensions; use POSIX/BSD-compatible syntax.
 15. Do **not** hand-write SPDX/REUSE headers. Instead run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout the repo. `annotate.sh` special-cases all generated files under `completions/` and man page (`.1`, `.1.md`) files to use `.license` sidecars (`--force-dot-license`) so their generated content is never altered.

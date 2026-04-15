@@ -4,3 +4,4 @@ __fish_brew_complete_arg 'purge-quarantine' -l debug -d 'Display any debugging i
 __fish_brew_complete_arg 'purge-quarantine' -l help -d 'Show this message'
 __fish_brew_complete_arg 'purge-quarantine' -l quiet -d 'Make some output more quiet'
 __fish_brew_complete_arg 'purge-quarantine' -l verbose -d 'Make some output more verbose'
+__fish_brew_complete_arg 'purge-quarantine' -a '(__fish_brew_suggest_casks_installed)'

@@ -13,4 +13,5 @@ _brew_purge_quarantine() {
       ;;
     *) ;;
   esac
+  __brew_complete_installed_casks
 }

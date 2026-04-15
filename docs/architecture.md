@@ -162,6 +162,78 @@ all brew commands. The flags have the following effect:
   write decisions, and stale file removal. This is the recommended flag for
   troubleshooting.
 
+## CI setup
+
+### `sync-shared-config` GitHub App
+
+The `sync-shared-config` workflow downloads upstream Homebrew configuration files and
+opens a pull request when they differ from the committed copies. One of those files is
+`.github/workflows/copilot-setup-steps.yml`, and GitHub restricts updates to files in
+`.github/workflows/`.
+
+When you enable GitHub Actions, GitHub
+[installs a GitHub App on your repository](https://docs.github.com/en/actions/concepts/security/github_token#about-the-github_token).
+At the start of each workflow run, this app generates a short-lived `GITHUB_TOKEN`
+that authenticates on behalf of the workflow. The token expires at the end of every
+job and its permissions are limited to the repository that contains the workflow.
+Crucially, GitHub‘s REST API [restricts creating or updating files in
+`.github/workflows/`](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents):
+the GitHub Actions app installation token exposed as `GITHUB_TOKEN` cannot perform
+that operation. Only an OAuth token with the `workflow` scope, or a GitHub App
+granted the Workflows repository permission, can do so.
+
+This workflow therefore uses a dedicated GitHub App whose **Workflows** repository
+permission allows it to push workflow files. The
+[`actions/create-github-app-token`](https://github.com/actions/create-github-app-token)
+action exchanges the app's credentials for a short-lived installation token. The
+`permission-*` inputs in the workflow step further restrict each issued token to only
+the permissions the workflow actually needs (Contents, Metadata, Pull Requests, and
+Workflows).
+
+#### Create the GitHub App
+
+Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
+(or follow the [GitHub docs: Creating a GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)).
+
+1. **GitHub App Name**: Choose a name, such as "Token Generator."
+2. **Description**: Something like "GitHub App to generate short-lived tokens for
+   workflows."
+3. **Homepage URL**: A placeholder URL or a link to this repository.
+4. **Webhook**: Uncheck **Active**. The app does not need to receive webhook events.
+5. Under **Repository permissions**, grant:
+
+   | Permission | Access |
+   |---|---|
+   | **Contents** | Read & Write |
+   | **Pull requests** | Read & Write |
+   | **Workflows** | Read & Write |
+   | **Metadata** | Read-only (automatically selected) |
+
+6. Leave all other permissions at their default (No access).
+7. **Where can this GitHub App be installed?**: Only on this account.
+8. The **Identifying and authorizing users** section is not relevant for this use case.
+9. Click **Create GitHub App**, then generate a **private key** on the app's settings page
+   and download the `.pem` file.
+
+#### Install the app on this repository
+
+On the app's settings page, click **Install App** and select the repository.
+Restrict the installation to **Only select repositories** and choose this repo.
+
+#### Add repository variable and secret
+
+In the repository's **Settings → Secrets and variables → Actions**, create:
+
+| Type | Name | Value |
+|---|---|---|
+| Variable | `SYNC_APP_CLIENT_ID` | The Client ID shown on the app's **General** settings page (not a secret — [ref](https://github.blog/changelog/2024-05-01-github-apps-can-now-use-the-client-id-to-fetch-installation-tokens/)) |
+| Secret | `SYNC_APP_PRIVATE_KEY` | The raw PEM private key contents (see below) |
+
+Paste the full contents of the downloaded `.pem` file (including the
+`-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` lines) as
+the value for `SYNC_APP_PRIVATE_KEY`. GitHub Actions secrets preserve multi-line
+values, and `actions/create-github-app-token` accepts the PEM directly.
+
 ## Developer workflow
 
 The generated files (completions and man pages) are written to the **Homebrew-managed

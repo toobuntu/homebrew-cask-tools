@@ -150,7 +150,8 @@ module Homebrew
                seen: T::Set[String]).returns(T.nilable(Pathname))
       }
       def resolve_manpage(manpath_dir, name, seen)
-        path = Pathname.glob(manpath_dir/"man*/#{name}.[0-9]*").min
+        escaped = name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+        path = Pathname.glob(manpath_dir/"man*/#{escaped}.[0-9]*").min
         return if path.nil? || !path.exist?
 
         real = path.realpath.to_s

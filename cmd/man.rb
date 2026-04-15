@@ -17,7 +17,7 @@ module Homebrew
       include SystemCommand::Mixin
 
       cmd_args do
-        usage_banner "`man` [<options>] <formula> [<manpage>]\n" \
+        usage_banner "`man` [<options>] <formula> [<manpage>]\n            " \
                      "`man` (`--list`|`--interactive`) <manpage>"
         description <<~EOS
           Display a man page bundled with an installed formula.
@@ -84,9 +84,18 @@ module Homebrew
 
         manpath = prefix/"share/man"
         result = Utils.popen_read({ "MANPATH" => manpath.to_s }, require_man_cmd.to_s, "-w", page).strip
-        odie "Man page not found: #{page} in #{formula_name}" if result.empty?
+        return Pathname(result) unless result.empty?
 
-        Pathname(result)
+        # man(1) cannot resolve filenames that include a section suffix
+        # (e.g. openssl.1ssl). Fall back to a direct filesystem search
+        # that also handles compressed pages (.gz, .bz2, .xz, .zst, …).
+        escaped = page.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+        match = Pathname.glob(manpath/"man*/#{escaped}").select(&:file?).min ||
+                Pathname.glob(manpath/"man*/#{escaped}.*").select(&:file?).min ||
+                Pathname.glob(manpath/"man*/#{escaped}*").select(&:file?).min
+        odie "Man page not found: #{page} in #{formula_name}" if match.nil?
+
+        match
       end
 
       # Lists all locations where a man page is found.
@@ -133,12 +142,19 @@ module Homebrew
 
         # Homebrew formula kegs: direct filesystem glob — equivalent to what
         # man(1) does internally since kegs have no mandoc.db. The glob
-        # pattern `.[0-9]*` matches compressed pages (.1.gz) and
-        # non-standard suffixes (.1ssl).
+        # pattern `.[0-9]*` matches compressed pages and non-standard
+        # suffixes (.1ssl, .3pm, etc.).
         escaped = name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
         formula_man_dirs.each do |formula, man_dir|
           path = Pathname.glob(man_dir/"man*/#{escaped}.[0-9]*").min
+          # Name may already include a section suffix (e.g. openssl.1ssl);
+          # try exact match and compressed variants as fallback.
+          if path.nil?
+            path = Pathname.glob(man_dir/"man*/#{escaped}").min ||
+                   Pathname.glob(man_dir/"man*/#{escaped}.*").min
+          end
           next if path.nil?
+          next unless path.exist?
 
           real = path.realpath.to_s
           next if seen.include?(real)

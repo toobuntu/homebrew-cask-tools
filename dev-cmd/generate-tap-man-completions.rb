@@ -360,7 +360,9 @@ module Homebrew
         title_line = short_desc ? "#{title_cmd}(1) -- #{short_desc}" : "#{title_cmd}(1)"
 
         md = "#{title_line}\n#{"=" * title_line.length}\n\n"
-        md << "## SYNOPSIS\n\n`brew` #{synopsis}\n\n"
+
+        synopsis_lines = synopsis.split("\n").map { |l| "`brew` #{l.strip}" }.join("\n\n")
+        md << "## SYNOPSIS\n\n#{synopsis_lines}\n\n"
         md << "## DESCRIPTION\n\n#{description}\n\n" if description
         md << "## OPTIONS\n\n"
         parser.processed_options.each do |opt|

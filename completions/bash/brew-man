@@ -16,4 +16,5 @@ _brew_man() {
       ;;
     *) ;;
   esac
+  __brew_complete_installed_formulae
 }

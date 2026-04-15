@@ -7,7 +7,7 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 # Agent Instructions for toobuntu/homebrew-cask-tools
 
 This repository provides Homebrew external tap commands: `brew purge-quarantine`,
-`brew cask-extract`, and `brew generate-tap-man-completions` (developer-only).
+`brew cask-extract`, `brew man`, and `brew generate-tap-man-completions` (developer-only).
 Code quality and style should be at a level suitable for potential inclusion in Homebrew.
 
 Run `brew style --fix --changed && brew typecheck` to verify any file edits before committing.
@@ -55,7 +55,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `Homebrew/style` (MCP) — equivalent to `brew style --fix --changed`
 - `Homebrew/typecheck` (MCP) — equivalent to `brew typecheck`
-- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine`, `--only=cmd/cask-extract`, or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
+- `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine`, `--only=cmd/cask-extract`, `--only=cmd/man`, or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
   (requires the cmd/dev-cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 
 ### Development Flow
@@ -74,6 +74,9 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `cmd/cask-extract.rb`: External tap command implementing `brew cask-extract`.
   Extracts a cask from Homebrew's git history into a personal tap, optionally adding
   a `postflight` block to remove macOS's quarantine extended attribute.
+- `cmd/man.rb`: External tap command implementing `brew man`.
+  Displays man pages bundled with installed formulae, with `--list` and `--interactive`
+  modes for resolving ambiguity when multiple formulae ship the same page name.
 - `dev-cmd/generate-tap-man-completions.rb`: Developer-only command implementing `brew generate-tap-man-completions`.
   Generates Bash, ZSH, and Fish completion files for all commands in `cmd/` and `dev-cmd/`, Ronn man
   page sources (`.1.md`), and compiled roff (`.1`) into `manpages/`. Cleans up stale files for
@@ -86,6 +89,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   automatically after `git pull` (set `core.hooksPath = .githooks` once to enable).
 - `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
 - `test/cmd/cask-extract_spec.rb`: RSpec spec for the `cask-extract` command.
+- `test/cmd/man_spec.rb`: RSpec spec for the `man` command.
 - `test/cmd/generate-tap-man-completions_spec.rb`: RSpec spec for the `generate-tap-man-completions` command.
 - `completions/`: Pre-generated shell completion files. Regenerate with `brew generate-tap-man-completions`
   after any `cmd_args` change. CI verifies these are not out of date.
@@ -97,7 +101,8 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `scripts/run-generate-tap-man-completions.sh`: Helper script to hardlink `dev-cmd/generate-tap-man-completions.rb`
   into the installed tap's `cmd/` and run the command with `--tap=` pointed at the installed tap.
   Syncs generated files back to the development clone for committing, then restores the tap repo
-  to a clean state (via `git restore` + `git clean -fd`).
+  to a clean state (via `git restore` + `git clean -fd`). Detects when the dev clone and tap repo
+  are the same directory (e.g. Copilot sandbox) and skips the sync/restore steps.
   Designed to be run from the development clone. Forwards all arguments to the command.
   Pass `--open-pr` to create a branch, commit, push, and open a PR from the dev clone via `gh`.
   The `--open-pr`, `--no-pull-requests`, and `--no-fork` flags are declared in `cmd_args`

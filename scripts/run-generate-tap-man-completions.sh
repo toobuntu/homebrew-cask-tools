@@ -72,6 +72,17 @@ then
   exit 1
 fi
 
+# Detect when the dev clone and tap repo are the same directory (e.g. Copilot
+# coding agent sandbox, where setup-homebrew symlinks the tap to the checkout).
+# In this case the sync and restore steps must be skipped.
+SAME_DIR=false
+dev_real="$(cd "${DEV_DIR}" && pwd -P)" || dev_real=""
+tap_real="$(cd "${TAP_DIR}" && pwd -P)" || tap_real=""
+if [[ -n "${dev_real}" && "${dev_real}" == "${tap_real}" ]]
+then
+  SAME_DIR=true
+fi
+
 CMD_SRC="${DEV_DIR}/dev-cmd/generate-tap-man-completions.rb"
 CMD_DST="${TAP_DIR}/cmd/generate-tap-man-completions.rb"
 
@@ -93,9 +104,12 @@ cleanup() {
   echo "" >&2
   echo "==> Removing hardlink from tap repository..." >&2
   rm -f "${CMD_DST}"
-  # Discard generated file changes (tracked) and remove new files (untracked)
-  git -C "${TAP_DIR}" restore completions/ manpages/ 2>/dev/null || true
-  git -C "${TAP_DIR}" clean -fd completions/ manpages/ 2>/dev/null || true
+  if [[ ${SAME_DIR} == false ]]
+  then
+    # Discard generated file changes (tracked) and remove new files (untracked)
+    git -C "${TAP_DIR}" restore completions/ manpages/ 2>/dev/null || true
+    git -C "${TAP_DIR}" clean -fd completions/ manpages/ 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT INT TERM
 
@@ -132,44 +146,57 @@ then
   exit "${gen_exit}"
 fi
 
-# Sync generated files back to the dev clone
-echo "==> Syncing completions/ and manpages/ to dev clone..." >&2
-for subdir in completions/bash completions/zsh completions/fish manpages
-do
-  src="${TAP_DIR}/${subdir}"
-  dst="${DEV_DIR}/${subdir}"
-  [[ -d ${src} ]] || continue
-  mkdir -p "${dst}"
-  # Copy all generated files, not .license sidecars (those are managed by annotate.sh)
-  for f in "${src}"/*
+# Sync generated files back to the dev clone (skip when dev=tap, since files
+# are already in place and cp would error with "same file").
+if [[ ${SAME_DIR} == true ]]
+then
+  echo "==> Dev clone and tap repo are the same directory; skipping sync/restore." >&2
+else
+  echo "==> Syncing completions/ and manpages/ to dev clone..." >&2
+  for subdir in completions/bash completions/zsh completions/fish manpages
   do
-    [[ -f ${f} ]] || continue
-    base="$(basename "${f}")"
-    [[ ${base} == *.license ]] && continue
-    cp "${f}" "${dst}/"
+    src="${TAP_DIR}/${subdir}"
+    dst="${DEV_DIR}/${subdir}"
+    [[ -d ${src} ]] || continue
+    mkdir -p "${dst}"
+    # Copy all generated files, not .license sidecars (those are managed by annotate.sh)
+    for f in "${src}"/*
+    do
+      [[ -f ${f} ]] || continue
+      base="$(basename "${f}")"
+      [[ ${base} == *.license ]] && continue
+      cp "${f}" "${dst}/"
+    done
   done
-done
 
-# Check for stale files in dev clone that were removed from tap
-for subdir in completions/bash completions/zsh completions/fish manpages
-do
-  dst="${DEV_DIR}/${subdir}"
-  src="${TAP_DIR}/${subdir}"
-  [[ -d ${dst} ]] || continue
-  for f in "${dst}"/*
+  # Check for stale files in dev clone that were removed from tap
+  for subdir in completions/bash completions/zsh completions/fish manpages
   do
-    [[ -f ${f} ]] || continue
-    base="$(basename "${f}")"
-    [[ ${base} == *.license ]] && continue
-    if [[ ! -f "${src}/${base}" ]]
-    then
-      echo "==> Removing stale: ${subdir}/${base}" >&2
-      rm -f "${f}"
-      # Also remove the .license sidecar if present
-      rm -f "${f}.license"
-    fi
+    dst="${DEV_DIR}/${subdir}"
+    src="${TAP_DIR}/${subdir}"
+    [[ -d ${dst} ]] || continue
+    for f in "${dst}"/*
+    do
+      [[ -f ${f} ]] || continue
+      base="$(basename "${f}")"
+      [[ ${base} == *.license ]] && continue
+      if [[ ! -f "${src}/${base}" ]]
+      then
+        echo "==> Removing stale: ${subdir}/${base}" >&2
+        rm -f "${f}"
+        # Also remove the .license sidecar if present
+        rm -f "${f}.license"
+      fi
+    done
   done
-done
+
+  # Restore the tap repo to its clean state now that files have been copied.
+  # The generator wrote into the tap repo; discard those changes so
+  # brew update doesn't see a dirty tree.
+  echo "==> Restoring tap repository to clean state..." >&2
+  git -C "${TAP_DIR}" restore completions/ manpages/ 2>/dev/null || true
+  git -C "${TAP_DIR}" clean -fd completions/ manpages/ 2>/dev/null || true
+fi
 
 # Show what changed in the dev clone
 if ! git -C "${DEV_DIR}" diff --quiet completions/ manpages/ 2>/dev/null
@@ -177,13 +204,6 @@ then
   echo "==> Changes in dev clone:" >&2
   git -C "${DEV_DIR}" diff --stat completions/ manpages/
 fi
-
-# Restore the tap repo to its clean state now that files have been copied.
-# The generator wrote into the tap repo; discard those changes so
-# brew update doesn't see a dirty tree.
-echo "==> Restoring tap repository to clean state..." >&2
-git -C "${TAP_DIR}" restore completions/ manpages/ 2>/dev/null || true
-git -C "${TAP_DIR}" clean -fd completions/ manpages/ 2>/dev/null || true
 
 # If --open-pr, commit changes in the dev clone on a new branch and open a PR.
 if [[ ${OPEN_PR} == true ]]

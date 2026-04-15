@@ -196,3 +196,34 @@ the `duplicate_pull_requests` / `maybe_duplicate_pull_requests` pattern from
 
 The script should **not** be run from `$(brew --repo)` directly — that directory is
 managed by Homebrew and modifications may be lost on `brew update`.
+
+### Copilot sandbox: dev repo = tap repo
+
+In the GitHub Copilot coding agent sandbox, `Homebrew/actions/setup-homebrew` installs
+the tap by symlinking `$(brew --repo toobuntu/cask-tools)` directly to the checked-out
+repository. This means the development clone and the installed tap resolve to the
+**same directory and the same inodes**.
+
+`scripts/run-generate-tap-man-completions.sh` now detects this SAME_DIR layout and
+adjusts its behavior accordingly. That avoids the two failure modes that would occur
+if it treated the tap repo and dev repo as distinct paths:
+
+1. **`cp` "same file" error** — a normal sync step would copy files from `TAP_DIR`
+   to `DEV_DIR`, but when both paths resolve to the same directory, `cp` would fail
+   with `'src' and 'dst' are the same file'`. In the SAME_DIR case, the generated
+   files are already in the working tree, so no copy is needed.
+
+2. **`git restore` reverts dev repo changes** — a normal cleanup step would run
+   `git -C TAP_DIR restore completions/ manpages/` to discard generated changes in
+   the tap repo. When the tap and dev repos are the same git tree, that would also
+   revert changes in the development checkout. In the SAME_DIR case, that restore
+   step must be skipped.
+
+For AI agents and other sandboxed development environments, continue to use
+`scripts/run-generate-tap-man-completions.sh`; it is responsible for detecting when
+the installed tap and the checked-out repository are the same directory and for
+avoiding the unsafe copy/restore operations in that case.
+
+Conceptually, when SAME_DIR is detected, generated files land directly in the
+working tree, so no sync back to the development checkout and no cleanup restore in
+the tap repo are needed.

@@ -122,43 +122,44 @@ module Homebrew
       end
 
       # Returns all locations where a man page is found, as [label, Pathname] pairs.
-      # Processes formula dirs before system dirs so that realpath deduplication
-      # attributes Homebrew-linked pages to their providing formula rather than
-      # labeling them "system".
+      # Processes formula kegs first (via filesystem glob for speed) so that
+      # realpath deduplication attributes Homebrew-linked pages to their
+      # providing formula rather than labeling them "system".
       sig { params(name: String).returns(T::Array[[String, Pathname]]) }
       def collect_manpages(name)
+        man_cmd = require_man_cmd
         choices = T.let([], T::Array[[String, Pathname]])
         seen = T.let(Set.new, T::Set[String])
 
+        # Homebrew formula kegs: direct filesystem glob — keg layout is
+        # predictable and doesn't need the man(1) database for resolution.
+        escaped = name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
         formula_man_dirs.each do |formula, man_dir|
-          path = resolve_manpage(man_dir, name, seen)
-          choices << [formula, path] if path
+          path = Pathname.glob(man_dir/"man*/#{escaped}.[0-9]*").min
+          next if path.nil?
+
+          real = path.realpath.to_s
+          next if seen.include?(real)
+
+          seen.add(real)
+          choices << [formula, path]
         end
 
-        system_manpath.each do |dir|
-          path = resolve_manpage(dir, name, seen)
-          choices << ["system", path] if path
+        # System/linked pages: single `man -wa` for robust resolution of
+        # compressed pages, database aliases, and platform-specific locations
+        # (e.g. macOS SDK paths configured in /etc/man.conf).
+        Utils.popen_read(man_cmd.to_s, "-w", "-a", name).strip.each_line do |line|
+          path = Pathname(line.strip)
+          next unless path.exist?
+
+          real = path.realpath.to_s
+          next if seen.include?(real)
+
+          seen.add(real)
+          choices << ["system", path]
         end
 
         choices
-      end
-
-      # Resolves a man page within a single MANPATH directory via filesystem glob,
-      # deduplicating by realpath. Returns nil if not found or already seen.
-      sig {
-        params(manpath_dir: Pathname, name: String,
-               seen: T::Set[String]).returns(T.nilable(Pathname))
-      }
-      def resolve_manpage(manpath_dir, name, seen)
-        escaped = name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
-        path = Pathname.glob(manpath_dir/"man*/#{escaped}.[0-9]*").min
-        return if path.nil? || !path.exist?
-
-        real = path.realpath.to_s
-        return if seen.include?(real)
-
-        seen.add(real)
-        path
       end
 
       # Renders a man page file, either via man(1) or as HTML in a browser.
@@ -189,14 +190,6 @@ module Homebrew
         ensure
           tmpfile.close!
         end
-      end
-
-      # Returns the list of system man directories from manpath(1).
-      sig { returns(T::Array[Pathname]) }
-      def system_manpath
-        manpath_cmd = which("manpath")
-        odie "`manpath` is required but not found on PATH." if manpath_cmd.nil?
-        Utils.popen_read(manpath_cmd.to_s).strip.split(":").map { |d| Pathname(d) }
       end
 
       # Returns pairs of [formula_name, man_dir] for all installed formulae

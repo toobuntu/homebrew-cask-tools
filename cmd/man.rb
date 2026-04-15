@@ -18,7 +18,8 @@ module Homebrew
 
       cmd_args do
         usage_banner "`man` [<options>] [<section>] <formula> [<manpage>]\n            " \
-                     "`man` (`--list`|`--interactive`) <manpage>"
+                     "`man` (`--list`|`--interactive`) <manpage>\n            " \
+                     "`man` `--all` <formula>"
         description <<~EOS
           Display a man page bundled with an installed formula.
 
@@ -37,11 +38,12 @@ module Homebrew
           With `--html`, renders the man page via `mandoc -T html` and opens it
           in a browser (respecting `HOMEBREW_BROWSER` or `BROWSER`).
 
+          Use `--all` to list every man page an installed formula provides.
+
           Use `--list` or `--interactive` to search across system and other
-          Homebrew formulae. When given a man page name, shows all locations
-          where it is found; when given an installed formula name that has no
-          matching man page, lists all pages the formula provides. Formulae
-          that provide a binary matching the page name are also included.
+          Homebrew formulae. Shows all locations where a man page name is
+          found. Formulae that provide a binary matching the page name are
+          also included.
 
           With `--interactive`, presents a numbered list with origin labels
           to interactively select which copy of a man page to view.
@@ -55,17 +57,24 @@ module Homebrew
         switch "--interactive", "-i",
                description: "Interactively resolve ambiguity when multiple copies " \
                             "of a man page are found."
+        switch "--all", "-a",
+               description: "List every man page provided by an installed formula."
 
         conflicts "--html", "--list"
         conflicts "--html", "--interactive"
+        conflicts "--html", "--all"
         conflicts "--list", "--interactive"
+        conflicts "--list", "--all"
+        conflicts "--interactive", "--all"
 
         named_args :installed_formula, min: 1
       end
 
       sig { override.void }
       def run
-        if args.list?
+        if args.all?
+          list_all_formula_manpages(T.must(args.named.first))
+        elsif args.list?
           list_manpages(T.must(args.named.first))
         elsif args.interactive?
           file = interactive_manpage(T.must(args.named.first))
@@ -154,23 +163,9 @@ module Homebrew
       end
 
       # Lists all locations where a man page is found.
-      # Falls back to listing all pages from a formula when the name
-      # matches an installed formula but no man page by that name exists.
       sig { params(name: String).void }
       def list_manpages(name)
         results = collect_manpages(name)
-
-        if results.empty?
-          formula_results = all_formula_manpages(name)
-          unless formula_results.empty?
-            odebug "No man page named '#{name}', showing formula '#{name}' pages"
-            ohai "#{name} provides:"
-            formula_results.each do |page_name, file|
-              puts "  #{page_name}: #{file}"
-            end
-            return
-          end
-        end
 
         ohai "#{name} found in:"
         results.each do |label, file|
@@ -178,16 +173,22 @@ module Homebrew
         end
       end
 
+      # Lists every man page an installed formula provides.
+      sig { params(name: String).void }
+      def list_all_formula_manpages(name)
+        results = all_formula_manpages(name)
+        odie "No man pages found for formula: #{name}" if results.empty?
+
+        ohai "#{name} provides:"
+        results.each do |page_name, file|
+          puts "  #{page_name}: #{file}"
+        end
+      end
+
       # Interactively selects a man page from a numbered list with origin labels.
       sig { params(name: String).returns(Pathname) }
       def interactive_manpage(name)
         choices = collect_manpages(name)
-
-        if choices.empty?
-          formula_results = all_formula_manpages(name)
-          choices = formula_results unless formula_results.empty?
-        end
-
         odie "No man pages found for: #{name}" if choices.empty?
 
         choices.each_with_index do |(label, file), i|

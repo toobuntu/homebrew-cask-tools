@@ -6,6 +6,8 @@ brew\-man \- Display a man page bundled with an installed formula
 \fBbrew\fP \fBman\fP [\fIoptions\fP] [\fIsection\fP] \fIformula\fP [\fImanpage\fP]
 .P
 \fBbrew\fP \fBman\fP (\fB\-\-list\fP|\fB\-\-interactive\fP) \fImanpage\fP
+.P
+\fBbrew\fP \fBman\fP \fB\-\-all\fP \fIformula\fP
 .SH "DESCRIPTION"
 Display a man page bundled with an installed formula\.
 .P
@@ -13,7 +15,9 @@ Homebrew kegs (especially keg\-only formulae) are not on the default \fBMANPATH\
 .P
 By default, \fBbrew man <formula>\fP resolves man pages within the specified formula only\. The optional \fImanpage\fP argument defaults to the formula name; when the formula name has no man page, the formula\[u2019]s executables are tried as fallback (e\.g\. \fBbrew man libressl\fP finds \fBopenssl(1)\fP)\. An optional \fIsection\fP number (e\.g\. \fB1\fP, \fB3\fP) before the formula name restricts the search to that man section\. With \fB\-\-html\fP, renders the man page via \fBmandoc \-T html\fP and opens it in a browser (respecting \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
 .P
-Use \fB\-\-list\fP or \fB\-\-interactive\fP to search across system and other Homebrew formulae\. When given a man page name, shows all locations where it is found; when given an installed formula name that has no matching man page, lists all pages the formula provides\. Formulae that provide a binary matching the page name are also included\.
+Use \fB\-\-all\fP to list every man page an installed formula provides\.
+.P
+Use \fB\-\-list\fP or \fB\-\-interactive\fP to search across system and other Homebrew formulae\. Shows all locations where a man page name is found\. Formulae that provide a binary matching the page name are also included\.
 .P
 With \fB\-\-interactive\fP, presents a numbered list with origin labels to interactively select which copy of a man page to view\.
 .SH "OPTIONS"
@@ -38,3 +42,6 @@ List all locations where the named man page is found\.
 .TP
 \fB\-i\fP, \fB\-\-interactive\fP
 Interactively resolve ambiguity when multiple copies of a man page are found\.
+.TP
+\fB\-a\fP, \fB\-\-all\fP
+List every man page provided by an installed formula\.

@@ -7,6 +7,8 @@ brew-man(1) -- Display a man page bundled with an installed formula
 
 `brew` `man` (`--list`|`--interactive`) <manpage>
 
+`brew` `man` `--all` <formula>
+
 ## DESCRIPTION
 
 Display a man page bundled with an installed formula.
@@ -26,11 +28,12 @@ before the formula name restricts the search to that man section.
 With `--html`, renders the man page via `mandoc -T html` and opens it
 in a browser (respecting `HOMEBREW_BROWSER` or `BROWSER`).
 
+Use `--all` to list every man page an installed formula provides.
+
 Use `--list` or `--interactive` to search across system and other
-Homebrew formulae. When given a man page name, shows all locations
-where it is found; when given an installed formula name that has no
-matching man page, lists all pages the formula provides. Formulae
-that provide a binary matching the page name are also included.
+Homebrew formulae. Shows all locations where a man page name is
+found. Formulae that provide a binary matching the page name are
+also included.
 
 With `--interactive`, presents a numbered list with origin labels
 to interactively select which copy of a man page to view.
@@ -64,4 +67,8 @@ to interactively select which copy of a man page to view.
 `-i`, `--interactive`
 
 : Interactively resolve ambiguity when multiple copies of a man page are found.
+
+`-a`, `--all`
+
+: List every man page provided by an installed formula.
 

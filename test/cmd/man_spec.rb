@@ -268,17 +268,24 @@ RSpec.describe Homebrew::Cmd::Man do
       expect { cmd.send(:list_manpages, "openssl") }
         .to output(/openssl found in:/).to_stdout
     end
+  end
 
-    it "falls back to formula pages when no man page matches" do
-      allow(cmd).to receive(:collect_manpages).with("libressl").and_return([])
-
+  describe "#list_all_formula_manpages" do
+    it "lists all man pages a formula provides" do
       man1_file = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
       allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
         ["openssl.1", man1_file],
       ])
 
-      expect { cmd.send(:list_manpages, "libressl") }
+      expect { cmd.send(:list_all_formula_manpages, "libressl") }
         .to output(/libressl provides:.*openssl\.1/m).to_stdout
+    end
+
+    it "dies when formula has no man pages" do
+      allow(cmd).to receive(:all_formula_manpages).with("empty-formula").and_return([])
+
+      expect { cmd.send(:list_all_formula_manpages, "empty-formula") }
+        .to raise_error(SystemExit)
     end
   end
 
@@ -452,21 +459,9 @@ RSpec.describe Homebrew::Cmd::Man do
   describe "#interactive_manpage" do
     it "dies when no man pages are found" do
       allow(cmd).to receive(:collect_manpages).with("nonexistent").and_return([])
-      allow(cmd).to receive(:all_formula_manpages).with("nonexistent").and_return([])
 
       expect { cmd.send(:interactive_manpage, "nonexistent") }
         .to raise_error(SystemExit)
-    end
-
-    it "falls back to formula pages when no man page matches" do
-      manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
-      allow(cmd).to receive(:collect_manpages).with("libressl").and_return([])
-      allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
-        ["openssl.1", manfile],
-      ])
-      allow($stdin).to receive(:gets).and_return("1\n")
-
-      expect(cmd.send(:interactive_manpage, "libressl")).to eq(manfile)
     end
 
     it "shows selector and prompts even for a single match" do

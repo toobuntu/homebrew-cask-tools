@@ -131,8 +131,10 @@ module Homebrew
         choices = T.let([], T::Array[[String, Pathname]])
         seen = T.let(Set.new, T::Set[String])
 
-        # Homebrew formula kegs: direct filesystem glob — keg layout is
-        # predictable and doesn't need the man(1) database for resolution.
+        # Homebrew formula kegs: direct filesystem glob — equivalent to what
+        # man(1) does internally since kegs have no mandoc.db. The glob
+        # pattern `.[0-9]*` matches compressed pages (.1.gz) and
+        # non-standard suffixes (.1ssl).
         escaped = name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
         formula_man_dirs.each do |formula, man_dir|
           path = Pathname.glob(man_dir/"man*/#{escaped}.[0-9]*").min
@@ -145,9 +147,9 @@ module Homebrew
           choices << [formula, path]
         end
 
-        # System/linked pages: single `man -wa` for robust resolution of
-        # compressed pages, database aliases, and platform-specific locations
-        # (e.g. macOS SDK paths configured in /etc/man.conf).
+        # System pages: single `man -wa` for platform-specific locations
+        # (e.g. Xcode SDK paths configured via /etc/man.conf on macOS)
+        # and mandoc database lookup.
         Utils.popen_read(man_cmd.to_s, "-w", "-a", name).strip.each_line do |line|
           path = Pathname(line.strip)
           next unless path.exist?

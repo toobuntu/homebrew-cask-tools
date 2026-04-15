@@ -91,7 +91,7 @@ In CI (`brew_tests` job in `.github/workflows/ci.yml`) the same hardlink approac
 
 - `args.verbose?` not `verbose?` (not an instance method on `AbstractCommand` subclasses).
 - `Cask::Artifact::Moved` (not `::App`) covers all installable artifact types with a target.
-- `named_args min: 1` — required for `purge-quarantine` because deprecated/removed casks are a primary use case; `:installed_cask` validates against tapped sources at parse time and must not be used.
+- `named_args :installed_cask, min: 1` — used for `purge-quarantine` to provide tab completion for installed cask names (via Homebrew's `__brew_complete_installed_casks`, which lists Caskroom directories without loading cask definitions). Works correctly for deprecated/removed casks.
 - `rescue => e` (idiomatic Ruby; equivalent to `rescue StandardError => e`). Never use bare `rescue Exception` — that catches `SystemExit` and `Interrupt`.
 - `T.unsafe()` for Sorbet strict typing with dynamic Cask artifact APIs.
 - `include SystemCommand::Mixin` (top-level, not `Homebrew::SystemCommand::Mixin`).

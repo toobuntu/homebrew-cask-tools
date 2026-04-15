@@ -176,9 +176,11 @@ When you enable GitHub Actions, GitHub
 At the start of each workflow run, this app generates a short-lived `GITHUB_TOKEN`
 that authenticates on behalf of the workflow. The token expires at the end of every
 job and its permissions are limited to the repository that contains the workflow.
-Crucially, the REST API
-[requires the `workflow` scope to create or update files in `.github/workflows/`](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents),
-and `GITHUB_TOKEN` is never granted that scope.
+Crucially, GitHub‘s REST API [restricts creating or updating files in
+`.github/workflows/`](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents):
+the GitHub Actions app installation token exposed as `GITHUB_TOKEN` cannot perform
+that operation. Only an OAuth token with the `workflow` scope, or a GitHub App
+granted the Workflows repository permission, can do so.
 
 This workflow therefore uses a dedicated GitHub App whose **Workflows** repository
 permission allows it to push workflow files. The

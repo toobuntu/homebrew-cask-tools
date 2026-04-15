@@ -35,12 +35,12 @@ jobs:
     steps:
       # A GitHub App token is required because GITHUB_TOKEN cannot push
       # workflow files (.github/workflows/*). The permission-* inputs scope
-      # the token to only the permissions this workflow actually needs.
+      # the issued token to only what this workflow actually needs.
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
         with:
-          app-id: ${{ secrets.SYNC_APP_ID }}
+          client-id: ${{ vars.SYNC_APP_CLIENT_ID }}
           private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-metadata: read

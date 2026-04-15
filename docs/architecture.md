@@ -167,12 +167,26 @@ all brew commands. The flags have the following effect:
 ### `sync-shared-config` GitHub App
 
 The `sync-shared-config` workflow downloads upstream Homebrew configuration files and
-opens a pull request when they differ from the committed copies. It must push
-`.github/workflows/copilot-setup-steps.yml`, and GitHub's API [unconditionally rejects
-pushes to `.github/workflows/` files when the token lacks the `workflows`
-scope](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes).
-`GITHUB_TOKEN` (a short-lived installation token scoped to the Actions app) is never
-granted that scope, so the workflow uses a dedicated GitHub App token instead.
+opens a pull request when they differ from the committed copies. One of those files is
+`.github/workflows/copilot-setup-steps.yml`, and GitHub restricts updates to files in
+`.github/workflows/`.
+
+When you enable GitHub Actions, GitHub
+[installs a GitHub App on your repository](https://docs.github.com/en/actions/concepts/security/github_token#about-the-github_token).
+At the start of each workflow run, this app generates a short-lived `GITHUB_TOKEN`
+that authenticates on behalf of the workflow. The token expires at the end of every
+job and its permissions are limited to the repository that contains the workflow.
+Crucially, the REST API
+[requires the `workflow` scope to create or update files in `.github/workflows/`](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents),
+and `GITHUB_TOKEN` is never granted that scope.
+
+This workflow therefore uses a dedicated GitHub App whose **Workflows** repository
+permission allows it to push workflow files. The
+[`actions/create-github-app-token`](https://github.com/actions/create-github-app-token)
+action exchanges the app's credentials for a short-lived installation token. The
+`permission-*` inputs in the workflow step further restrict each issued token to only
+the permissions the workflow actually needs (Contents, Metadata, Pull Requests, and
+Workflows).
 
 #### Create the GitHub App
 
@@ -182,8 +196,8 @@ Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
 1. **GitHub App Name**: Choose a name, such as "Token Generator."
 2. **Description**: Something like "GitHub App to generate short-lived tokens for
    workflows."
-3. **Homepage URL**: You can use a placeholder URL or a link to this repository.
-4. **Webhook Active**: Inactive. The app does not need to receive webhook events.
+3. **Homepage URL**: A placeholder URL or a link to this repository.
+4. **Webhook**: Uncheck **Active**. The app does not need to receive webhook events.
 5. Under **Repository permissions**, grant:
 
    | Permission | Access |
@@ -204,30 +218,19 @@ Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
 On the app's settings page, click **Install App** and select the repository.
 Restrict the installation to **Only select repositories** and choose this repo.
 
-#### Add repository secrets
+#### Add repository variable and secret
 
 In the repository's **Settings → Secrets and variables → Actions**, create:
 
-| Secret name | Value |
-|---|---|
-| `SYNC_APP_ID` | The numeric App ID shown at the top of the app's settings page |
-| `SYNC_APP_PRIVATE_KEY` | The base64-encoded private key (see below) |
+| Type | Name | Value |
+|---|---|---|
+| Variable | `SYNC_APP_CLIENT_ID` | The Client ID shown on the app's **General** settings page (not a secret — [ref](https://github.blog/changelog/2024-05-01-github-apps-can-now-use-the-client-id-to-fetch-installation-tokens/)) |
+| Secret | `SYNC_APP_PRIVATE_KEY` | The raw PEM private key contents (see below) |
 
-When storing a private key as a secret, encode it in base64 first (GNU coreutils
-`base64` will line-wrap long output by default, so remove any newlines):
-
-```sh
-cat private-key.pem | base64 | tr -d "\n"
-```
-
-Use the resulting base64-encoded string as the value for `SYNC_APP_PRIVATE_KEY`.
-GitHub will automatically decode the base64-encoded value and provide it as the
-original private key to the workflow.
-
-The `actions/create-github-app-token` action in the workflow exchanges these credentials
-for a short-lived token scoped to this repository only. The `permission-*` inputs further
-restrict the token to only the permissions this workflow requires (Contents, Metadata,
-Pull Requests, and Workflows write access).
+Paste the full contents of the downloaded `.pem` file (including the
+`-----BEGIN RSA PRIVATE KEY-----` and `-----END RSA PRIVATE KEY-----` lines) as
+the value for `SYNC_APP_PRIVATE_KEY`. GitHub Actions secrets preserve multi-line
+values, and `actions/create-github-app-token` accepts the PEM directly.
 
 ## Developer workflow
 

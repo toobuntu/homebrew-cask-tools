@@ -110,7 +110,7 @@ RSpec.describe Homebrew::Cmd::Man do
 
     after { FileUtils.rm_rf(tmpdir) }
 
-    it "returns system and formula matches as label/path pairs" do
+    it "returns formula and system matches as label/path pairs" do
       sys_man = tmpdir/"sys/man1"
       sys_man.mkpath
       manfile_sys = sys_man/"testcmd.1"
@@ -133,7 +133,7 @@ RSpec.describe Homebrew::Cmd::Man do
         .and_return(manfile_formula.to_s)
 
       result = cmd.send(:collect_manpages, "testcmd")
-      expect(result.map(&:first)).to eq(["system", "test-formula"])
+      expect(result.map(&:first)).to eq(["test-formula", "system"])
     end
 
     it "returns empty array when no matches exist" do
@@ -198,6 +198,33 @@ RSpec.describe Homebrew::Cmd::Man do
 
       result = cmd.send(:collect_manpages, "openssl")
       expect(result.map(&:first)).to contain_exactly("libressl", "openssl@3")
+    end
+
+    it "labels Homebrew-linked pages by formula when HOMEBREW_PREFIX is in manpath" do
+      brew_man = tmpdir/"share/man"
+      (brew_man/"man1").mkpath
+
+      formula_man = tmpdir/"opt/openssl@3/share/man/man1"
+      formula_man.mkpath
+      formula_file = formula_man/"openssl.1ssl"
+      FileUtils.touch(formula_file)
+      FileUtils.ln_sf(formula_file, brew_man/"man1/openssl.1ssl")
+
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(cmd).to receive(:system_manpath).and_return([brew_man])
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return(formula_file.to_s)
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => brew_man.to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return((brew_man/"man1/openssl.1ssl").to_s)
+
+      result = cmd.send(:collect_manpages, "openssl")
+      labels = result.map(&:first)
+      expect(labels).to include("openssl@3")
+      expect(labels).not_to include("system")
     end
   end
 

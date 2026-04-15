@@ -21,16 +21,6 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(result).to all(be_a(Pathname))
       expect(result.map(&:to_s)).to eq(["/usr/share/man", "/usr/local/share/man"])
     end
-
-    it "excludes directories under HOMEBREW_PREFIX" do
-      allow(cmd).to receive(:which).with("manpath").and_return(Pathname("/usr/bin/manpath"))
-      stub_const("HOMEBREW_PREFIX", Pathname("/opt/homebrew"))
-      allow(Utils).to receive(:popen_read).with("/usr/bin/manpath")
-                                          .and_return("/usr/share/man:/opt/homebrew/share/man:/usr/local/share/man")
-
-      result = cmd.send(:system_manpath)
-      expect(result.map(&:to_s)).to eq(["/usr/share/man", "/usr/local/share/man"])
-    end
   end
 
   describe "#formula_man_dirs" do
@@ -120,7 +110,7 @@ RSpec.describe Homebrew::Cmd::Man do
 
     after { FileUtils.rm_rf(tmpdir) }
 
-    it "returns system and formula matches as label/path pairs" do
+    it "returns formula and system matches as label/path pairs" do
       sys_man = tmpdir/"sys/man1"
       sys_man.mkpath
       manfile_sys = sys_man/"testcmd.1"
@@ -143,7 +133,7 @@ RSpec.describe Homebrew::Cmd::Man do
         .and_return(manfile_formula.to_s)
 
       result = cmd.send(:collect_manpages, "testcmd")
-      expect(result.map(&:first)).to eq(["system", "test-formula"])
+      expect(result.map(&:first)).to eq(["test-formula", "system"])
     end
 
     it "returns empty array when no matches exist" do
@@ -221,22 +211,20 @@ RSpec.describe Homebrew::Cmd::Man do
       FileUtils.ln_sf(formula_file, brew_man/"man1/openssl.1ssl")
 
       allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
-      allow(cmd).to receive(:which).with("manpath").and_return(Pathname("/usr/bin/manpath"))
-      allow(Utils).to receive(:popen_read).with("/usr/bin/manpath")
-                                          .and_return("#{brew_man}:/usr/share/man")
+      allow(cmd).to receive(:system_manpath).and_return([brew_man])
       stub_const("HOMEBREW_PREFIX", tmpdir)
 
       allow(Utils).to receive(:popen_read)
-        .with({ "MANPATH" => "/usr/share/man" }, "/usr/bin/man", "-w", "openssl")
-        .and_return("")
-      allow(Utils).to receive(:popen_read)
         .with({ "MANPATH" => (tmpdir/"opt/openssl@3/share/man").to_s }, "/usr/bin/man", "-w", "openssl")
         .and_return(formula_file.to_s)
+      allow(Utils).to receive(:popen_read)
+        .with({ "MANPATH" => brew_man.to_s }, "/usr/bin/man", "-w", "openssl")
+        .and_return((brew_man/"man1/openssl.1ssl").to_s)
 
       result = cmd.send(:collect_manpages, "openssl")
       labels = result.map(&:first)
-      expect(labels).not_to include("system")
       expect(labels).to include("openssl@3")
+      expect(labels).not_to include("system")
     end
   end
 

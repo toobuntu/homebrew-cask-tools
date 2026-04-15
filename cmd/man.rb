@@ -122,8 +122,9 @@ module Homebrew
       end
 
       # Returns all locations where a man page is found, as [label, Pathname] pairs.
-      # Uses `man -w` per MANPATH entry for robust page resolution (handles
-      # compressed pages, symlinks, and platform-specific man page locations).
+      # Processes formula dirs before system dirs so that realpath deduplication
+      # attributes Homebrew-linked pages to their providing formula rather than
+      # labeling them "system".
       sig { params(name: String).returns(T::Array[[String, Pathname]]) }
       def collect_manpages(name)
         man_cmd = require_man_cmd
@@ -131,14 +132,14 @@ module Homebrew
         choices = T.let([], T::Array[[String, Pathname]])
         seen = T.let(Set.new, T::Set[String])
 
-        system_manpath.each do |dir|
-          path = resolve_manpage(man_cmd, dir, name, seen)
-          choices << ["system", path] if path
-        end
-
         formula_man_dirs.each do |formula, man_dir|
           path = resolve_manpage(man_cmd, man_dir, name, seen)
           choices << [formula, path] if path
+        end
+
+        system_manpath.each do |dir|
+          path = resolve_manpage(man_cmd, dir, name, seen)
+          choices << ["system", path] if path
         end
 
         choices
@@ -194,17 +195,12 @@ module Homebrew
         end
       end
 
-      # Returns the list of system man directories from manpath(1),
-      # excluding directories under HOMEBREW_PREFIX (which are Homebrew-managed
-      # and should be attributed to their providing formula, not "system").
+      # Returns the list of system man directories from manpath(1).
       sig { returns(T::Array[Pathname]) }
       def system_manpath
         manpath_cmd = which("manpath")
         odie "`manpath` is required but not found on PATH." if manpath_cmd.nil?
-
-        prefix = "#{HOMEBREW_PREFIX}/"
         Utils.popen_read(manpath_cmd.to_s).strip.split(":").map { |d| Pathname(d) }
-                                                           .reject { |d| d.to_s.start_with?(prefix) }
       end
 
       # Returns pairs of [formula_name, man_dir] for all installed formulae

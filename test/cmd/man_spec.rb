@@ -53,6 +53,90 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
+  describe "#parse_default_args" do
+    it "detects a section number as first argument" do
+      section_cmd = described_class.new(["1", "libressl", "openssl"])
+      section, formula_name, page = section_cmd.send(:parse_default_args)
+      expect(section).to eq("1")
+      expect(formula_name).to eq("libressl")
+      expect(page).to eq("openssl")
+    end
+
+    it "passes through when first argument is not a section" do
+      no_section_cmd = described_class.new(["libressl", "openssl"])
+      section, formula_name, page = no_section_cmd.send(:parse_default_args)
+      expect(section).to be_nil
+      expect(formula_name).to eq("libressl")
+      expect(page).to eq("openssl")
+    end
+
+    it "defaults page to formula name when only formula is given" do
+      formula_only_cmd = described_class.new(["curl"])
+      section, formula_name, page = formula_only_cmd.send(:parse_default_args)
+      expect(section).to be_nil
+      expect(formula_name).to eq("curl")
+      expect(page).to eq("curl")
+    end
+  end
+
+  describe "#formula_binaries" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "returns sorted executable names from bin and sbin" do
+      (tmpdir/"bin").mkpath
+      FileUtils.touch(tmpdir/"bin/openssl")
+      FileUtils.touch(tmpdir/"bin/c_rehash")
+      (tmpdir/"sbin").mkpath
+      FileUtils.touch(tmpdir/"sbin/ocspcheck")
+
+      result = cmd.send(:formula_binaries, tmpdir)
+      expect(result).to eq(["c_rehash", "ocspcheck", "openssl"])
+    end
+
+    it "includes symlinks" do
+      (tmpdir/"bin").mkpath
+      FileUtils.touch(tmpdir/"bin/gawk")
+      FileUtils.ln_sf(tmpdir/"bin/gawk", tmpdir/"bin/awk")
+
+      result = cmd.send(:formula_binaries, tmpdir)
+      expect(result).to include("awk", "gawk")
+    end
+
+    it "returns empty when no bin or sbin exists" do
+      expect(cmd.send(:formula_binaries, tmpdir)).to eq([])
+    end
+  end
+
+  describe "#all_formula_manpages" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "lists all man pages from a formula's keg" do
+      man1 = tmpdir/"share/man/man1"
+      man1.mkpath
+      FileUtils.touch(man1/"openssl.1")
+      FileUtils.touch(man1/"c_rehash.1")
+      man3 = tmpdir/"share/man/man3"
+      man3.mkpath
+      FileUtils.touch(man3/"SSL_CTX_new.3")
+
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      allow(Formula).to receive(:[]).with("libressl").and_return(formula)
+
+      result = cmd.send(:all_formula_manpages, "libressl")
+      page_names = result.map(&:first)
+      expect(page_names).to contain_exactly("SSL_CTX_new.3", "c_rehash.1", "openssl.1")
+    end
+
+    it "returns empty for unavailable formulae" do
+      allow(Formula).to receive(:[]).with("nonexistent").and_raise(FormulaUnavailableError, "nonexistent")
+      expect(cmd.send(:all_formula_manpages, "nonexistent")).to eq([])
+    end
+  end
+
   describe "#find_formula_manpage" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
 
@@ -113,6 +197,56 @@ RSpec.describe Homebrew::Cmd::Man do
 
       expect(cmd.send(:find_formula_manpage, "openssl@3", "openssl.1")).to eq(manfile)
     end
+
+    it "falls back to base name when section suffix does not match" do
+      man1_dir = tmpdir/"share/man/man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1"
+      FileUtils.touch(manfile)
+
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      allow(Formula).to receive(:[]).with("libressl").and_return(formula)
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect(cmd.send(:find_formula_manpage, "libressl", "openssl.1ssl")).to eq(manfile)
+    end
+
+    it "falls back to formula binaries when page matches formula name" do
+      man1_dir = tmpdir/"share/man/man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1"
+      FileUtils.touch(manfile)
+      bin_dir = tmpdir/"bin"
+      bin_dir.mkpath
+      FileUtils.touch(bin_dir/"openssl")
+      FileUtils.touch(bin_dir/"c_rehash")
+
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      allow(Formula).to receive(:[]).with("libressl").and_return(formula)
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect(cmd.send(:find_formula_manpage, "libressl", "libressl")).to eq(manfile)
+    end
+
+    it "scopes search to a specific section when given" do
+      man1_dir = tmpdir/"share/man/man1"
+      man1_dir.mkpath
+      man3_dir = tmpdir/"share/man/man3"
+      man3_dir.mkpath
+      man1_file = man1_dir/"openssl.1"
+      man3_file = man3_dir/"openssl.3"
+      FileUtils.touch(man1_file)
+      FileUtils.touch(man3_file)
+
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      allow(Formula).to receive(:[]).with("openssl@3").and_return(formula)
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect(cmd.send(:find_formula_manpage, "openssl@3", "openssl", section: "3")).to eq(man3_file)
+    end
   end
 
   describe "#list_manpages" do
@@ -133,6 +267,18 @@ RSpec.describe Homebrew::Cmd::Man do
 
       expect { cmd.send(:list_manpages, "openssl") }
         .to output(/openssl found in:/).to_stdout
+    end
+
+    it "falls back to formula pages when no man page matches" do
+      allow(cmd).to receive(:collect_manpages).with("libressl").and_return([])
+
+      man1_file = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
+        ["openssl.1", man1_file],
+      ])
+
+      expect { cmd.send(:list_manpages, "libressl") }
+        .to output(/libressl provides:.*openssl\.1/m).to_stdout
     end
   end
 
@@ -281,14 +427,46 @@ RSpec.describe Homebrew::Cmd::Man do
       result = cmd.send(:collect_manpages, "testcmd")
       expect(result).to eq([])
     end
+
+    it "finds formulae by binary alias" do
+      gawk_man = tmpdir/"opt/gawk/share/man/man1"
+      gawk_man.mkpath
+      gawk_file = gawk_man/"gawk.1"
+      FileUtils.touch(gawk_file)
+      gawk_bin = tmpdir/"opt/gawk/bin"
+      gawk_bin.mkpath
+      FileUtils.touch(gawk_bin/"gawk")
+      FileUtils.touch(gawk_bin/"awk")
+
+      allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))
+      stub_const("HOMEBREW_PREFIX", tmpdir)
+      allow(Utils).to receive(:popen_read)
+        .with("/usr/bin/man", "-w", "-a", "awk")
+        .and_return("")
+
+      result = cmd.send(:collect_manpages, "awk")
+      expect(result.map(&:first)).to include("gawk")
+    end
   end
 
   describe "#interactive_manpage" do
     it "dies when no man pages are found" do
       allow(cmd).to receive(:collect_manpages).with("nonexistent").and_return([])
+      allow(cmd).to receive(:all_formula_manpages).with("nonexistent").and_return([])
 
       expect { cmd.send(:interactive_manpage, "nonexistent") }
         .to raise_error(SystemExit)
+    end
+
+    it "falls back to formula pages when no man page matches" do
+      manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      allow(cmd).to receive(:collect_manpages).with("libressl").and_return([])
+      allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
+        ["openssl.1", manfile],
+      ])
+      allow($stdin).to receive(:gets).and_return("1\n")
+
+      expect(cmd.send(:interactive_manpage, "libressl")).to eq(manfile)
     end
 
     it "shows selector and prompts even for a single match" do

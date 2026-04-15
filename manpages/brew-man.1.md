@@ -3,7 +3,7 @@ brew-man(1) -- Display a man page bundled with an installed formula
 
 ## SYNOPSIS
 
-`brew` `man` [<options>] <formula> [<manpage>]
+`brew` `man` [<options>] [<section>] <formula> [<manpage>]
 
 `brew` `man` (`--list`|`--interactive`) <manpage>
 
@@ -19,13 +19,18 @@ ambiguity explicit.
 
 By default, `brew man <formula>` resolves man pages within the
 specified formula only. The optional <manpage> argument defaults to
-the formula name. With `--html`, renders the man page via
-`mandoc -T html` and opens it in a browser (respecting
-`HOMEBREW_BROWSER` or `BROWSER`).
+the formula name; when the formula name has no man page, the
+formula's executables are tried as fallback (e.g. `brew man libressl`
+finds `openssl(1)`). An optional <section> number (e.g. `1`, `3`)
+before the formula name restricts the search to that man section.
+With `--html`, renders the man page via `mandoc -T html` and opens it
+in a browser (respecting `HOMEBREW_BROWSER` or `BROWSER`).
 
 Use `--list` or `--interactive` to search across system and other
-Homebrew formulae. With `--list`, shows all locations where a given
-man page is found (both system paths and Homebrew formula kegs).
+Homebrew formulae. When given a man page name, shows all locations
+where it is found; when given an installed formula name that has no
+matching man page, lists all pages the formula provides. Formulae
+that provide a binary matching the page name are also included.
 
 With `--interactive`, presents a numbered list with origin labels
 to interactively select which copy of a man page to view.

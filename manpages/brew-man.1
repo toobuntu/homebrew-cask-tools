@@ -3,7 +3,7 @@
 .SH NAME
 brew\-man \- Display a man page bundled with an installed formula
 .SH "SYNOPSIS"
-\fBbrew\fP \fBman\fP [\fIoptions\fP] \fIformula\fP [\fImanpage\fP]
+\fBbrew\fP \fBman\fP [\fIoptions\fP] [\fIsection\fP] \fIformula\fP [\fImanpage\fP]
 .P
 \fBbrew\fP \fBman\fP (\fB\-\-list\fP|\fB\-\-interactive\fP) \fImanpage\fP
 .SH "DESCRIPTION"
@@ -11,9 +11,9 @@ Display a man page bundled with an installed formula\.
 .P
 Homebrew kegs (especially keg\-only formulae) are not on the default \fBMANPATH\fP, so \fBman\fP does not reliably find their pages\. When multiple providers ship the same page name, \fBman\fP silently returns the first match\. This command resolves man pages \fBby formula\fP and makes ambiguity explicit\.
 .P
-By default, \fBbrew man <formula>\fP resolves man pages within the specified formula only\. The optional \fImanpage\fP argument defaults to the formula name\. With \fB\-\-html\fP, renders the man page via \fBmandoc \-T html\fP and opens it in a browser (respecting \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
+By default, \fBbrew man <formula>\fP resolves man pages within the specified formula only\. The optional \fImanpage\fP argument defaults to the formula name; when the formula name has no man page, the formula\[u2019]s executables are tried as fallback (e\.g\. \fBbrew man libressl\fP finds \fBopenssl(1)\fP)\. An optional \fIsection\fP number (e\.g\. \fB1\fP, \fB3\fP) before the formula name restricts the search to that man section\. With \fB\-\-html\fP, renders the man page via \fBmandoc \-T html\fP and opens it in a browser (respecting \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
 .P
-Use \fB\-\-list\fP or \fB\-\-interactive\fP to search across system and other Homebrew formulae\. With \fB\-\-list\fP, shows all locations where a given man page is found (both system paths and Homebrew formula kegs)\.
+Use \fB\-\-list\fP or \fB\-\-interactive\fP to search across system and other Homebrew formulae\. When given a man page name, shows all locations where it is found; when given an installed formula name that has no matching man page, lists all pages the formula provides\. Formulae that provide a binary matching the page name are also included\.
 .P
 With \fB\-\-interactive\fP, presents a numbered list with origin labels to interactively select which copy of a man page to view\.
 .SH "OPTIONS"

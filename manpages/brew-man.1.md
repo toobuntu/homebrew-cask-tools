@@ -5,7 +5,7 @@ brew-man(1) -- Display a man page bundled with an installed formula
 
 `brew` `man` [<options>] [<section>] <formula> [<manpage>]
 
-`brew` `man` `--find` [`--interactive`] [<options>] <manpage>
+`brew` `man` `--find` [<options>] <manpage>
 
 `brew` `man` `--list` [`--interactive`] [<options>] <formula>
 
@@ -34,9 +34,8 @@ found. Formulae that provide a binary matching the page name are
 also included.
 
 Use `--list` to list every man page an installed formula provides.
-
-Add `--interactive` to either `--find` or `--list` to present a
-numbered list for selecting which page to view.
+Add `--interactive` to present a numbered list for selecting which
+page to view.
 
 ## OPTIONS
 
@@ -70,5 +69,5 @@ numbered list for selecting which page to view.
 
 `-i`, `--interactive`
 
-: Present a numbered list for interactive selection. Requires `--find` or `--list`.
+: Present a numbered list for interactive selection. Requires `--list`.
 

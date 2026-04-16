@@ -483,57 +483,6 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
-  describe "#interactive_manpage" do
-    it "dies when no man pages are found" do
-      allow(cmd).to receive(:collect_manpages).with("nonexistent").and_return([])
-
-      expect { cmd.send(:interactive_manpage, "nonexistent") }
-        .to raise_error(SystemExit)
-    end
-
-    it "shows selector and prompts even for a single match" do
-      manfile = Pathname("/usr/share/man/man1/testcmd.1")
-      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([["system", manfile]])
-      allow($stdin).to receive(:gets).and_return("1\n")
-
-      expect(cmd.send(:interactive_manpage, "testcmd")).to eq(manfile)
-    end
-
-    it "prompts and returns the selected man page when multiple matches exist" do
-      sys_manfile = Pathname("/usr/share/man/man1/testcmd.1")
-      formula_manfile = Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")
-      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
-        ["system", sys_manfile],
-        ["pkg", formula_manfile],
-      ])
-      allow($stdin).to receive(:gets).and_return("1\n")
-
-      expect(cmd.send(:interactive_manpage, "testcmd")).to eq(sys_manfile)
-    end
-
-    it "dies on invalid selection" do
-      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
-        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
-        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
-      ])
-      allow($stdin).to receive(:gets).and_return("99\n")
-
-      expect { cmd.send(:interactive_manpage, "testcmd") }
-        .to raise_error(SystemExit)
-    end
-
-    it "dies when stdin returns nil (EOF)" do
-      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
-        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
-        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
-      ])
-      allow($stdin).to receive(:gets).and_return(nil)
-
-      expect { cmd.send(:interactive_manpage, "testcmd") }
-        .to raise_error(SystemExit)
-    end
-  end
-
   describe "#render_html" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
 

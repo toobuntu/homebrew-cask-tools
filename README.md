@@ -124,8 +124,7 @@ match. `brew man` resolves man pages **by formula** and makes ambiguity explicit
 
 ```
 brew man [<section>] <formula> [<manpage>]
-brew man (--list|--interactive) <manpage>
-brew man --all <formula>
+brew man (--list|--interactive) [--all] <manpage>
 ```
 
 | Use case | Syntax |
@@ -134,7 +133,8 @@ brew man --all <formula>
 | View a specific page within a formula | `brew man openssl@3 openssl.1ssl` |
 | Restrict to a man section | `brew man 1 libressl openssl` |
 | Find all providers of a page | `brew man --list openssl` |
-| List all pages a formula provides | `brew man --all libressl` |
+| List all pages a formula provides | `brew man --list --all libressl` |
+| Pick from all formula pages | `brew man --interactive --all libressl` |
 | Pick interactively | `brew man --interactive openssl` |
 | Render as HTML in a browser | `brew man --html curl` |
 
@@ -154,7 +154,7 @@ fallback — for example, `brew man libressl` resolves to `openssl(1)` because
 | `--html`, `-H` | Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`) |
 | `--list`, `-l` | List all locations where the named man page is found |
 | `--interactive`, `-i` | Present a numbered list with origin labels for interactive selection |
-| `--all`, `-a` | List every man page provided by an installed formula |
+| `--all`, `-a` | List every man page provided by the named formula (requires `--list` or `--interactive`) |
 | `--debug`, `-d` | Show detailed search steps for troubleshooting |
 
 #### Examples
@@ -186,7 +186,7 @@ brew man --list openssl
 List all man pages that the `libressl` formula provides:
 
 ```sh
-brew man --all libressl
+brew man --list --all libressl
 ```
 
 Interactively choose which copy of `openssl(1)` to view:

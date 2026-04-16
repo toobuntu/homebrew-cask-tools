@@ -18,8 +18,7 @@ module Homebrew
 
       cmd_args do
         usage_banner "`man` [<options>] [<section>] <formula> [<manpage>]\n            " \
-                     "`man` (`--list`|`--interactive`) <manpage>\n            " \
-                     "`man` `--all` <formula>"
+                     "`man` (`--list`|`--interactive`) [<options>] <manpage>"
         description <<~EOS
           Display a man page bundled with an installed formula.
 
@@ -38,12 +37,11 @@ module Homebrew
           With `--html`, renders the man page via `mandoc -T html` and opens it
           in a browser (respecting `HOMEBREW_BROWSER` or `BROWSER`).
 
-          Use `--all` to list every man page an installed formula provides.
-
           Use `--list` or `--interactive` to search across system and other
           Homebrew formulae. Shows all locations where a man page name is
           found. Formulae that provide a binary matching the page name are
-          also included.
+          also included. Add `--all` to list every man page an installed
+          formula provides instead of searching by page name.
 
           With `--interactive`, presents a numbered list with origin labels
           to interactively select which copy of a man page to view.
@@ -58,26 +56,37 @@ module Homebrew
                description: "Interactively resolve ambiguity when multiple copies " \
                             "of a man page are found."
         switch "--all", "-a",
-               description: "List every man page provided by an installed formula."
+               description: "List every man page provided by the named formula. " \
+                            "Requires `--list` or `--interactive`."
 
         conflicts "--html", "--list"
         conflicts "--html", "--interactive"
         conflicts "--html", "--all"
         conflicts "--list", "--interactive"
-        conflicts "--list", "--all"
-        conflicts "--interactive", "--all"
 
         named_args :installed_formula, min: 1
       end
 
       sig { override.void }
       def run
-        if args.all?
-          list_all_formula_manpages(T.must(args.named.first))
-        elsif args.list?
-          list_manpages(T.must(args.named.first))
+        if args.all? && !args.list? && !args.interactive?
+          raise UsageError, "`--all` requires `--list` or `--interactive`."
+        end
+
+        name = T.must(args.named.first)
+
+        if args.list?
+          if args.all?
+            list_all_formula_manpages(name)
+          else
+            list_manpages(name)
+          end
         elsif args.interactive?
-          file = interactive_manpage(T.must(args.named.first))
+          file = if args.all?
+            interactive_all_formula_manpages(name)
+          else
+            interactive_manpage(name)
+          end
           render(file)
         else
           section, formula_name, page = parse_default_args
@@ -193,6 +202,28 @@ module Homebrew
 
         choices.each_with_index do |(label, file), i|
           puts "  #{i + 1}) #{label}: #{file}"
+        end
+
+        $stdout.write "Choose [1-#{choices.length}]: "
+        $stdout.flush
+        input = $stdin.gets
+        odie "No selection made." if input.nil?
+
+        index = input.strip.to_i - 1
+        odie "Invalid selection." if index.negative? || index >= choices.length
+
+        T.must(choices[index]).last
+      end
+
+      # Interactively selects from all man pages an installed formula provides.
+      sig { params(name: String).returns(Pathname) }
+      def interactive_all_formula_manpages(name)
+        choices = all_formula_manpages(name)
+        odie "No man pages found for formula: #{name}" if choices.empty?
+
+        ohai "#{name} provides:"
+        choices.each_with_index do |(page_name, file), i|
+          puts "  #{i + 1}) #{page_name}: #{file}"
         end
 
         $stdout.write "Choose [1-#{choices.length}]: "

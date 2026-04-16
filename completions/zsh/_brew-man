@@ -2,12 +2,12 @@
 # brew man
 _brew_man() {
   _arguments \
-    '(--html --list --interactive)--all[List every man page provided by an installed formula]' \
+    '(--html)--all[List every man page provided by the named formula. Requires `--list` or `--interactive`]' \
     '--debug[Display any debugging information]' \
     '--help[Show this message]' \
     '(--list --interactive --all)--html[Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`)]' \
-    '(--html --list --all)--interactive[Interactively resolve ambiguity when multiple copies of a man page are found]' \
-    '(--html --interactive --all)--list[List all locations where the named man page is found]' \
+    '(--html --list)--interactive[Interactively resolve ambiguity when multiple copies of a man page are found]' \
+    '(--html --interactive)--list[List all locations where the named man page is found]' \
     '--quiet[Make some output more quiet]' \
     '--verbose[Make some output more verbose]' \
     - installed_formula \

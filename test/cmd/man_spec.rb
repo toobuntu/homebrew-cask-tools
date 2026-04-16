@@ -289,6 +289,25 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
+  describe "#interactive_all_formula_manpages" do
+    it "prompts and returns the selected formula page" do
+      manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
+        ["openssl.1", manfile],
+      ])
+      allow($stdin).to receive(:gets).and_return("1\n")
+
+      expect(cmd.send(:interactive_all_formula_manpages, "libressl")).to eq(manfile)
+    end
+
+    it "dies when formula has no man pages" do
+      allow(cmd).to receive(:all_formula_manpages).with("empty-formula").and_return([])
+
+      expect { cmd.send(:interactive_all_formula_manpages, "empty-formula") }
+        .to raise_error(SystemExit)
+    end
+  end
+
   describe "#collect_manpages" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
 

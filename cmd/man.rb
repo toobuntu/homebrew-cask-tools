@@ -18,7 +18,8 @@ module Homebrew
 
       cmd_args do
         usage_banner "`man` [<options>] [<section>] <formula> [<manpage>]\n            " \
-                     "`man` (`--list`|`--interactive`) [<options>] <manpage>"
+                     "`man` (`--list`|`--interactive`) [<options>] <manpage>\n            " \
+                     "`man` (`--list`|`--interactive`) `--all` [<options>] <formula>"
         description <<~EOS
           Display a man page bundled with an installed formula.
 
@@ -104,7 +105,7 @@ module Homebrew
         named = args.named.to_a
         section = T.let(nil, T.nilable(String))
 
-        if named.length >= 2 && T.must(named.first).match?(/\A\d+[a-z]*\z/i)
+        if named.length >= 2 && T.must(named.first).match?(/\A\d+\z/)
           section = T.must(named.shift)
           odebug "Detected section argument: #{section}"
         end

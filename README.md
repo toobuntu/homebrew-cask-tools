@@ -124,7 +124,10 @@ match. `brew man` resolves man pages **by formula** and makes ambiguity explicit
 
 ```
 brew man [<section>] <formula> [<manpage>]
-brew man (--list|--interactive) [--all] <manpage>
+brew man --list <manpage>
+brew man --interactive <manpage>
+brew man --list --all <formula>
+brew man --interactive --all <formula>
 ```
 
 | Use case | Syntax |

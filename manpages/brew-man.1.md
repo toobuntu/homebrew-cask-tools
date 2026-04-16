@@ -7,6 +7,8 @@ brew-man(1) -- Display a man page bundled with an installed formula
 
 `brew` `man` (`--list`|`--interactive`) [<options>] <manpage>
 
+`brew` `man` (`--list`|`--interactive`) `--all` [<options>] <formula>
+
 ## DESCRIPTION
 
 Display a man page bundled with an installed formula.

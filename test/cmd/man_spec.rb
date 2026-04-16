@@ -70,6 +70,14 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(page).to eq("openssl")
     end
 
+    it "does not treat a digit-prefixed formula name as a section" do
+      formula_cmd = described_class.new(["7zip", "some-page"])
+      section, formula_name, page = formula_cmd.send(:parse_default_args)
+      expect(section).to be_nil
+      expect(formula_name).to eq("7zip")
+      expect(page).to eq("some-page")
+    end
+
     it "defaults page to formula name when only formula is given" do
       formula_only_cmd = described_class.new(["curl"])
       section, formula_name, page = formula_only_cmd.send(:parse_default_args)

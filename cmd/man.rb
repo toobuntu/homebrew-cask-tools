@@ -18,8 +18,8 @@ module Homebrew
 
       cmd_args do
         usage_banner "`man` [<options>] [<section>] <formula> [<manpage>]\n            " \
-                     "`man` (`--list`|`--interactive`) [<options>] <manpage>\n            " \
-                     "`man` (`--list`|`--interactive`) `--all` [<options>] <formula>"
+                     "`man` `--find` [`--interactive`] [<options>] <manpage>\n            " \
+                     "`man` `--list` [`--interactive`] [<options>] <formula>"
         description <<~EOS
           Display a man page bundled with an installed formula.
 
@@ -38,57 +38,58 @@ module Homebrew
           With `--html`, renders the man page via `mandoc -T html` and opens it
           in a browser (respecting `HOMEBREW_BROWSER` or `BROWSER`).
 
-          Use `--list` or `--interactive` to search across system and other
-          Homebrew formulae. Shows all locations where a man page name is
+          Use `--find` to search across all installed formulae and the system
+          for a man page by name. Shows all locations where a man page name is
           found. Formulae that provide a binary matching the page name are
-          also included. Add `--all` to list every man page an installed
-          formula provides instead of searching by page name.
+          also included.
 
-          With `--interactive`, presents a numbered list with origin labels
-          to interactively select which copy of a man page to view.
+          Use `--list` to list every man page an installed formula provides.
+
+          Add `--interactive` to either `--find` or `--list` to present a
+          numbered list for selecting which page to view.
         EOS
 
         switch "--html", "-H",
                description: "Render the man page as HTML and open it in a browser " \
                             "(respects `HOMEBREW_BROWSER` or `BROWSER`)."
+        switch "--find", "-f",
+               description: "Find all installed formulae that provide the named man page."
         switch "--list", "-l",
-               description: "List all locations where the named man page is found."
+               description: "List every man page provided by the named formula."
         switch "--interactive", "-i",
-               description: "Interactively resolve ambiguity when multiple copies " \
-                            "of a man page are found."
-        switch "--all", "-a",
-               description: "List every man page provided by the named formula. " \
-                            "Requires `--list` or `--interactive`."
+               description: "Present a numbered list for interactive selection. " \
+                            "Requires `--find` or `--list`."
 
+        conflicts "--html", "--find"
         conflicts "--html", "--list"
         conflicts "--html", "--interactive"
-        conflicts "--html", "--all"
-        conflicts "--list", "--interactive"
+        conflicts "--find", "--list"
 
         named_args :installed_formula, min: 1
       end
 
       sig { override.void }
       def run
-        if args.all? && !args.list? && !args.interactive?
-          raise UsageError, "`--all` requires `--list` or `--interactive`."
+        if args.interactive? && !args.find? && !args.list?
+          raise UsageError, "`--interactive` requires `--find` or `--list`."
         end
 
         name = T.must(args.named.first)
 
-        if args.list?
-          if args.all?
-            list_all_formula_manpages(name)
+        if args.find?
+          if args.interactive?
+            file = interactive_manpage(name)
+            render(file)
           else
             list_manpages(name)
           end
-        elsif args.interactive?
-          file = if args.all?
-            interactive_all_formula_manpages(name)
+        elsif args.list?
+          if args.interactive?
+            file = interactive_all_formula_manpages(name)
+            render(file)
           else
-            interactive_manpage(name)
+            list_all_formula_manpages(name)
           end
-          render(file)
         else
           section, formula_name, page = parse_default_args
           file = find_formula_manpage(formula_name, page, section:)

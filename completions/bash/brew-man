@@ -4,8 +4,8 @@ _brew_man() {
   case "${cur}" in
     -*)
       __brewcomp "
-      --all
       --debug
+      --find
       --help
       --html
       --interactive

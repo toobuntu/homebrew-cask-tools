@@ -10,13 +10,14 @@ This file provides technical notes for AI agents and contributors working in thi
 
 ## Reasoning style
 
-Always operate with maximum reasoning effort and deep multi-step analysis:
+Always operate with maximum reasoning effort and deep multi-step analysis.
+Use extended thinking when available. Prefer thoroughness over speed.
 
 - Decompose problems step by step; list assumptions before proceeding.
 - Explore multiple approaches and evaluate tradeoffs before selecting a solution.
 - Consider edge cases, failure modes, and macOS compatibility implications.
 - Validate conclusions before producing final output — avoid first-pass or heuristic answers.
-- Prefer thoroughness over speed.
+- Be exhaustive over concise.
 
 ## Repository overview
 

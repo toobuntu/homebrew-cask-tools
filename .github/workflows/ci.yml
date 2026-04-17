@@ -107,3 +107,45 @@ jobs:
           rm -f "${brew_lib}/test/cmd/man_spec.rb"
           rm -f "${brew_lib}/cmd/generate-tap-man-completions.rb"
           rm -f "${brew_lib}/test/cmd/generate-tap-man-completions_spec.rb"
+
+  completions:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: macos-latest
+    steps:
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - name: Cache Homebrew Bundler RubyGems
+        id: cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ runner.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ runner.os }}-rubygems-
+
+      - name: Install Homebrew Bundler RubyGems
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install-bundler-gems
+
+      - name: Link generate-tap-man-completions into Homebrew for brew run
+        run: |
+          brew_lib="$(brew --repo)/Library/Homebrew"
+          mkdir -p "${brew_lib}/cmd"
+          ln -f dev-cmd/generate-tap-man-completions.rb "${brew_lib}/cmd/generate-tap-man-completions.rb"
+
+      - name: Check completions and man pages are up to date
+        run: brew generate-tap-man-completions --no-exit-code
+
+      - name: Fail if completions or man page sources are out of date
+        # -I '\.TH ' ignores date-only changes in compiled roff headers
+        # (.TH "CMD" "1" "Month Year" "Homebrew") that occur when the
+        # month rolls over. These are cosmetic and not a source change.
+        run: git diff --exit-code -I '\.TH ' completions/ manpages/
+
+      - name: Unlink generate-tap-man-completions from Homebrew
+        if: always()
+        run: rm -f "$(brew --repo)/Library/Homebrew/cmd/generate-tap-man-completions.rb"

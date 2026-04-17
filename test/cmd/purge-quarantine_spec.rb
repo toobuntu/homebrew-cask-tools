@@ -225,6 +225,109 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
     end
   end
 
+  describe "#candidate_bundle_names" do
+    let(:tmpdir)   { Pathname(Dir.mktmpdir) }
+    let(:cask_dir) { tmpdir/"Caskroom"/"my-cask" }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "extracts app names from metadata JSON" do
+      metadata_dir = cask_dir/".metadata"/"1.0"/"Casks"
+      metadata_dir.mkpath
+      (metadata_dir/"my-cask.json").write(
+        { "artifacts" => [{ "app" => ["My App.app"] }] }.to_json,
+      )
+
+      result = cmd.send(:candidate_bundle_names, "my-cask", cask_dir)
+      expect(result).to include("My App.app")
+    end
+
+    it "extracts delete paths with bundle extensions" do
+      metadata_dir = cask_dir/".metadata"/"1.0"/"Casks"
+      metadata_dir.mkpath
+      (metadata_dir/"my-cask.json").write(
+        { "artifacts" => [{ "uninstall" => [{ "delete" => ["/Applications/My App.app"] }] }] }.to_json,
+      )
+
+      result = cmd.send(:candidate_bundle_names, "my-cask", cask_dir)
+      expect(result).to include("My App.app")
+    end
+
+    it "returns empty array when metadata directory is absent" do
+      cask_dir.mkpath
+      expect(cmd.send(:candidate_bundle_names, "my-cask", cask_dir)).to eq([])
+    end
+
+    it "returns empty array when no JSON files exist" do
+      (cask_dir/".metadata").mkpath
+      expect(cmd.send(:candidate_bundle_names, "my-cask", cask_dir)).to eq([])
+    end
+
+    it "filters delete paths that are not bundle extensions" do
+      metadata_dir = cask_dir/".metadata"/"1.0"/"Casks"
+      metadata_dir.mkpath
+      (metadata_dir/"my-cask.json").write(
+        { "artifacts" => [{ "uninstall" => [{ "delete" => ["/usr/local/bin/tool"] }] }] }.to_json,
+      )
+
+      expect(cmd.send(:candidate_bundle_names, "my-cask", cask_dir)).to eq([])
+    end
+
+    it "extracts bundle names from pkgutil when available" do
+      metadata_dir = cask_dir/".metadata"/"1.0"/"Casks"
+      metadata_dir.mkpath
+      (metadata_dir/"my-cask.json").write(
+        { "artifacts" => [{ "uninstall" => [{ "pkgutil" => ["com.example.*"] }] }] }.to_json,
+      )
+
+      pkgs_result = instance_double(SystemCommand::Result,
+                                    exit_status: 0, stdout: "com.example.pkg\n", stderr: "")
+      files_result = instance_double(SystemCommand::Result,
+                                     exit_status: 0,
+                                     stdout:      "My App.app/Contents/MacOS/app\n",
+                                     stderr:      "")
+      allow(cmd).to receive(:system_command)
+        .with("/usr/sbin/pkgutil", hash_including(args: ["--pkgs=com.example.*"]))
+        .and_return(pkgs_result)
+      allow(cmd).to receive(:system_command)
+        .with("/usr/sbin/pkgutil", hash_including(args: ["--files", "com.example.pkg"]))
+        .and_return(files_result)
+
+      result = cmd.send(:candidate_bundle_names, "my-cask", cask_dir)
+      expect(result).to include("My App.app")
+    end
+
+    it "handles pkgutil failures gracefully" do
+      metadata_dir = cask_dir/".metadata"/"1.0"/"Casks"
+      metadata_dir.mkpath
+      (metadata_dir/"my-cask.json").write(
+        { "artifacts" => [{ "uninstall" => [{ "pkgutil" => ["com.example.*"] }] }] }.to_json,
+      )
+
+      pkgs_result = instance_double(SystemCommand::Result,
+                                    exit_status: 1, stdout: "", stderr: "error")
+      allow(cmd).to receive(:system_command)
+        .with("/usr/sbin/pkgutil", hash_including(args: ["--pkgs=com.example.*"]))
+        .and_return(pkgs_result)
+
+      expect(cmd.send(:candidate_bundle_names, "my-cask", cask_dir)).to eq([])
+    end
+
+    it "deduplicates results from multiple sources" do
+      metadata_dir = cask_dir/".metadata"/"1.0"/"Casks"
+      metadata_dir.mkpath
+      (metadata_dir/"my-cask.json").write(
+        { "artifacts" => [
+          { "app" => ["My App.app"] },
+          { "uninstall" => [{ "delete" => ["/Applications/My App.app"] }] },
+        ] }.to_json,
+      )
+
+      result = cmd.send(:candidate_bundle_names, "my-cask", cask_dir)
+      expect(result.count("My App.app")).to eq(1)
+    end
+  end
+
   describe "#bundles_from_mdfind" do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
     let(:app)    { tmpdir/"My App.app" }

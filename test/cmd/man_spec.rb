@@ -319,6 +319,69 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(cmd.send(:interactive_all_formula_manpages, "libressl")).to eq(manfile)
     end
 
+    it "returns the last item when the upper boundary is selected" do
+      page1 = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      page2 = Pathname("/opt/homebrew/opt/libressl/share/man/man1/c_rehash.1")
+      opt_prefix = Pathname("/opt/homebrew/opt/libressl")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(true)
+      allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
+      allow(cmd).to receive(:all_formula_manpages).with(mock_formula).and_return([
+        ["openssl.1", page1],
+        ["c_rehash.1", page2],
+      ])
+      allow($stdin).to receive(:gets).and_return("2\n")
+
+      expect(cmd.send(:interactive_all_formula_manpages, "libressl")).to eq(page2)
+    end
+
+    it "dies on empty input" do
+      manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      opt_prefix = Pathname("/opt/homebrew/opt/libressl")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(true)
+      allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
+      allow(cmd).to receive(:all_formula_manpages).with(mock_formula).and_return([
+        ["openssl.1", manfile],
+      ])
+      allow($stdin).to receive(:gets).and_return("\n")
+
+      expect { cmd.send(:interactive_all_formula_manpages, "libressl") }
+        .to raise_error(SystemExit)
+    end
+
+    it "dies when stdin returns nil (EOF)" do
+      manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      opt_prefix = Pathname("/opt/homebrew/opt/libressl")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(true)
+      allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
+      allow(cmd).to receive(:all_formula_manpages).with(mock_formula).and_return([
+        ["openssl.1", manfile],
+      ])
+      allow($stdin).to receive(:gets).and_return(nil)
+
+      expect { cmd.send(:interactive_all_formula_manpages, "libressl") }
+        .to raise_error(SystemExit)
+    end
+
+    it "dies when formula is not installed" do
+      opt_prefix = Pathname("/opt/homebrew/opt/libressl")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(false)
+      allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
+
+      expect { cmd.send(:interactive_all_formula_manpages, "libressl") }
+        .to raise_error(SystemExit)
+    end
+
+    it "dies when formula is unavailable" do
+      allow(Formula).to receive(:[]).with("nonexistent").and_raise(FormulaUnavailableError, "nonexistent")
+
+      expect { cmd.send(:interactive_all_formula_manpages, "nonexistent") }
+        .to raise_error(SystemExit)
+    end
+
     it "dies when formula has no man pages" do
       opt_prefix = Pathname("/opt/homebrew/opt/empty-formula")
       mock_formula = instance_double(Formula, opt_prefix:)
@@ -526,6 +589,38 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(cmd.send(:interactive_manpage, "testcmd")).to eq(sys_manfile)
     end
 
+    it "returns the last item when the upper boundary is selected" do
+      sys_manfile = Pathname("/usr/share/man/man1/testcmd.1")
+      formula_manfile = Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", sys_manfile],
+        ["pkg", formula_manfile],
+      ])
+      allow($stdin).to receive(:gets).and_return("2\n")
+
+      expect(cmd.send(:interactive_manpage, "testcmd")).to eq(formula_manfile)
+    end
+
+    it "dies on zero selection" do
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+      allow($stdin).to receive(:gets).and_return("0\n")
+
+      expect { cmd.send(:interactive_manpage, "testcmd") }
+        .to raise_error(SystemExit)
+    end
+
+    it "dies on empty input" do
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+      allow($stdin).to receive(:gets).and_return("\n")
+
+      expect { cmd.send(:interactive_manpage, "testcmd") }
+        .to raise_error(SystemExit)
+    end
+
     it "dies on invalid selection" do
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
@@ -606,6 +701,94 @@ RSpec.describe Homebrew::Cmd::Man do
     it "dies when man is not found" do
       allow(cmd).to receive(:which).with("man").and_return(nil)
       expect { cmd.send(:require_man_cmd) }.to raise_error(SystemExit)
+    end
+  end
+
+  describe "#glob_manpage" do
+    let(:tmpdir) { Pathname(Dir.mktmpdir) }
+
+    after { FileUtils.rm_rf(tmpdir) }
+
+    it "finds a numbered man page" do
+      man1_dir = tmpdir/"man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1"
+      FileUtils.touch(manfile)
+
+      expect(cmd.send(:glob_manpage, tmpdir, "openssl")).to eq(manfile)
+    end
+
+    it "finds a compressed man page" do
+      man1_dir = tmpdir/"man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1.gz"
+      FileUtils.touch(manfile)
+
+      expect(cmd.send(:glob_manpage, tmpdir, "openssl")).to eq(manfile)
+    end
+
+    it "finds a subsection man page" do
+      man1_dir = tmpdir/"man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1ssl"
+      FileUtils.touch(manfile)
+
+      expect(cmd.send(:glob_manpage, tmpdir, "openssl")).to eq(manfile)
+    end
+
+    it "finds an exact match page" do
+      man1_dir = tmpdir/"man1"
+      man1_dir.mkpath
+      manfile = man1_dir/"openssl.1ssl"
+      FileUtils.touch(manfile)
+
+      expect(cmd.send(:glob_manpage, tmpdir, "openssl.1ssl")).to eq(manfile)
+    end
+
+    it "scopes search to a specific section" do
+      (tmpdir/"man1").mkpath
+      (tmpdir/"man3").mkpath
+      FileUtils.touch(tmpdir/"man1/openssl.1")
+      man3_file = tmpdir/"man3/openssl.3"
+      FileUtils.touch(man3_file)
+
+      expect(cmd.send(:glob_manpage, tmpdir, "openssl", "man3")).to eq(man3_file)
+    end
+
+    it "returns nil when no match exists" do
+      (tmpdir/"man1").mkpath
+
+      expect(cmd.send(:glob_manpage, tmpdir, "nonexistent")).to be_nil
+    end
+  end
+
+  describe "#escape_glob" do
+    it "escapes asterisks" do
+      expect(cmd.send(:escape_glob, "foo*bar")).to eq("foo\\*bar")
+    end
+
+    it "escapes question marks" do
+      expect(cmd.send(:escape_glob, "foo?bar")).to eq("foo\\?bar")
+    end
+
+    it "escapes square brackets" do
+      expect(cmd.send(:escape_glob, "foo[0]bar")).to eq("foo\\[0\\]bar")
+    end
+
+    it "escapes curly braces" do
+      expect(cmd.send(:escape_glob, "foo{a,b}bar")).to eq("foo\\{a,b\\}bar")
+    end
+
+    it "escapes backslashes" do
+      expect(cmd.send(:escape_glob, 'foo\\bar')).to eq('foo\\\\bar')
+    end
+
+    it "escapes multiple metacharacters in combination" do
+      expect(cmd.send(:escape_glob, "a*b?c[d]{e}\\f")).to eq("a\\*b\\?c\\[d\\]\\{e\\}\\\\f")
+    end
+
+    it "passes through strings without metacharacters" do
+      expect(cmd.send(:escape_glob, "openssl.1ssl")).to eq("openssl.1ssl")
     end
   end
 

@@ -317,6 +317,22 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
     end
   end
 
+  describe "bundler gem install failure" do
+    it "dies with an informative message when install_bundler_gems! raises" do
+      failing_cmd = described_class.new(["--no-exit-code"])
+      mock_tap = instance_double(Tap, name: "test/tap", path: Pathname(Dir.mktmpdir),
+                                      remote_repository: nil)
+      allow(Homebrew::EnvConfig).to receive(:developer?).and_return(true)
+      allow(failing_cmd).to receive(:resolve_tap).and_return(mock_tap)
+      allow(Homebrew).to receive(:install_bundler_gems!)
+        .and_raise(RuntimeError.new("network unreachable"))
+
+      expect { failing_cmd.run }.to raise_error(SystemExit)
+    ensure
+      FileUtils.rm_rf(mock_tap.path)
+    end
+  end
+
   describe "#run", :integration_test do
     let(:tmpdir) { Pathname(Dir.mktmpdir) }
     let(:cmd_no_exit) { described_class.new(["--no-exit-code"]) }

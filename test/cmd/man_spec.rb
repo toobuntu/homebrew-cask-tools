@@ -281,6 +281,10 @@ RSpec.describe Homebrew::Cmd::Man do
   describe "#list_all_formula_manpages" do
     it "lists all man pages a formula provides" do
       man1_file = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      opt_prefix = Pathname("/opt/homebrew/opt/libressl")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(true)
+      allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
       allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
         ["openssl.1", man1_file],
       ])
@@ -300,6 +304,10 @@ RSpec.describe Homebrew::Cmd::Man do
   describe "#interactive_all_formula_manpages" do
     it "prompts and returns the selected formula page" do
       manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
+      opt_prefix = Pathname("/opt/homebrew/opt/libressl")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(true)
+      allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
       allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
         ["openssl.1", manfile],
       ])
@@ -321,7 +329,7 @@ RSpec.describe Homebrew::Cmd::Man do
 
     after { FileUtils.rm_rf(tmpdir) }
 
-    it "returns formula and system matches as label/path pairs" do
+    it "returns formula and system matches as provider/path pairs" do
       sys_man = tmpdir/"sys/man1"
       sys_man.mkpath
       manfile_sys = sys_man/"testcmd.1"
@@ -392,7 +400,7 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(result.map(&:first)).to contain_exactly("libressl", "openssl@3")
     end
 
-    it "labels Homebrew-linked pages by formula when man -wa finds the link" do
+    it "attributes Homebrew-linked pages to their provider formula" do
       formula_man = tmpdir/"opt/openssl@3/share/man/man1"
       formula_man.mkpath
       formula_file = formula_man/"openssl.1ssl"
@@ -409,9 +417,9 @@ RSpec.describe Homebrew::Cmd::Man do
         .and_return("#{brew_man}/openssl.1ssl\n")
 
       result = cmd.send(:collect_manpages, "openssl")
-      labels = result.map(&:first)
-      expect(labels).to include("openssl@3")
-      expect(labels).not_to include("system")
+      providers = result.map(&:first)
+      expect(providers).to include("openssl@3")
+      expect(providers).not_to include("system")
     end
 
     it "includes compressed system man pages found by man -wa" do

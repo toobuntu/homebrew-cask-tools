@@ -181,14 +181,17 @@ module Homebrew
         results = collect_manpages(name)
 
         ohai "#{name} found in:"
-        results.each do |label, file|
-          puts "  #{label}: #{file}"
+        results.each do |provider, file|
+          puts "  #{provider}: #{file}"
         end
       end
 
       # Lists every man page an installed formula provides.
       sig { params(name: String).void }
       def list_all_formula_manpages(name)
+        formula = Formula[name]
+        odie "Formula not installed: #{name}" unless formula.opt_prefix.exist?
+
         results = all_formula_manpages(name)
         odie "No man pages found for formula: #{name}" if results.empty?
 
@@ -196,16 +199,18 @@ module Homebrew
         results.each do |page_name, file|
           puts "  #{page_name}: #{file}"
         end
+      rescue FormulaUnavailableError
+        odie "No available formula with the name \"#{name}\"."
       end
 
-      # Interactively selects a man page from a numbered list with origin labels.
+      # Interactively selects a man page from a numbered list with provider names.
       sig { params(name: String).returns(Pathname) }
       def interactive_manpage(name)
         choices = collect_manpages(name)
         odie "No man pages found for: #{name}" if choices.empty?
 
-        choices.each_with_index do |(label, file), i|
-          puts "  #{i + 1}) #{label}: #{file}"
+        choices.each_with_index do |(provider, file), i|
+          puts "  #{i + 1}) #{provider}: #{file}"
         end
 
         $stdout.write "Choose [1-#{choices.length}]: "
@@ -222,6 +227,9 @@ module Homebrew
       # Interactively selects from all man pages an installed formula provides.
       sig { params(name: String).returns(Pathname) }
       def interactive_all_formula_manpages(name)
+        formula = Formula[name]
+        odie "Formula not installed: #{name}" unless formula.opt_prefix.exist?
+
         choices = all_formula_manpages(name)
         odie "No man pages found for formula: #{name}" if choices.empty?
 
@@ -239,12 +247,14 @@ module Homebrew
         odie "Invalid selection." if index.negative? || index >= choices.length
 
         T.must(choices[index]).last
+      rescue FormulaUnavailableError
+        odie "No available formula with the name \"#{name}\"."
       end
 
-      # Returns all locations where a man page is found, as [label, Pathname] pairs.
+      # Returns all locations where a man page is found, as [provider, Pathname] pairs.
       # Processes formula kegs first (via filesystem glob for speed) so that
       # realpath deduplication attributes Homebrew-linked pages to their
-      # providing formula rather than labeling them "system".
+      # providing formula rather than labelling them "system".
       sig { params(name: String).returns(T::Array[[String, Pathname]]) }
       def collect_manpages(name)
         man_cmd = require_man_cmd
@@ -350,7 +360,7 @@ module Homebrew
         end
       end
 
-      # Returns executable names from a formula's bin and sbin directories.
+      # Returns entry names from a formula's bin and sbin directories.
       sig { params(prefix: Pathname).returns(T::Array[String]) }
       def formula_binaries(prefix)
         result = T.let([], T::Array[String])

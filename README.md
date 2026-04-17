@@ -139,7 +139,7 @@ brew man --list [--interactive] <formula>
 | List all pages a formula provides | `brew man --list libressl` |
 | Pick from all formula pages | `brew man --list --interactive libressl` |
 
-> Results from `--find` and `--list` are shown as `provider: page` pairs.
+> `--find` results are shown as `provider: /path/to/manfile`; `--list` results are shown as `page: /path/to/manfile`.
 
 `--interactive` replaces printed results with a numbered prompt; select an entry to open its page.
 

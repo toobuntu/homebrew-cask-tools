@@ -593,4 +593,18 @@ RSpec.describe Homebrew::Cmd::Man do
       expect { cmd.send(:require_man_cmd) }.to raise_error(SystemExit)
     end
   end
+
+  describe "#run --html validation" do
+    it "raises UsageError when --html is used with --find without --interactive" do
+      html_find_cmd = described_class.new(["--html", "--find", "openssl"])
+
+      expect { html_find_cmd.run }.to raise_error(UsageError, /--html.*requires.*--interactive/)
+    end
+
+    it "raises UsageError when --html is used with --list without --interactive" do
+      html_list_cmd = described_class.new(["--html", "--list", "libressl"])
+
+      expect { html_list_cmd.run }.to raise_error(UsageError, /--html.*requires.*--interactive/)
+    end
+  end
 end

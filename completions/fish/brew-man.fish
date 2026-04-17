@@ -3,7 +3,7 @@ __fish_brew_complete_cmd 'man' 'Display a man page bundled with an installed for
 __fish_brew_complete_arg 'man' -l debug -d 'Display any debugging information'
 __fish_brew_complete_arg 'man' -l find -d 'Find all installed formulae that provide the named man page'
 __fish_brew_complete_arg 'man' -l help -d 'Show this message'
-__fish_brew_complete_arg 'man' -l html -d 'Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`)'
+__fish_brew_complete_arg 'man' -l html -d 'Open the page as HTML in a browser (requires `--interactive` when used with `--find` or `--list`; respects `HOMEBREW_BROWSER` or `BROWSER`)'
 __fish_brew_complete_arg 'man' -l interactive -d 'Present a numbered list for interactive selection. Requires `--find` or `--list`'
 __fish_brew_complete_arg 'man' -l list -d 'List every man page provided by the named formula'
 __fish_brew_complete_arg 'man' -l quiet -d 'Make some output more quiet'

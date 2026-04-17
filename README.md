@@ -133,13 +133,15 @@ brew man --list [--interactive] <formula>
 | View a formula's default page | `brew man openssl@3` |
 | View a specific page within a formula | `brew man openssl@3 openssl.1ssl` |
 | Restrict to a man section | `brew man 1 libressl openssl` |
+| Render as HTML in a browser | `brew man --html curl` |
 | Find all providers of a page | `brew man --find openssl` |
 | Pick from providers interactively | `brew man --find --interactive openssl` |
 | List all pages a formula provides | `brew man --list libressl` |
 | Pick from all formula pages | `brew man --list --interactive libressl` |
-| Render as HTML in a browser | `brew man --html curl` |
 
-`--interactive` replaces printed results with a numbered prompt; select an entry to open it.
+> Results from `--find` and `--list` are shown as `provider: page` pairs.
+
+`--interactive` replaces printed results with a numbered prompt; select an entry to open its page.
 
 - `brew man --find --interactive openssl` — choose which provider's `openssl(1)` to view
 - `brew man --list --interactive libressl` — choose which of libressl's pages to open
@@ -156,7 +158,7 @@ fallback — for example, `brew man libressl` resolves to `openssl(1)` because
 | `[<section>]` | Optional man section number (e.g. `1`, `3`) before the formula name |
 | `<formula>` | The installed formula whose keg to search (default mode) |
 | `[<manpage>]` | Man page name to look up (defaults to `<formula>`) |
-| `--html`, `-H` | Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`) |
+| `--html`, `-H` | Open the page as HTML in a browser; requires `--interactive` when used with `--find` or `--list` (respects `HOMEBREW_BROWSER` or `BROWSER`) |
 | `--find`, `-f` | Find all installed formulae that provide the named man page |
 | `--list`, `-l` | List every man page provided by the named formula |
 | `--interactive`, `-i` | Replaces printed results with a numbered prompt; select an entry to open it (requires `--find` or `--list`) |

@@ -13,13 +13,13 @@ Display a man page bundled with an installed formula\.
 .P
 Homebrew kegs (especially keg\-only formulae) are not on the default \fBMANPATH\fP, so \fBman\fP does not reliably find their pages\. When multiple providers ship the same page name, \fBman\fP silently returns the first match\. This command resolves man pages \fBby formula\fP and makes ambiguity explicit\.
 .P
-By default, \fBbrew man <formula>\fP resolves man pages within the specified formula only\. The optional \fImanpage\fP argument defaults to the formula name; when the formula name has no man page, the formula\[u2019]s executables are tried as fallback (e\.g\. \fBbrew man libressl\fP finds \fBopenssl(1)\fP)\. An optional \fIsection\fP number (e\.g\. \fB1\fP, \fB3\fP) before the formula name restricts the search to that man section\. With \fB\-\-html\fP, renders the man page via \fBmandoc \-T html\fP and opens it in a browser (respecting \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
+By default, \fBbrew man <formula>\fP resolves man pages within the specified formula only\. The optional \fImanpage\fP argument defaults to the formula name; when the formula name has no man page, the formula\[u2019]s executables are tried as fallback (e\.g\. \fBbrew man libressl\fP finds \fBopenssl(1)\fP)\. An optional \fIsection\fP number (e\.g\. \fB1\fP, \fB3\fP) before the formula name restricts the search to that man section\. Add \fB\-\-html\fP to open the page as HTML in a browser via \fBmandoc \-T html\fP (respects \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\. With \fB\-\-interactive\fP, the selected page is opened as HTML instead of in the terminal pager\.
 .P
 Use \fB\-\-find\fP to search across all installed formulae and the system for a man page by name\. Shows all locations where a man page name is found\. Formulae that provide a binary matching the page name are also included\.
 .P
 Use \fB\-\-list\fP to list every man page an installed formula provides\.
 .P
-Add \fB\-\-interactive\fP to select from a numbered list and open the chosen page: with \fB\-\-find\fP, you pick a provider; with \fB\-\-list\fP, you pick a page\.
+Add \fB\-\-interactive\fP to select from a numbered list and open the selected page: with \fB\-\-find\fP, pick by provider; with \fB\-\-list\fP, pick by page\.
 .SH "OPTIONS"
 .TP
 \fB\-d\fP, \fB\-\-debug\fP
@@ -35,7 +35,7 @@ Make some output more verbose\.
 Show this message\.
 .TP
 \fB\-H\fP, \fB\-\-html\fP
-Render the man page as HTML and open it in a browser (respects \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
+Open the page as HTML in a browser (requires \fB\-\-interactive\fP when used with \fB\-\-find\fP or \fB\-\-list\fP; respects \fBHOMEBREW_BROWSER\fP or \fBBROWSER\fP)\.
 .TP
 \fB\-f\fP, \fB\-\-find\fP
 Find all installed formulae that provide the named man page\.

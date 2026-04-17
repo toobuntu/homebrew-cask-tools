@@ -25,8 +25,9 @@ the formula name; when the formula name has no man page, the
 formula's executables are tried as fallback (e.g. `brew man libressl`
 finds `openssl(1)`). An optional <section> number (e.g. `1`, `3`)
 before the formula name restricts the search to that man section.
-With `--html`, renders the man page via `mandoc -T html` and opens it
-in a browser (respecting `HOMEBREW_BROWSER` or `BROWSER`).
+Add `--html` to open the page as HTML in a browser via `mandoc -T html`
+(respects `HOMEBREW_BROWSER` or `BROWSER`). With `--interactive`, the
+selected page is opened as HTML instead of in the terminal pager.
 
 Use `--find` to search across all installed formulae and the system
 for a man page by name. Shows all locations where a man page name is
@@ -35,8 +36,8 @@ also included.
 
 Use `--list` to list every man page an installed formula provides.
 
-Add `--interactive` to select from a numbered list and open the chosen
-page: with `--find`, you pick a provider; with `--list`, you pick a page.
+Add `--interactive` to select from a numbered list and open the selected page:
+with `--find`, pick by provider; with `--list`, pick by page.
 
 ## OPTIONS
 
@@ -58,7 +59,7 @@ page: with `--find`, you pick a provider; with `--list`, you pick a page.
 
 `-H`, `--html`
 
-: Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`).
+: Open the page as HTML in a browser (requires `--interactive` when used with `--find` or `--list`; respects `HOMEBREW_BROWSER` or `BROWSER`).
 
 `-f`, `--find`
 

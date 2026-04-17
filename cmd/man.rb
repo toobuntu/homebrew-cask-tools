@@ -254,7 +254,7 @@ module Homebrew
       # Returns all locations where a man page is found, as [provider, Pathname] pairs.
       # Processes formula kegs first (via filesystem glob for speed) so that
       # realpath deduplication attributes Homebrew-linked pages to their
-      # providing formula rather than labelling them "system".
+      # providing formula rather than labeling them "system".
       sig { params(name: String).returns(T::Array[[String, Pathname]]) }
       def collect_manpages(name)
         man_cmd = require_man_cmd

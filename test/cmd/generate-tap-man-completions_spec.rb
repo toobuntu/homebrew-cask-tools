@@ -155,6 +155,30 @@ RSpec.describe Homebrew::Cmd::GenerateTapManCompletions do
       expect((bash_dir/"brew-keep").exist?).to be(true)
       expect((bash_dir/"brew-keep.license").exist?).to be(true)
     end
+
+    it "ignores unrelated files in completion directories" do
+      (bash_dir/"README.md").write("docs")
+      (bash_dir/"brew-keep").write("keep")
+      cmd.send(:remove_stale_files, ["keep"], bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+      expect((bash_dir/"README.md").exist?).to be(true)
+    end
+
+    it "handles empty current_names list by removing all brew- files" do
+      (bash_dir/"brew-alpha").write("stale")
+      (zsh_dir/"_brew-alpha").write("stale")
+      (fish_dir/"brew-alpha.fish").write("stale")
+      (man_dir/"brew-alpha.1").write("stale")
+      (man_dir/"brew-alpha.1.md").write("stale")
+
+      cmd.send(:remove_stale_files, [],
+               bash_dir:, zsh_dir:, fish_dir:, man_dir:)
+
+      expect((bash_dir/"brew-alpha").exist?).to be(false)
+      expect((zsh_dir/"_brew-alpha").exist?).to be(false)
+      expect((fish_dir/"brew-alpha.fish").exist?).to be(false)
+      expect((man_dir/"brew-alpha.1").exist?).to be(false)
+      expect((man_dir/"brew-alpha.1.md").exist?).to be(false)
+    end
   end
 
   describe "#bash_content" do

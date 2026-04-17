@@ -52,6 +52,17 @@ deterministic code injection:
    — after artifact stanzas (`app`, `pkg`, …) and `preflight`, but before
    `uninstall`, `zap`, and `caveats`.
 6. Warns if no `app` stanza is found (manual configuration may be needed).
+7. Warns (but still proceeds) if Prism reports parse errors but a cask block
+   was still found, since the AST may be unreliable.
+
+#### Why Prism instead of regex
+
+Regex-based code injection is fragile for Ruby DSLs: it cannot reliably handle
+nested blocks (`on_arm do … end`), existing `postflight` blocks (single-line
+vs. multi-line), or varying indentation. Prism provides a proper AST with
+precise source locations (`location.start_offset`, `location.end_offset`),
+making insertions and appends deterministic regardless of formatting. Prism is
+bundled with Ruby 3.3+ (which Homebrew requires), so it adds no dependencies.
 
 ## Tiered bundle discovery
 
@@ -71,6 +82,57 @@ order, stopping at the first non-empty result:
 Tiers 4–7 need **candidate bundle names** (from `candidate_bundle_names`) to
 target their search. This helper extracts names from `.metadata` JSON `app`
 stanzas, `uninstall.delete` paths, and `pkgutil` receipt file lists.
+
+### Tier rationale
+
+The tier order reflects two priorities: **reliability** (higher tiers are more
+deterministic) and **data freshness** (higher tiers use data that is closer to
+the current install state).
+
+- **Tiers 1–3** use local Homebrew data (Caskroom files, cask definitions,
+  `.metadata` JSON). These are fast (no subprocess) and reliable, but depend on
+  Homebrew's own bookkeeping being intact.
+- **Tier 4 (lsregister)** queries macOS Launch Services, which tracks all
+  registered applications regardless of how they were installed. The dump is
+  cached for 5 minutes because `lsregister -dump` takes ~20 seconds to run.
+- **Tiers 5–6 (pkgutil)** query the macOS package receipt database, which
+  persists after `.pkg` installation. Tier 5 uses registered receipts; tier 6
+  falls back to BOM (Bill of Materials) files in the Caskroom `.pkg` for cases
+  where the receipt has been removed.
+- **Tier 7 (mdfind)** is the last resort: Spotlight may have indexed the
+  bundle even when all other sources have been removed.
+
+### Performance characteristics
+
+| Tier | Typical latency | Notes |
+|------|----------------|-------|
+| 1–3 | < 10 ms | Local filesystem reads; fast |
+| 4 | ~20 s (first call), < 10 ms (cached) | `lsregister -dump` is slow; result is cached for 5 min at `HOMEBREW_CACHE/purge-quarantine/lsregister.dump` |
+| 5 | ~100 ms per pkg | One `pkgutil --pkgs` + `pkgutil --pkg-info` + `pkgutil --files` per matching receipt |
+| 6 | ~100 ms per pkg | One `pkgutil --bom` + `lsbom -s` per `.pkg` file in Caskroom |
+| 7 | ~500 ms per name | One `mdfind -name` per candidate bundle name |
+
+The `--verbose` flag shows which tier transitions occur. The `--debug` flag
+shows detailed per-tier diagnostics including candidate counts and paths
+searched.
+
+### macOS version compatibility
+
+The discovery tiers rely on macOS system utilities:
+
+- **`xattr`** (tiers 1–7, attribute removal): Available on all macOS versions.
+  The `-d` flag for attribute deletion has been supported since Mac OS X 10.4.
+- **`lsregister`** (tier 4): The Launch Services framework path has been stable
+  since Mac OS X 10.5. The `-dump` flag format is undocumented but has been
+  consistent across macOS 10.12–15.x.
+- **`pkgutil`** (tiers 5–6): Available since Mac OS X 10.5. The `--pkgs`,
+  `--pkg-info`, `--files`, and `--bom` flags are documented and stable.
+- **`lsbom`** (tier 6): Available since Mac OS X 10.4. The `-s` flag for
+  path-only output is documented and stable.
+- **`mdfind`** (tier 7): Available since Mac OS X 10.4. Spotlight must be
+  enabled and have indexed the install location.
+- **`mandoc`** (HTML rendering in `brew man`): Ships with macOS since Yosemite
+  (10.10). Not available on older macOS or Linux; the `--html` flag requires it.
 
 ### Common install directories
 

@@ -75,6 +75,19 @@ jobs:
             exit 1
           fi
 
+      - name: Validate completion file syntax
+        run: |
+          # Bash: check syntax with bash -n
+          for f in completions/bash/brew-*; do
+            [ -f "$f" ] && bash -n "$f"
+          done
+          # Fish: check syntax with fish --no-execute (if fish is available)
+          if command -v fish >/dev/null 2>&1; then
+            for f in completions/fish/*.fish; do
+              [ -f "$f" ] && fish --no-execute "$f"
+            done
+          fi
+
       - name: Unlink generate-tap-man-completions from Homebrew
         if: always()
         run: rm -f "$(brew --repo)/Library/Homebrew/cmd/generate-tap-man-completions.rb"

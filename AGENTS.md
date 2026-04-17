@@ -77,6 +77,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - When adding or tightening tests, verify them with a red/green cycle using the exact `--only=file:line` target for the example you changed.
 - Formula classes created in specs may be frozen; avoid stubbing class methods on them with RSpec mocks and prefer instance-level stubs or test setup that does not require class-method stubbing.
 - Keep comments minimal; prefer self-documenting code through strings, variable names, etc. over more comments.
+- Use **en_US** spelling in prose, comments, and documentation (e.g. "labeling" not "labelling", "color" not "colour").
 
 ## Repository Structure
 

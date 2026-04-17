@@ -92,7 +92,7 @@ RSpec.describe Homebrew::Cmd::Man do
 
     after { FileUtils.rm_rf(tmpdir) }
 
-    it "returns sorted executable names from bin and sbin" do
+    it "returns sorted entry names from bin and sbin" do
       (tmpdir/"bin").mkpath
       FileUtils.touch(tmpdir/"bin/openssl")
       FileUtils.touch(tmpdir/"bin/c_rehash")
@@ -132,16 +132,15 @@ RSpec.describe Homebrew::Cmd::Man do
       FileUtils.touch(man3/"SSL_CTX_new.3")
 
       formula = instance_double(Formula, opt_prefix: tmpdir)
-      allow(Formula).to receive(:[]).with("libressl").and_return(formula)
 
-      result = cmd.send(:all_formula_manpages, "libressl")
+      result = cmd.send(:all_formula_manpages, formula)
       page_names = result.map(&:first)
       expect(page_names).to contain_exactly("SSL_CTX_new.3", "c_rehash.1", "openssl.1")
     end
 
-    it "returns empty for unavailable formulae" do
-      allow(Formula).to receive(:[]).with("nonexistent").and_raise(FormulaUnavailableError, "nonexistent")
-      expect(cmd.send(:all_formula_manpages, "nonexistent")).to eq([])
+    it "returns empty when man directory does not exist" do
+      formula = instance_double(Formula, opt_prefix: tmpdir)
+      expect(cmd.send(:all_formula_manpages, formula)).to eq([])
     end
   end
 
@@ -285,7 +284,7 @@ RSpec.describe Homebrew::Cmd::Man do
       mock_formula = instance_double(Formula, opt_prefix:)
       allow(opt_prefix).to receive(:exist?).and_return(true)
       allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
-      allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
+      allow(cmd).to receive(:all_formula_manpages).with(mock_formula).and_return([
         ["openssl.1", man1_file],
       ])
 
@@ -294,7 +293,11 @@ RSpec.describe Homebrew::Cmd::Man do
     end
 
     it "dies when formula has no man pages" do
-      allow(cmd).to receive(:all_formula_manpages).with("empty-formula").and_return([])
+      opt_prefix = Pathname("/opt/homebrew/opt/empty-formula")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(true)
+      allow(Formula).to receive(:[]).with("empty-formula").and_return(mock_formula)
+      allow(cmd).to receive(:all_formula_manpages).with(mock_formula).and_return([])
 
       expect { cmd.send(:list_all_formula_manpages, "empty-formula") }
         .to raise_error(SystemExit)
@@ -308,7 +311,7 @@ RSpec.describe Homebrew::Cmd::Man do
       mock_formula = instance_double(Formula, opt_prefix:)
       allow(opt_prefix).to receive(:exist?).and_return(true)
       allow(Formula).to receive(:[]).with("libressl").and_return(mock_formula)
-      allow(cmd).to receive(:all_formula_manpages).with("libressl").and_return([
+      allow(cmd).to receive(:all_formula_manpages).with(mock_formula).and_return([
         ["openssl.1", manfile],
       ])
       allow($stdin).to receive(:gets).and_return("1\n")
@@ -317,7 +320,11 @@ RSpec.describe Homebrew::Cmd::Man do
     end
 
     it "dies when formula has no man pages" do
-      allow(cmd).to receive(:all_formula_manpages).with("empty-formula").and_return([])
+      opt_prefix = Pathname("/opt/homebrew/opt/empty-formula")
+      mock_formula = instance_double(Formula, opt_prefix:)
+      allow(opt_prefix).to receive(:exist?).and_return(true)
+      allow(Formula).to receive(:[]).with("empty-formula").and_return(mock_formula)
+      allow(cmd).to receive(:all_formula_manpages).with(mock_formula).and_return([])
 
       expect { cmd.send(:interactive_all_formula_manpages, "empty-formula") }
         .to raise_error(SystemExit)

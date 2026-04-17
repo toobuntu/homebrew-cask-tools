@@ -192,7 +192,7 @@ module Homebrew
         formula = Formula[name]
         odie "Formula not installed: #{name}" unless formula.opt_prefix.exist?
 
-        results = all_formula_manpages(name)
+        results = all_formula_manpages(formula)
         odie "No man pages found for formula: #{name}" if results.empty?
 
         ohai "#{name} provides:"
@@ -230,7 +230,7 @@ module Homebrew
         formula = Formula[name]
         odie "Formula not installed: #{name}" unless formula.opt_prefix.exist?
 
-        choices = all_formula_manpages(name)
+        choices = all_formula_manpages(formula)
         odie "No man pages found for formula: #{name}" if choices.empty?
 
         ohai "#{name} provides:"
@@ -375,20 +375,14 @@ module Homebrew
       end
 
       # Returns all man pages from a formula's keg as [page_name, path] pairs.
-      sig { params(name: String).returns(T::Array[[String, Pathname]]) }
-      def all_formula_manpages(name)
-        formula = Formula[name]
-        prefix = formula.opt_prefix
-        return [] unless prefix.exist?
-
-        manpath = prefix/"share/man"
+      sig { params(formula: Formula).returns(T::Array[[String, Pathname]]) }
+      def all_formula_manpages(formula)
+        manpath = formula.opt_prefix/"share/man"
         return [] unless manpath.directory?
 
         Pathname.glob(manpath/"man*/*").select(&:file?).sort.map do |f|
           [f.basename.to_s, f]
         end
-      rescue FormulaUnavailableError
-        []
       end
 
       # Returns pairs of [formula_name, man_dir] for all installed formulae

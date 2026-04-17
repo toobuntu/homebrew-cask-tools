@@ -8,6 +8,17 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
 This file provides technical notes for AI agents and contributors working in this repository.
 
+## Reasoning style
+
+Always operate with maximum reasoning effort and deep multi-step analysis.
+Use extended thinking when available. Prefer thoroughness over speed.
+
+- Decompose problems step by step; list assumptions before proceeding.
+- Explore multiple approaches and evaluate tradeoffs before selecting a solution.
+- Consider edge cases, failure modes, and macOS compatibility implications.
+- Validate conclusions before producing final output — avoid first-pass or heuristic answers.
+- Be exhaustive over concise.
+
 ## Repository overview
 
 This is a Homebrew external tap hosting `brew purge-quarantine`, `brew cask-extract`,

@@ -3,10 +3,11 @@
 _brew_man() {
   _arguments \
     '--debug[Display any debugging information]' \
+    '(--list)--find[Find all installed formulae that provide the named man page]' \
     '--help[Show this message]' \
-    '(--list --interactive)--html[Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`)]' \
-    '(--html --list)--interactive[Interactively resolve ambiguity when multiple copies of a man page are found]' \
-    '(--html --interactive)--list[List all locations where the named man page is found]' \
+    '--html[Open the page as HTML in a browser (requires `--interactive` when used with `--find` or `--list`; respects `HOMEBREW_BROWSER` or `BROWSER`)]' \
+    '--interactive[Present a numbered list for interactive selection. Requires `--find` or `--list`]' \
+    '(--find)--list[List every man page provided by the named formula]' \
     '--quiet[Make some output more quiet]' \
     '--verbose[Make some output more verbose]' \
     - installed_formula \

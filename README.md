@@ -6,7 +6,17 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
 # homebrew-cask-tools
 
-A Homebrew tap providing external commands for working with casks.
+A Homebrew tap providing external commands for working with casks and formulae.
+
+## Table of Contents
+
+- [Install](#install)
+- [Commands](#commands)
+  - [`brew cask-extract`](#brew-cask-extract)
+  - [`brew purge-quarantine`](#brew-purge-quarantine)
+  - [`brew man`](#brew-man)
+  - [`brew generate-tap-man-completions`](#brew-generate-tap-man-completions-developer-only) (developer only)
+- [License](#license)
 
 ## Install
 
@@ -14,20 +24,20 @@ A Homebrew tap providing external commands for working with casks.
 brew tap toobuntu/cask-tools
 ```
 
----
+## Commands
 
-## `brew cask-extract`
+### `brew cask-extract`
 
 Extract a cask from Homebrew's git history into a personal tap, optionally adding
 a postflight block to remove macOS's quarantine extended attribute.
 
-### Usage
+#### Usage
 
 ```sh
 brew cask-extract [--no-quarantine] [--version=<version>] [--unversioned] [--force] [--no-shard] <cask> <tap>
 ```
 
-### Arguments
+#### Arguments
 
 | Argument / Flag | Description |
 |---|---|
@@ -39,7 +49,7 @@ brew cask-extract [--no-quarantine] [--version=<version>] [--unversioned] [--for
 | `--force` | Overwrite the destination file if it already exists |
 | `--no-shard` | Write to a flat `Casks/` directory instead of a sharded one |
 
-### Examples
+#### Examples
 
 Extract the `iterm2` cask to your personal tap:
 
@@ -65,7 +75,7 @@ Extract a cask from a non-default tap (e.g. `homebrew/cask-versions`):
 brew cask-extract homebrew/cask-versions/firefox user/my-tap
 ```
 
-### How it works
+#### How it works
 
 1. **Delegates to `brew extract --cask`** when the installed Homebrew supports it,
    passing all relevant flags through.
@@ -77,85 +87,89 @@ brew cask-extract homebrew/cask-versions/firefox user/my-tap
      on each app bundle.
    - Prints a security warning reminding you to verify the software.
 
-### Security notice
+#### Security notice
 
 Using `--no-quarantine` bypasses macOS Gatekeeper for the installed app.
 Only use this flag with software you trust.
 
 ---
 
-## `brew purge-quarantine`
+### `brew purge-quarantine`
 
 Disables macOS's Gatekeeper for the named casks by removing the
 `com.apple.quarantine` and `com.apple.provenance` extended attributes from
 their installed `.app` and plugin bundles (for example: `.component`, `.colorpicker`, `.saver`, `.vst3`).
 
-### Usage
+#### Usage
 
 ```sh
 brew purge-quarantine <cask> [<cask> ...]
 ```
 
-### Security notice
+#### Security notice
 
 Removing quarantine bypasses macOS's Gatekeeper for the affected apps.
 Please use this command only with software you trust.
 
 ---
 
-## `brew man`
+### `brew man`
 
-Display a man page bundled with an installed formula.
+Homebrew kegs (especially keg-only formulae like `libressl`) are
+not on the default `MANPATH`, so `man` does not reliably find their pages. When
+multiple providers ship the same page name, `man` silently returns the first
+match. `brew man` resolves man pages **by formula** and makes ambiguity explicit.
 
-Homebrew kegs (especially keg-only formulae) are not on the default `MANPATH`,
-so `man` does not reliably find their pages. When multiple providers ship the
-same page name, `man` silently returns the first match. This command resolves
-man pages **by formula** and makes ambiguity explicit.
-
-### Usage
+#### Usage
 
 ```
-brew man [--html] <formula> [<manpage>]
-brew man --list <manpage>
-brew man --interactive <manpage>
+brew man [<section>] <formula> [<manpage>]
+brew man --find [--interactive] <manpage>
+brew man --list [--interactive] <formula>
 ```
 
-By default, `brew man <formula>` resolves man pages within the specified
-formula only. Use `--list` or `--interactive` to search across system and
-other Homebrew formulae.
+| Use case | Syntax |
+|---|---|
+| View a formula's default page | `brew man openssl@3` |
+| View a specific page within a formula | `brew man openssl@3 openssl.1ssl` |
+| Restrict to a man section | `brew man 1 libressl openssl` |
+| Render as HTML in a browser | `brew man --html curl` |
+| Find all providers of a page | `brew man --find openssl` |
+| Pick from providers interactively | `brew man --find --interactive openssl` |
+| List all pages a formula provides | `brew man --list libressl` |
+| Pick from all formula pages | `brew man --list --interactive libressl` |
 
-### Arguments and flags
+> `--find` results are shown as `provider: /path/to/manfile`; `--list` results are shown as `page: /path/to/manfile`.
+
+`--interactive` replaces printed results with a numbered prompt; select an entry to open its page.
+
+- `brew man --find --interactive openssl` — choose which provider's `openssl(1)` to view
+- `brew man --list --interactive libressl` — choose which of libressl's pages to open
+
+When no `<manpage>` is given, `brew man <formula>` defaults to the formula name.
+If no man page matches the formula name, the formula's executables are tried as
+fallback — for example, `brew man libressl` resolves to `openssl(1)` because
+`libressl` ships a `bin/openssl` executable.
+
+#### Arguments and flags
 
 | Argument / Flag | Description |
 |---|---|
+| `[<section>]` | Optional man section number (e.g. `1`, `3`) before the formula name |
 | `<formula>` | The installed formula whose keg to search (default mode) |
 | `[<manpage>]` | Man page name to look up (defaults to `<formula>`) |
-| `<manpage>` | Man page name to search for (`--list` / `--interactive` mode) |
-| `--html`, `-H` | Render the man page as HTML and open it in a browser (respects `HOMEBREW_BROWSER` or `BROWSER`) |
-| `--list`, `-l` | List all locations where the named man page is found |
-| `--interactive`, `-i` | Present a numbered list with origin labels for interactive selection |
+| `--html`, `-H` | Open the page as HTML in a browser; requires `--interactive` when used with `--find` or `--list` (respects `HOMEBREW_BROWSER` or `BROWSER`) |
+| `--find`, `-f` | Find all installed formulae that provide the named man page |
+| `--list`, `-l` | List every man page provided by the named formula |
+| `--interactive`, `-i` | Replaces printed results with a numbered prompt; select an entry to open it (requires `--find` or `--list`) |
+| `--debug`, `-d` | Show detailed search steps for troubleshooting |
 
-### Behavior
+#### Examples
 
-| Mode | Scope | Behavior |
-|---|---|---|
-| `brew man <formula>` | Formula-scoped | Opens `<formula>(1)` from the named formula's keg |
-| `brew man <formula> <manpage>` | Formula-scoped | Opens `<manpage>(1)` from the named formula's keg |
-| `brew man --list <manpage>` | Global | Lists every location (system + all formula kegs) where the page is found |
-| `brew man --interactive <manpage>` | Global | Presents a numbered list with origin labels for interactive selection |
-
-### Examples
-
-Open `openssl(1)` from the `libressl` (keg-only) formula's keg:
+Open `openssl(1)` from the `libressl` formula (resolved via binary fallback):
 
 ```sh
-brew man libressl openssl
-```
-
-Open `openssl(1)` from the `openssl@3` formula's keg:
-
-```sh
-brew man openssl@3 openssl
+brew man libressl
 ```
 
 Open `curl(1)` from the `curl` formula's keg (man page defaults to formula name):
@@ -164,16 +178,28 @@ Open `curl(1)` from the `curl` formula's keg (man page defaults to formula name)
 brew man curl
 ```
 
+Open `openssl(1)` from the `openssl@3` formula's keg:
+
+```sh
+brew man openssl@3 openssl
+```
+
 List every location where `openssl(1)` is found (system, libressl, openssl@3):
 
 ```sh
-brew man --list openssl
+brew man --find openssl
+```
+
+List all man pages that the `libressl` formula provides:
+
+```sh
+brew man --list libressl
 ```
 
 Interactively choose which copy of `openssl(1)` to view:
 
 ```sh
-brew man --interactive openssl
+brew man --find --interactive openssl
 ```
 
 Render the `curl` man page as HTML and open in a browser:
@@ -184,14 +210,14 @@ brew man --html curl
 
 ---
 
-## `brew generate-tap-man-completions` (developer only)
+### `brew generate-tap-man-completions` (developer only)
 
 A developer-only command that generates Bash, ZSH, and Fish shell completions and
 Ronn man pages for all user-facing commands in this tap. Requires `HOMEBREW_DEVELOPER=1`.
 Primarily used by maintainers to keep the pre-committed `completions/`
 and `manpages/` directories up to date.
 
-### Setup
+#### Setup
 
 Homebrew does not load `dev-cmd/` from third-party taps automatically.
 To use this command locally, create a hardlink:
@@ -210,13 +236,11 @@ git config core.hooksPath .githooks
 With hooks enabled, `.githooks/post-merge` and `.githooks/post-rewrite` silently
 re-create the hardlink after every `git pull` (merge or rebase mode).
 
-### Usage
+#### Usage
 
 ```sh
 HOMEBREW_DEVELOPER=1 brew generate-tap-man-completions [--tap=<user>/<repo>] [--no-exit-code]
 ```
-
----
 
 ## License
 

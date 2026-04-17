@@ -17,8 +17,9 @@ module Homebrew
       include SystemCommand::Mixin
 
       cmd_args do
-        usage_banner "`man` [<options>] <formula> [<manpage>]\n            " \
-                     "`man` (`--list`|`--interactive`) <manpage>"
+        usage_banner "`man` [<options>] [<section>] <formula> [<manpage>]\n            " \
+                     "`man` `--find` [`--interactive`] [<options>] <manpage>\n            " \
+                     "`man` `--list` [`--interactive`] [<options>] <formula>"
         description <<~EOS
           Display a man page bundled with an installed formula.
 
@@ -30,69 +31,145 @@ module Homebrew
 
           By default, `brew man <formula>` resolves man pages within the
           specified formula only. The optional <manpage> argument defaults to
-          the formula name. With `--html`, renders the man page via
-          `mandoc -T html` and opens it in a browser (respecting
-          `HOMEBREW_BROWSER` or `BROWSER`).
+          the formula name; when the formula name has no man page, the
+          formula's executables are tried as fallback (e.g. `brew man libressl`
+          finds `openssl(1)`). An optional <section> number (e.g. `1`, `3`)
+          before the formula name restricts the search to that man section.
+          Add `--html` to open the page as HTML in a browser via `mandoc -T html`
+          (respects `HOMEBREW_BROWSER` or `BROWSER`). With `--interactive`, the
+          selected page is opened as HTML instead of in the terminal pager.
 
-          Use `--list` or `--interactive` to search across system and other
-          Homebrew formulae. With `--list`, shows all locations where a given
-          man page is found (both system paths and Homebrew formula kegs).
+          Use `--find` to search across all installed formulae and the system
+          for a man page by name. Shows all locations where a man page name is
+          found. Formulae that provide a binary matching the page name are
+          also included.
 
-          With `--interactive`, presents a numbered list with origin labels
-          to interactively select which copy of a man page to view.
+          Use `--list` to list every man page an installed formula provides.
+
+          Add `--interactive` to select from a numbered list and open the selected page:
+          with `--find`, pick by provider; with `--list`, pick by page.
         EOS
 
         switch "--html", "-H",
-               description: "Render the man page as HTML and open it in a browser " \
-                            "(respects `HOMEBREW_BROWSER` or `BROWSER`)."
+               description: "Open the page as HTML in a browser " \
+                            "(requires `--interactive` when used with `--find` or `--list`; " \
+                            "respects `HOMEBREW_BROWSER` or `BROWSER`)."
+        switch "--find", "-f",
+               description: "Find all installed formulae that provide the named man page."
         switch "--list", "-l",
-               description: "List all locations where the named man page is found."
+               description: "List every man page provided by the named formula."
         switch "--interactive", "-i",
-               description: "Interactively resolve ambiguity when multiple copies " \
-                            "of a man page are found."
+               description: "Present a numbered list for interactive selection. " \
+                            "Requires `--find` or `--list`."
 
-        conflicts "--html", "--list"
-        conflicts "--html", "--interactive"
-        conflicts "--list", "--interactive"
+        conflicts "--find", "--list"
 
         named_args :installed_formula, min: 1
       end
 
       sig { override.void }
       def run
-        if args.list?
-          list_manpages(T.must(args.named.first))
-        elsif args.interactive?
-          file = interactive_manpage(T.must(args.named.first))
-          render(file)
+        if args.interactive? && !args.find? && !args.list?
+          raise UsageError, "`--interactive` requires `--find` or `--list`."
+        end
+        if args.html? && (args.find? || args.list?) && !args.interactive?
+          raise UsageError, "`--html` with `--find` or `--list` requires `--interactive`."
+        end
+
+        name = T.must(args.named.first)
+
+        if args.find?
+          if args.interactive?
+            file = interactive_manpage(name)
+            render(file)
+          else
+            list_manpages(name)
+          end
+        elsif args.list?
+          if args.interactive?
+            file = interactive_all_formula_manpages(name)
+            render(file)
+          else
+            list_all_formula_manpages(name)
+          end
         else
-          formula_name = T.must(args.named.first)
-          page = args.named.second || formula_name
-          file = find_formula_manpage(formula_name, page)
+          section, formula_name, page = parse_default_args
+          file = find_formula_manpage(formula_name, page, section:)
           render(file)
         end
       end
 
       private
 
+      # Parses default-mode named arguments, detecting an optional
+      # leading section number (e.g. `brew man 1 libressl openssl`).
+      sig { returns([T.nilable(String), String, String]) }
+      def parse_default_args
+        named = args.named.to_a
+        section = T.let(nil, T.nilable(String))
+
+        if named.length >= 2 && T.must(named.first).match?(/\A\d+\z/)
+          section = T.must(named.shift)
+          odebug "Detected section argument: #{section}"
+        end
+
+        formula_name = T.must(named.first)
+        page = named[1] || formula_name
+        odebug "Formula: #{formula_name}, page: #{page}, section: #{section.inspect}"
+        [section, formula_name, page]
+      end
+
       # Finds the man page file inside a formula's installed keg.
-      sig { params(formula_name: String, page: String).returns(Pathname) }
-      def find_formula_manpage(formula_name, page)
+      sig { params(formula_name: String, page: String, section: T.nilable(String)).returns(Pathname) }
+      def find_formula_manpage(formula_name, page, section: nil)
         formula = Formula[formula_name]
         prefix = formula.opt_prefix
         odie "Formula not installed: #{formula_name}" unless prefix.exist?
 
         manpath = prefix/"share/man"
-        result = Utils.popen_read({ "MANPATH" => manpath.to_s }, require_man_cmd.to_s, "-w", page).strip
-        return Pathname(result) unless result.empty?
+        man_dir_glob = section ? "man#{section}" : "man*"
+
+        man_args = [require_man_cmd.to_s, "-w"]
+        man_args << section if section
+        man_args << page
+        result = Utils.popen_read({ "MANPATH" => manpath.to_s }, *man_args).strip
+        unless result.empty?
+          odebug "man(1) found: #{result}"
+          return Pathname(result)
+        end
 
         # man(1) cannot resolve filenames that include a section suffix
         # (e.g. openssl.1ssl). Fall back to a direct filesystem search
         # that also handles compressed pages (.gz, .bz2, .xz, .zst, …).
-        escaped = page.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
-        match = Pathname.glob(manpath/"man*/#{escaped}").select(&:file?).min ||
-                Pathname.glob(manpath/"man*/#{escaped}.*").select(&:file?).min ||
-                Pathname.glob(manpath/"man*/#{escaped}*").select(&:file?).min
+        escaped = escape_glob(page)
+        match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}").select(&:file?).min ||
+                Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}.*").select(&:file?).min ||
+                Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}*").select(&:file?).min
+
+        # Base name fallback: strip section suffix (e.g. openssl.1ssl → openssl)
+        # to find pages with a different section suffix (e.g. openssl.1).
+        if match.nil? && page.match?(/\.\d+[a-z]*$/i)
+          base = page.sub(/\.\d+[a-z]*$/i, "")
+          odebug "Trying base name '#{base}' (stripped section suffix from '#{page}')"
+          escaped_base = escape_glob(base)
+          match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_base}.[0-9]*").select(&:file?).min
+        end
+
+        # Binary fallback: when no explicit page was given (page == formula_name)
+        # and no match, try executable names shipped by the formula.
+        if match.nil? && page == formula_name
+          odebug "No man page '#{page}' in #{formula_name}, checking formula binaries"
+          formula_binaries(prefix).each do |bin_name|
+            escaped_bin = escape_glob(bin_name)
+            match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_bin}").select(&:file?).min ||
+                    Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_bin}.[0-9]*").select(&:file?).min
+            if match
+              odebug "Resolved to binary '#{bin_name}' → #{match}"
+              break
+            end
+          end
+        end
+
         odie "Man page not found: #{page} in #{formula_name}" if match.nil?
 
         match
@@ -104,19 +181,36 @@ module Homebrew
         results = collect_manpages(name)
 
         ohai "#{name} found in:"
-        results.each do |label, file|
-          puts "  #{label}: #{file}"
+        results.each do |provider, file|
+          puts "  #{provider}: #{file}"
         end
       end
 
-      # Interactively selects a man page from a numbered list with origin labels.
+      # Lists every man page an installed formula provides.
+      sig { params(name: String).void }
+      def list_all_formula_manpages(name)
+        formula = Formula[name]
+        odie "Formula not installed: #{name}" unless formula.opt_prefix.exist?
+
+        results = all_formula_manpages(formula)
+        odie "No man pages found for formula: #{name}" if results.empty?
+
+        ohai "#{name} provides:"
+        results.each do |page_name, file|
+          puts "  #{page_name}: #{file}"
+        end
+      rescue FormulaUnavailableError
+        odie "No available formula with the name \"#{name}\"."
+      end
+
+      # Interactively selects a man page from a numbered list with provider names.
       sig { params(name: String).returns(Pathname) }
       def interactive_manpage(name)
         choices = collect_manpages(name)
         odie "No man pages found for: #{name}" if choices.empty?
 
-        choices.each_with_index do |(label, file), i|
-          puts "  #{i + 1}) #{label}: #{file}"
+        choices.each_with_index do |(provider, file), i|
+          puts "  #{i + 1}) #{provider}: #{file}"
         end
 
         $stdout.write "Choose [1-#{choices.length}]: "
@@ -130,7 +224,34 @@ module Homebrew
         T.must(choices[index]).last
       end
 
-      # Returns all locations where a man page is found, as [label, Pathname] pairs.
+      # Interactively selects from all man pages an installed formula provides.
+      sig { params(name: String).returns(Pathname) }
+      def interactive_all_formula_manpages(name)
+        formula = Formula[name]
+        odie "Formula not installed: #{name}" unless formula.opt_prefix.exist?
+
+        choices = all_formula_manpages(formula)
+        odie "No man pages found for formula: #{name}" if choices.empty?
+
+        ohai "#{name} provides:"
+        choices.each_with_index do |(page_name, file), i|
+          puts "  #{i + 1}) #{page_name}: #{file}"
+        end
+
+        $stdout.write "Choose [1-#{choices.length}]: "
+        $stdout.flush
+        input = $stdin.gets
+        odie "No selection made." if input.nil?
+
+        index = input.strip.to_i - 1
+        odie "Invalid selection." if index.negative? || index >= choices.length
+
+        T.must(choices[index]).last
+      rescue FormulaUnavailableError
+        odie "No available formula with the name \"#{name}\"."
+      end
+
+      # Returns all locations where a man page is found, as [provider, Pathname] pairs.
       # Processes formula kegs first (via filesystem glob for speed) so that
       # realpath deduplication attributes Homebrew-linked pages to their
       # providing formula rather than labeling them "system".
@@ -144,7 +265,7 @@ module Homebrew
         # man(1) does internally since kegs have no mandoc.db. The glob
         # pattern `.[0-9]*` matches compressed pages and non-standard
         # suffixes (.1ssl, .3pm, etc.).
-        escaped = name.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
+        escaped = escape_glob(name)
         formula_man_dirs.each do |formula, man_dir|
           path = Pathname.glob(man_dir/"man*/#{escaped}.[0-9]*").min
           # Name may already include a section suffix (e.g. openssl.1ssl);
@@ -161,6 +282,34 @@ module Homebrew
 
           seen.add(real)
           choices << [formula, path]
+          odebug "Formula keg match: #{formula} → #{path}"
+        end
+
+        # Binary alias: find formulae providing a binary named `name`
+        # and include their primary man page (e.g. awk → gawk ships
+        # bin/awk and man1/gawk.1).
+        [HOMEBREW_PREFIX/"opt/*/bin/#{escaped}",
+         HOMEBREW_PREFIX/"opt/*/sbin/#{escaped}"].each do |pattern|
+          Pathname.glob(pattern).sort.each do |bin_path|
+            next unless bin_path.file?
+
+            opt_dir = bin_path.parent.parent
+            fname = opt_dir.basename.to_s
+            man_dir = opt_dir/"share/man"
+            next unless man_dir.directory?
+
+            escaped_fn = escape_glob(fname)
+            path = Pathname.glob(man_dir/"man*/#{escaped_fn}.[0-9]*").min ||
+                   Pathname.glob(man_dir/"man*/#{escaped_fn}").min
+            next if path.nil? || !path.exist?
+
+            real = path.realpath.to_s
+            next if seen.include?(real)
+
+            seen.add(real)
+            choices << [fname, path]
+            odebug "Binary alias match: #{fname} provides bin/#{name} → #{path}"
+          end
         end
 
         # System pages: single `man -wa` for platform-specific locations
@@ -175,6 +324,7 @@ module Homebrew
 
           seen.add(real)
           choices << ["system", path]
+          odebug "System match: #{path}"
         end
 
         choices
@@ -210,6 +360,31 @@ module Homebrew
         end
       end
 
+      # Returns entry names from a formula's bin and sbin directories.
+      sig { params(prefix: Pathname).returns(T::Array[String]) }
+      def formula_binaries(prefix)
+        result = T.let([], T::Array[String])
+        [prefix/"bin", prefix/"sbin"].each do |dir|
+          next unless dir.directory?
+
+          dir.children.each do |f|
+            result << f.basename.to_s if f.file? || f.symlink?
+          end
+        end
+        result.sort
+      end
+
+      # Returns all man pages from a formula's keg as [page_name, path] pairs.
+      sig { params(formula: Formula).returns(T::Array[[String, Pathname]]) }
+      def all_formula_manpages(formula)
+        manpath = formula.opt_prefix/"share/man"
+        return [] unless manpath.directory?
+
+        Pathname.glob(manpath/"man*/*").select(&:file?).sort.map do |f|
+          [f.basename.to_s, f]
+        end
+      end
+
       # Returns pairs of [formula_name, man_dir] for all installed formulae
       # that have any man section directory under share/man/.
       sig { returns(T::Array[[String, Pathname]]) }
@@ -232,6 +407,12 @@ module Homebrew
         @require_man_cmd ||= T.let(which("man"), T.nilable(Pathname))
         odie "`man` is required but not found on PATH." if @require_man_cmd.nil?
         T.must(@require_man_cmd)
+      end
+
+      # Escapes glob metacharacters in a string for safe use in Pathname.glob.
+      sig { params(str: String).returns(String) }
+      def escape_glob(str)
+        str.gsub(/[*?\[\]{}\\]/) { |c| "\\#{c}" }
       end
     end
   end

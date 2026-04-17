@@ -5,6 +5,7 @@ _brew_man() {
     -*)
       __brewcomp "
       --debug
+      --find
       --help
       --html
       --interactive

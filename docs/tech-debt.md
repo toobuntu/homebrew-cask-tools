@@ -88,8 +88,10 @@ no guidance.
 ### 6. Duplicate Glob Patterns (DRY Violation)
 
 `collect_manpages` and `find_formula_manpage` in `cmd/man.rb` share similar
-glob patterns for searching man pages. The binary-fallback logic also appears
-in both methods.
+glob patterns for searching man pages. The `all_formula_manpages` signature was
+refactored to accept a `Formula` object (PR #25), but the underlying glob
+patterns in `collect_manpages` and `find_formula_manpage` remain duplicated.
+The binary-fallback logic also appears in both methods.
 
 **Acceptance criteria:**
 

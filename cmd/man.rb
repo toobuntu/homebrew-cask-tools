@@ -18,7 +18,7 @@ module Homebrew
 
       cmd_args do
         usage_banner "`man` [<options>] [<section>] <formula> [<manpage>]\n            " \
-                     "`man` `--find` [<options>] <manpage>\n            " \
+                     "`man` `--find` [`--interactive`] [<options>] <manpage>\n            " \
                      "`man` `--list` [`--interactive`] [<options>] <formula>"
         description <<~EOS
           Display a man page bundled with an installed formula.
@@ -44,8 +44,9 @@ module Homebrew
           also included.
 
           Use `--list` to list every man page an installed formula provides.
-          Add `--interactive` to present a numbered list for selecting which
-          page to view.
+
+          Add `--interactive` to select from a numbered list and open the chosen
+          page: with `--find`, you pick a provider; with `--list`, you pick a page.
         EOS
 
         switch "--html", "-H",
@@ -57,25 +58,31 @@ module Homebrew
                description: "List every man page provided by the named formula."
         switch "--interactive", "-i",
                description: "Present a numbered list for interactive selection. " \
-                            "Requires `--list`."
+                            "Requires `--find` or `--list`."
 
         conflicts "--html", "--find"
         conflicts "--html", "--list"
         conflicts "--html", "--interactive"
         conflicts "--find", "--list"
-        conflicts "--find", "--interactive"
 
         named_args :installed_formula, min: 1
       end
 
       sig { override.void }
       def run
-        raise UsageError, "`--interactive` requires `--list`." if args.interactive? && !args.list?
+        if args.interactive? && !args.find? && !args.list?
+          raise UsageError, "`--interactive` requires `--find` or `--list`."
+        end
 
         name = T.must(args.named.first)
 
         if args.find?
-          list_manpages(name)
+          if args.interactive?
+            file = interactive_manpage(name)
+            render(file)
+          else
+            list_manpages(name)
+          end
         elsif args.list?
           if args.interactive?
             file = interactive_all_formula_manpages(name)
@@ -187,6 +194,27 @@ module Homebrew
         results.each do |page_name, file|
           puts "  #{page_name}: #{file}"
         end
+      end
+
+      # Interactively selects a man page from a numbered list with origin labels.
+      sig { params(name: String).returns(Pathname) }
+      def interactive_manpage(name)
+        choices = collect_manpages(name)
+        odie "No man pages found for: #{name}" if choices.empty?
+
+        choices.each_with_index do |(label, file), i|
+          puts "  #{i + 1}) #{label}: #{file}"
+        end
+
+        $stdout.write "Choose [1-#{choices.length}]: "
+        $stdout.flush
+        input = $stdin.gets
+        odie "No selection made." if input.nil?
+
+        index = input.strip.to_i - 1
+        odie "Invalid selection." if index.negative? || index >= choices.length
+
+        T.must(choices[index]).last
       end
 
       # Interactively selects from all man pages an installed formula provides.

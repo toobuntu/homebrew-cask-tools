@@ -5,7 +5,7 @@ brew\-man \- Display a man page bundled with an installed formula
 .SH "SYNOPSIS"
 \fBbrew\fP \fBman\fP [\fIoptions\fP] [\fIsection\fP] \fIformula\fP [\fImanpage\fP]
 .P
-\fBbrew\fP \fBman\fP \fB\-\-find\fP [\fIoptions\fP] \fImanpage\fP
+\fBbrew\fP \fBman\fP \fB\-\-find\fP [\fB\-\-interactive\fP] [\fIoptions\fP] \fImanpage\fP
 .P
 \fBbrew\fP \fBman\fP \fB\-\-list\fP [\fB\-\-interactive\fP] [\fIoptions\fP] \fIformula\fP
 .SH "DESCRIPTION"
@@ -17,7 +17,9 @@ By default, \fBbrew man <formula>\fP resolves man pages within the specified for
 .P
 Use \fB\-\-find\fP to search across all installed formulae and the system for a man page by name\. Shows all locations where a man page name is found\. Formulae that provide a binary matching the page name are also included\.
 .P
-Use \fB\-\-list\fP to list every man page an installed formula provides\. Add \fB\-\-interactive\fP to present a numbered list for selecting which page to view\.
+Use \fB\-\-list\fP to list every man page an installed formula provides\.
+.P
+Add \fB\-\-interactive\fP to select from a numbered list and open the chosen page: with \fB\-\-find\fP, you pick a provider; with \fB\-\-list\fP, you pick a page\.
 .SH "OPTIONS"
 .TP
 \fB\-d\fP, \fB\-\-debug\fP
@@ -42,4 +44,4 @@ Find all installed formulae that provide the named man page\.
 List every man page provided by the named formula\.
 .TP
 \fB\-i\fP, \fB\-\-interactive\fP
-Present a numbered list for interactive selection\. Requires \fB\-\-list\fP\&\.
+Present a numbered list for interactive selection\. Requires \fB\-\-find\fP or \fB\-\-list\fP\&\.

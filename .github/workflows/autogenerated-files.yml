@@ -79,7 +79,9 @@ jobs:
         run: |
           # Bash: check syntax with bash -n
           for f in completions/bash/brew-*; do
-            [ -f "$f" ] && bash -n "$f"
+            [ -f "$f" ] || continue
+            [[ "$f" == *.license ]] && continue
+            bash -n "$f"
           done
           # Fish: check syntax with fish --no-execute (if fish is available)
           if command -v fish >/dev/null 2>&1; then

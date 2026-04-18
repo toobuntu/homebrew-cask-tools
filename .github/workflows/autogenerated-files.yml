@@ -86,8 +86,7 @@ jobs:
           # Fish: check syntax with fish --no-execute (if fish is available)
           if command -v fish >/dev/null 2>&1; then
             for f in completions/fish/*.fish; do
-              [ -f "$f" ] || continue
-              [[ "$f" == *.license ]] && fish --no-execute "$f"
+              [ -f "$f" ] && fish --no-execute "$f"
             done
           fi
 

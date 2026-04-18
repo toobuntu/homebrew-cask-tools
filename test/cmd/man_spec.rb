@@ -304,7 +304,7 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
-  describe "#with_pager" do
+  describe "pager behavior" do
     it "outputs directly when stdout is not a TTY" do
       allow($stdout).to receive(:tty?).and_return(false)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([

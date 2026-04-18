@@ -339,7 +339,7 @@ module Homebrew
         # Write to a non-auto-deleting temp file so the browser (which opens
         # asynchronously via `open(1)` on macOS) can read it. The OS cleans
         # up /tmp on reboot; we intentionally do not delete immediately.
-        tmppath = File.join(Dir.tmpdir, "brew-man-#{Process.pid}-#{rand(0x100000).to_s(16)}.html")
+        tmppath = File.join(Dir.tmpdir, "brew-man-#{Process.pid}-#{SecureRandom.hex(8)}.html")
         File.write(tmppath, html)
         exec_browser tmppath
       end

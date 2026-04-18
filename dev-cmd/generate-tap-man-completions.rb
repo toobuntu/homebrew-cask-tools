@@ -81,7 +81,7 @@ module Homebrew
           odie <<~EOS
             Failed to install required bundler gems (group: man).
             #{e.message}
-            Try running: brew install-bundler-gems
+            Try running: brew install-bundler-gems --groups=man
           EOS
         end
         require "manpages/parser/ronn"

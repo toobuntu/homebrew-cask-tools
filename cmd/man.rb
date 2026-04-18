@@ -8,7 +8,7 @@
 require "abstract_command"
 require "formula"
 require "system_command"
-require "tempfile"
+require "tmpdir"
 
 module Homebrew
   module Cmd
@@ -333,18 +333,15 @@ module Homebrew
         mandoc_cmd = which("mandoc")
         odie "`mandoc` is required for --html but not found on PATH." if mandoc_cmd.nil?
 
-        tmpfile = Tempfile.new(["brew-man-", ".html"])
-        begin
-          html = Utils.popen_read(mandoc_cmd.to_s, "-T", "html", file.to_s)
-          odie "mandoc failed to render #{file}" if html.empty?
+        html = Utils.popen_read(mandoc_cmd.to_s, "-T", "html", file.to_s)
+        odie "mandoc failed to render #{file}" if html.empty?
 
-          tmpfile.write(html)
-          tmpfile.close
-
-          exec_browser tmpfile.path
-        ensure
-          tmpfile.close!
-        end
+        # Write to a non-auto-deleting temp file so the browser (which opens
+        # asynchronously via `open(1)` on macOS) can read it. The OS cleans
+        # up /tmp on reboot; we intentionally do not delete immediately.
+        tmppath = File.join(Dir.tmpdir, "brew-man-#{Process.pid}-#{rand(0x100000).to_s(16)}.html")
+        File.write(tmppath, html)
+        exec_browser tmppath
       end
 
       # Returns entry names from a formula's bin and sbin directories.
@@ -397,7 +394,9 @@ module Homebrew
       end
 
       # Searches for a man page by name within a man directory using cascading
-      # glob patterns. Returns the first match or nil. The cascade order is:
+      # glob patterns. Returns the lexicographically smallest file match from
+      # the first pattern that has any matches, or nil if none do. The cascade
+      # order is:
       #   1. name.[0-9]* — section-numbered pages and compressed variants
       #   2. name (exact match)
       #   3. name.* — any extension (compressed, subsection suffixes, etc.)

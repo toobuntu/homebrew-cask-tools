@@ -101,6 +101,28 @@ module Homebrew
 
       private
 
+      # Pipes block output through a pager when stdout is a TTY.
+      # Respects $PAGER; falls back to `less -R`.
+      sig { params(block: T.proc.void).void }
+      def with_pager(&block)
+        unless $stdout.tty?
+          yield
+          return
+        end
+
+        pager_cmd = ENV["PAGER"].presence || "less -R"
+        original_stdout = $stdout
+        IO.popen(pager_cmd, "w") do |io|
+          $stdout = io
+          yield
+        ensure
+          $stdout = original_stdout
+        end
+      rescue Errno::EPIPE
+        # User quit pager early
+        nil
+      end
+
       # Parses default-mode named arguments, detecting an optional
       # leading section number (e.g. `brew man 1 libressl openssl`).
       sig { returns([T.nilable(String), String, String]) }
@@ -180,9 +202,11 @@ module Homebrew
       def list_manpages(name)
         results = collect_manpages(name)
 
-        ohai "#{name} found in:"
-        results.each do |provider, file|
-          puts "  #{provider}: #{file}"
+        with_pager do
+          ohai "#{name} found in:"
+          results.each do |provider, file|
+            puts "  #{provider}: #{file}"
+          end
         end
       end
 
@@ -195,9 +219,11 @@ module Homebrew
         results = all_formula_manpages(formula)
         odie "No man pages found for formula: #{name}" if results.empty?
 
-        ohai "#{name} provides:"
-        results.each do |page_name, file|
-          puts "  #{page_name}: #{file}"
+        with_pager do
+          ohai "#{name} provides:"
+          results.each do |page_name, file|
+            puts "  #{page_name}: #{file}"
+          end
         end
       rescue FormulaUnavailableError
         odie "No available formula with the name \"#{name}\"."

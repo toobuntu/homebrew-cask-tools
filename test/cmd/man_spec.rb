@@ -304,6 +304,56 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
+  describe "#with_pager" do
+    it "outputs directly when stdout is not a TTY" do
+      allow($stdout).to receive(:tty?).and_return(false)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+
+      expect { cmd.send(:list_manpages, "testcmd") }
+        .to output(/testcmd found in:/).to_stdout
+    end
+
+    it "pipes output through a pager when stdout is a TTY" do
+      allow($stdout).to receive(:tty?).and_return(true)
+      pager_io = StringIO.new
+      allow(IO).to receive(:popen).with("less -R", "w").and_yield(pager_io)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+
+      cmd.send(:list_manpages, "testcmd")
+
+      expect(pager_io.string).to include("system:")
+    end
+
+    it "respects the PAGER environment variable" do
+      allow($stdout).to receive(:tty?).and_return(true)
+      pager_io = StringIO.new
+      allow(ENV).to receive(:[]).and_call_original
+      allow(ENV).to receive(:[]).with("PAGER").and_return("more")
+      allow(IO).to receive(:popen).with("more", "w").and_yield(pager_io)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+
+      cmd.send(:list_manpages, "testcmd")
+
+      expect(pager_io.string).to include("system:")
+    end
+
+    it "handles EPIPE gracefully when user quits pager early" do
+      allow($stdout).to receive(:tty?).and_return(true)
+      allow(IO).to receive(:popen).with("less -R", "w").and_raise(Errno::EPIPE)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+
+      expect { cmd.send(:list_manpages, "testcmd") }.not_to raise_error
+    end
+  end
+
   describe "#interactive_all_formula_manpages" do
     it "prompts and returns the selected formula page" do
       manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")

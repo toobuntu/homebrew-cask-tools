@@ -185,11 +185,16 @@ module Homebrew
           next if log_output.empty?
 
           commit = T.must(log_output.lines.first).split.first
+          next if commit.blank?
+
           content = Utils.popen_read(
             "git", "-C", tap_path.to_s,
             "show", "#{commit}:#{pattern}"
           )
-          return content unless content.empty?
+          next if content.empty?
+
+          odebug "Found #{token} at #{commit}:#{pattern} (#{content.length} bytes)"
+          return content
         end
 
         nil
@@ -241,6 +246,10 @@ module Homebrew
             opoo "Could not parse cask block in #{cask_path.basename}."
           end
           return
+        end
+
+        unless parsed.errors.empty?
+          opoo "Parse errors in #{cask_path.basename}; postflight may be incorrectly placed. Verify the result."
         end
 
         stmts = cask_block_stmts(cask_block)

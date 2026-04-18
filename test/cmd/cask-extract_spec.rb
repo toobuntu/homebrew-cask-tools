@@ -200,6 +200,20 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       cmd.send(:add_quarantine_postflight, cask_file)
     end
 
+    it "warns about parse errors but still proceeds when cask block is found" do
+      cask_file.write(<<~RUBY)
+        cask "some-cask" do
+          version "1.0"
+          app "Some App.app"
+          undefined_method_call(
+        end
+      RUBY
+
+      expect(cmd).to receive(:opoo).with(/Parse errors in.*postflight may be incorrectly placed/)
+      allow(cmd).to receive(:opoo).with(/A postflight block has been added/)
+      cmd.send(:add_quarantine_postflight, cask_file)
+    end
+
     it "appends to an existing postflight block" do
       cask_file.write(<<~RUBY)
         cask "some-cask" do
@@ -358,6 +372,27 @@ RSpec.describe Homebrew::Cmd::CaskExtract do
       font_path.write('cask "font-fira-code" do; end')
 
       expect(cmd.send(:find_cask_in_history, tap, "font-fira-code")).to eq('cask "font-fira-code" do; end')
+    end
+
+    it "returns nil when git show returns empty content" do
+      tmpdir.mkpath
+      allow(Utils).to receive(:popen_read)
+        .with("git", "-C", tmpdir.to_s, "log", "--all", "--oneline", "--", anything)
+        .and_return("abc1234 Remove cask\n")
+      allow(Utils).to receive(:popen_read)
+        .with("git", "-C", tmpdir.to_s, "show", /^abc1234:/)
+        .and_return("")
+
+      expect(cmd.send(:find_cask_in_history, tap, "nonexistent")).to be_nil
+    end
+
+    it "returns nil when git log returns entries but commit field is empty" do
+      tmpdir.mkpath
+      allow(Utils).to receive(:popen_read)
+        .with("git", "-C", tmpdir.to_s, "log", "--all", "--oneline", "--", anything)
+        .and_return(" \n")
+
+      expect(cmd.send(:find_cask_in_history, tap, "badlog")).to be_nil
     end
   end
 

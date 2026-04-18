@@ -10,14 +10,8 @@ This file provides technical notes for AI agents and contributors working in thi
 
 ## Reasoning style
 
-Always operate with maximum reasoning effort and deep multi-step analysis.
-Use extended thinking when available. Prefer thoroughness over speed.
-
-- Decompose problems step by step; list assumptions before proceeding.
-- Explore multiple approaches and evaluate tradeoffs before selecting a solution.
-- Consider edge cases, failure modes, and macOS compatibility implications.
-- Validate conclusions before producing final output — avoid first-pass or heuristic answers.
-- Be exhaustive over concise.
+See [`docs/shared-guidelines.md`](docs/shared-guidelines.md#reasoning-style) for the
+canonical reasoning style guidelines shared across all agent instruction files.
 
 ## Repository overview
 
@@ -128,29 +122,13 @@ In CI (`brew_tests` job in `.github/workflows/ci.yml`) the same hardlink approac
 
 ## macOS compatibility
 
-The Copilot Coding Agent runs on Ubuntu, but this tap targets macOS end-users. All
-implementations must be compatible with macOS:
-
-- Use POSIX/BSD-compatible CLI syntax — macOS ships BSD variants of `sed`, `awk`, `find`,
-  `xargs`, `date`, `grep`, etc.; GNU extensions are not available by default on macOS.
-- Do not rely on Linux-specific paths (`/proc`, `/sys`) or package managers (`apt`, `dpkg`).
-- Ruby code that shells out should use commands available on macOS (`xattr`, `pkgutil`, etc.).
-- Shell scripts with `#!/bin/sh` must be POSIX-compatible; scripts with `#!/usr/bin/env bash`
-  may use bash features but must avoid GNU coreutil extensions.
-- `brew style --fix` is canonical for all files (Ruby and shell). It runs RuboCop for Ruby
-  and shfmt + shellcheck for shell scripts. CI enforces this; the pre-commit hook does too.
+See [`docs/shared-guidelines.md`](docs/shared-guidelines.md#macos-compatibility) for the
+full macOS compatibility guidelines shared across all agent instruction files.
 
 ## REUSE / licensing
 
-Files must carry SPDX headers. Run `scripts/annotate.sh` to annotate non-compliant files.
-The `reuse` tool is pre-installed in the Copilot sandbox; do **not** hand-write SPDX headers —
-run `scripts/annotate.sh` so that formatting and copyright info are standardised throughout.
-
-`scripts/annotate.sh` special-cases all generated files under `completions/` and man page files (`.1`, `.1.md`):
-because the generator overwrites their content, they use `.license` sidecars created with
-`--force-dot-license` rather than inline `#` comment headers.
-
-License texts are committed in `LICENSES/` (populated via `reuse download --all`).
+See [`docs/shared-guidelines.md`](docs/shared-guidelines.md#reuse--licensing) for the
+full REUSE/licensing guidelines shared across all agent instruction files.
 
 ## Man pages
 

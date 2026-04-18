@@ -75,7 +75,15 @@ module Homebrew
         [bash_dir, zsh_dir, fish_dir, man_dir].each(&:mkpath)
 
         # kramdown (man bundler group) is needed to compile Ronn sources to roff
-        Homebrew.install_bundler_gems!(groups: ["man"])
+        begin
+          Homebrew.install_bundler_gems!(groups: ["man"])
+        rescue => e
+          odie <<~EOS
+            Failed to install required bundler gems (group: man).
+            #{e.message}
+            Try running: brew install-bundler-gems --groups=man
+          EOS
+        end
         require "manpages/parser/ronn"
         require "manpages/converter/roff"
 

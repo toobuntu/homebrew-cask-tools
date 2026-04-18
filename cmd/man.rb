@@ -8,7 +8,7 @@
 require "abstract_command"
 require "formula"
 require "system_command"
-require "tempfile"
+require "tmpdir"
 
 module Homebrew
   module Cmd
@@ -69,6 +69,8 @@ module Homebrew
 
       sig { override.void }
       def run
+        prune_html_tempfiles
+
         if args.interactive? && !args.find? && !args.list?
           raise UsageError, "`--interactive` requires `--find` or `--list`."
         end
@@ -141,10 +143,7 @@ module Homebrew
         # man(1) cannot resolve filenames that include a section suffix
         # (e.g. openssl.1ssl). Fall back to a direct filesystem search
         # that also handles compressed pages (.gz, .bz2, .xz, .zst, …).
-        escaped = escape_glob(page)
-        match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}").select(&:file?).min ||
-                Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}.*").select(&:file?).min ||
-                Pathname.glob(manpath/"#{man_dir_glob}/#{escaped}*").select(&:file?).min
+        match = glob_manpage(manpath, page, man_dir_glob)
 
         # Base name fallback: strip section suffix (e.g. openssl.1ssl → openssl)
         # to find pages with a different section suffix (e.g. openssl.1).
@@ -160,9 +159,7 @@ module Homebrew
         if match.nil? && page == formula_name
           odebug "No man page '#{page}' in #{formula_name}, checking formula binaries"
           formula_binaries(prefix).each do |bin_name|
-            escaped_bin = escape_glob(bin_name)
-            match = Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_bin}").select(&:file?).min ||
-                    Pathname.glob(manpath/"#{man_dir_glob}/#{escaped_bin}.[0-9]*").select(&:file?).min
+            match = glob_manpage(manpath, bin_name, man_dir_glob)
             if match
               odebug "Resolved to binary '#{bin_name}' → #{match}"
               break
@@ -265,15 +262,8 @@ module Homebrew
         # man(1) does internally since kegs have no mandoc.db. The glob
         # pattern `.[0-9]*` matches compressed pages and non-standard
         # suffixes (.1ssl, .3pm, etc.).
-        escaped = escape_glob(name)
         formula_man_dirs.each do |formula, man_dir|
-          path = Pathname.glob(man_dir/"man*/#{escaped}.[0-9]*").min
-          # Name may already include a section suffix (e.g. openssl.1ssl);
-          # try exact match and compressed variants as fallback.
-          if path.nil?
-            path = Pathname.glob(man_dir/"man*/#{escaped}").min ||
-                   Pathname.glob(man_dir/"man*/#{escaped}.*").min
-          end
+          path = glob_manpage(man_dir, name)
           next if path.nil?
           next unless path.exist?
 
@@ -288,6 +278,7 @@ module Homebrew
         # Binary alias: find formulae providing a binary named `name`
         # and include their primary man page (e.g. awk → gawk ships
         # bin/awk and man1/gawk.1).
+        escaped = escape_glob(name)
         [HOMEBREW_PREFIX/"opt/*/bin/#{escaped}",
          HOMEBREW_PREFIX/"opt/*/sbin/#{escaped}"].each do |pattern|
           Pathname.glob(pattern).sort.each do |bin_path|
@@ -298,9 +289,7 @@ module Homebrew
             man_dir = opt_dir/"share/man"
             next unless man_dir.directory?
 
-            escaped_fn = escape_glob(fname)
-            path = Pathname.glob(man_dir/"man*/#{escaped_fn}.[0-9]*").min ||
-                   Pathname.glob(man_dir/"man*/#{escaped_fn}").min
+            path = glob_manpage(man_dir, fname)
             next if path.nil? || !path.exist?
 
             real = path.realpath.to_s
@@ -346,17 +335,32 @@ module Homebrew
         mandoc_cmd = which("mandoc")
         odie "`mandoc` is required for --html but not found on PATH." if mandoc_cmd.nil?
 
-        tmpfile = Tempfile.new(["brew-man-", ".html"])
-        begin
-          html = Utils.popen_read(mandoc_cmd.to_s, "-T", "html", file.to_s)
-          odie "mandoc failed to render #{file}" if html.empty?
+        html = Utils.popen_read(mandoc_cmd.to_s, "-T", "html", file.to_s)
+        odie "mandoc failed to render #{file}" if html.empty?
 
-          tmpfile.write(html)
-          tmpfile.close
+        # Write to a non-auto-deleting temp file so the browser (which opens
+        # asynchronously via `open(1)` on macOS) can read it. Old temp files
+        # are pruned at startup; see `prune_html_tempfiles`.
+        # Dir::Tmpname.create requires an empty block to generate a unique path
+        # rubocop:disable Lint/EmptyBlock
+        tmppath = Dir::Tmpname.create(["brew-man-", ".html"]) {}
+        # rubocop:enable Lint/EmptyBlock
+        File.write(tmppath, html)
+        exec_browser tmppath
+      end
 
-          exec_browser tmpfile.path
-        ensure
-          tmpfile.close!
+      # Removes stale brew-man-*.html temp files older than 24 hours.
+      sig { void }
+      def prune_html_tempfiles
+        cutoff = Time.now - (24 * 60 * 60)
+        Pathname.glob(File.join(Dir.tmpdir, "brew-man-*.html")).each do |f|
+          next unless f.file?
+          next if f.mtime >= cutoff
+
+          odebug "Pruning stale temp file: #{f}"
+          f.unlink
+        rescue SystemCallError
+          nil
         end
       end
 
@@ -407,6 +411,21 @@ module Homebrew
         @require_man_cmd ||= T.let(which("man"), T.nilable(Pathname))
         odie "`man` is required but not found on PATH." if @require_man_cmd.nil?
         T.must(@require_man_cmd)
+      end
+
+      # Searches for a man page by name within a man directory using cascading
+      # glob patterns. Returns the lexicographically smallest file match from
+      # the first pattern that has any matches, or nil if none do. The cascade
+      # order is:
+      #   1. name.[0-9]* — section-numbered pages and compressed variants
+      #   2. name (exact match)
+      #   3. name.* — any extension (compressed, subsection suffixes, etc.)
+      sig { params(man_dir: Pathname, name: String, man_dir_glob: String).returns(T.nilable(Pathname)) }
+      def glob_manpage(man_dir, name, man_dir_glob = "man*")
+        escaped = escape_glob(name)
+        Pathname.glob(man_dir/"#{man_dir_glob}/#{escaped}.[0-9]*").select(&:file?).min ||
+          Pathname.glob(man_dir/"#{man_dir_glob}/#{escaped}").select(&:file?).min ||
+          Pathname.glob(man_dir/"#{man_dir_glob}/#{escaped}.*").select(&:file?).min
       end
 
       # Escapes glob metacharacters in a string for safe use in Pathname.glob.

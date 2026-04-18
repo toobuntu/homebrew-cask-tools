@@ -686,6 +686,43 @@ RSpec.describe Homebrew::Cmd::Man do
     end
   end
 
+  describe "#prune_html_tempfiles" do
+    let(:tmpdir_path) { Dir.mktmpdir }
+
+    before { allow(Dir).to receive(:tmpdir).and_return(tmpdir_path) }
+
+    after { FileUtils.rm_rf(tmpdir_path) }
+
+    it "removes brew-man-*.html files older than 24 hours" do
+      old_file = Pathname(tmpdir_path)/"brew-man-old.html"
+      old_file.write("stale")
+      FileUtils.touch(old_file, mtime: Time.now - (25 * 60 * 60))
+
+      cmd.send(:prune_html_tempfiles)
+
+      expect(old_file.exist?).to be false
+    end
+
+    it "preserves brew-man-*.html files newer than 24 hours" do
+      recent_file = Pathname(tmpdir_path)/"brew-man-recent.html"
+      recent_file.write("fresh")
+
+      cmd.send(:prune_html_tempfiles)
+
+      expect(recent_file.exist?).to be true
+    end
+
+    it "ignores non-matching files in the temp directory" do
+      unrelated = Pathname(tmpdir_path)/"other-file.html"
+      unrelated.write("keep me")
+      FileUtils.touch(unrelated, mtime: Time.now - (48 * 60 * 60))
+
+      cmd.send(:prune_html_tempfiles)
+
+      expect(unrelated.exist?).to be true
+    end
+  end
+
   describe "#require_man_cmd" do
     it "returns the man command path" do
       allow(cmd).to receive(:which).with("man").and_return(Pathname("/usr/bin/man"))

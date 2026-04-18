@@ -69,6 +69,8 @@ module Homebrew
 
       sig { override.void }
       def run
+        prune_html_tempfiles
+
         if args.interactive? && !args.find? && !args.list?
           raise UsageError, "`--interactive` requires `--find` or `--list`."
         end
@@ -337,11 +339,29 @@ module Homebrew
         odie "mandoc failed to render #{file}" if html.empty?
 
         # Write to a non-auto-deleting temp file so the browser (which opens
-        # asynchronously via `open(1)` on macOS) can read it. The OS cleans
-        # up /tmp on reboot; we intentionally do not delete immediately.
-        tmppath = File.join(Dir.tmpdir, "brew-man-#{Process.pid}-#{SecureRandom.hex(8)}.html")
+        # asynchronously via `open(1)` on macOS) can read it. Old temp files
+        # are pruned at startup; see `prune_html_tempfiles`.
+        # Dir::Tmpname.create requires an empty block to generate a unique path
+        # rubocop:disable Lint/EmptyBlock
+        tmppath = Dir::Tmpname.create(["brew-man-", ".html"]) {}
+        # rubocop:enable Lint/EmptyBlock
         File.write(tmppath, html)
         exec_browser tmppath
+      end
+
+      # Removes stale brew-man-*.html temp files older than 24 hours.
+      sig { void }
+      def prune_html_tempfiles
+        cutoff = Time.now - (24 * 60 * 60)
+        Pathname.glob(File.join(Dir.tmpdir, "brew-man-*.html")).each do |f|
+          next unless f.file?
+          next if f.mtime >= cutoff
+
+          odebug "Pruning stale temp file: #{f}"
+          f.unlink
+        rescue SystemCallError
+          nil
+        end
       end
 
       # Returns entry names from a formula's bin and sbin directories.

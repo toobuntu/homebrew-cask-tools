@@ -6,7 +6,9 @@
 # frozen_string_literal: true
 
 require "abstract_command"
+require "env_config"
 require "formula"
+require "shellwords"
 require "system_command"
 require "tmpdir"
 
@@ -103,6 +105,161 @@ module Homebrew
 
       private
 
+      # Returns the pager command, honoring HOMEBREW_BAT > PAGER > less -R.
+      sig { returns(String) }
+      def pager_cmd
+        if Homebrew::EnvConfig.bat?
+          # By the time Ruby runs, bootstrap in `bin/brew` has copied
+          # BAT_* → HOMEBREW_BAT_* when HOMEBREW_BAT_* is unset.
+          # EnvConfig.bat_* reads HOMEBREW_BAT_* from ENV; absence means
+          # neither HOMEBREW_BAT_* nor BAT_* is present in ENV.
+          # ENV passes this bootstrap-derived state to the subprocess;
+          # nil represents "no value after bootstrap resolution",
+          # not user data loss.
+          ENV["BAT_CONFIG_PATH"] = Homebrew::EnvConfig.bat_config_path
+          ENV["BAT_THEME"] = Homebrew::EnvConfig.bat_theme
+          bat_path = which("bat")
+          return bat_path.to_s if bat_path
+        end
+
+        ENV["PAGER"].presence || "less -R"
+      end
+
+      # Pipes block output through a pager when stdout is a TTY.
+      sig { params(block: T.proc.void).void }
+      def with_pager(&block)
+        unless $stdout.tty?
+          yield
+          return
+        end
+
+        original_stdout = $stdout
+        IO.popen(pager_cmd, "w") do |io|
+          $stdout = io
+          yield
+        ensure
+          $stdout = original_stdout
+        end
+      rescue Errno::EPIPE
+        # User quit pager early
+        nil
+      end
+
+      # Presents choices via fzf for interactive selection, or falls back
+      # to a paged list with a /dev/tty prompt when fzf is not available.
+      sig {
+        params(
+          choices: T::Array[[String, Pathname]],
+          header:  String,
+          block:   T.proc.params(label: String, file: Pathname, index: Integer).returns(String),
+        ).returns(Pathname)
+      }
+      def interactive_select(choices, header:, &block)
+        fzf_path = which("fzf")
+        if fzf_path
+          interactive_select_fzf(choices, header:, fzf_path:, &block)
+        else
+          interactive_select_paged(choices, header:, &block)
+        end
+      end
+
+      # Uses fzf for fuzzy interactive selection.
+      sig {
+        params(
+          choices:  T::Array[[String, Pathname]],
+          header:   String,
+          fzf_path: Pathname,
+          block:    T.proc.params(label: String, file: Pathname, index: Integer).returns(String),
+        ).returns(Pathname)
+      }
+      def interactive_select_fzf(choices, header:, fzf_path:, &block)
+        lines = choices.each_with_index.map do |(label, file), i|
+          yield(label, file, i)
+        end
+
+        bold_header = "\033[1m==> #{header}\033[0m"
+        # fzf processes ANSI color codes in --header even without --ansi (fzf(1));
+        # documented since at least fzf 0.17.5 (2018), so --ansi is redundant here.
+        # --ansi enables processing of ANSI color codes in input.
+        result = Utils.popen_read(
+          fzf_path.to_s, "--height=40%", "--layout=reverse", "--border",
+          "--header", bold_header,
+          "--prompt", "Use ↑↓ to navigate, Enter to select: ",
+          input: lines.join("\n")
+        ).strip
+        odie "No selection made." if result.empty?
+
+        # Extract the index from the "N) " prefix
+        match = result.match(/\A\s*(\d+)\)/)
+        odie "Invalid selection." unless match
+
+        index = T.must(match[1]).to_i - 1
+        odie "Invalid selection." if index.negative? || index >= choices.length
+
+        T.must(choices[index]).last
+      end
+
+      # Falls back to paging the list and prompting via /dev/tty.
+      sig {
+        params(
+          choices: T::Array[[String, Pathname]],
+          header:  String,
+          block:   T.proc.params(label: String, file: Pathname, index: Integer).returns(String),
+        ).returns(Pathname)
+      }
+      def interactive_select_paged(choices, header:, &block)
+        lines = choices.each_with_index.map do |(label, file), i|
+          yield(label, file, i)
+        end
+
+        list_text = "#{header}\n#{lines.join("\n")}\n"
+
+        if $stdout.tty?
+          page_list(list_text)
+
+          File.open("/dev/tty", "r") do |tty|
+            loop do
+              $stdout.write "Choose [1-#{choices.length}] (or 'l' to re-list): "
+              $stdout.flush
+              input = tty.gets
+              odie "No selection made." if input.nil?
+
+              if input.strip.casecmp("l").zero?
+                page_list(list_text)
+                next
+              end
+
+              index = input.strip.to_i - 1
+              odie "Invalid selection." if index.negative? || index >= choices.length
+
+              return T.must(choices[index]).last
+            end
+          end
+        else
+          # Non-TTY: print the list and read from stdin
+          $stdout.write list_text
+          $stdout.write "Choose [1-#{choices.length}]: "
+          $stdout.flush
+          input = $stdin.gets
+          odie "No selection made." if input.nil?
+
+          index = input.strip.to_i - 1
+          odie "Invalid selection." if index.negative? || index >= choices.length
+
+          T.must(choices[index]).last
+        end
+      end
+
+      # Writes text to a temp file and pages it.
+      sig { params(text: String).void }
+      def page_list(text)
+        Tempfile.create("brew-man-list") do |f|
+          f.write(text)
+          f.flush
+          system(*Shellwords.shellsplit(pager_cmd), f.path)
+        end
+      end
+
       # Parses default-mode named arguments, detecting an optional
       # leading section number (e.g. `brew man 1 libressl openssl`).
       sig { returns([T.nilable(String), String, String]) }
@@ -177,9 +334,11 @@ module Homebrew
       def list_manpages(name)
         results = collect_manpages(name)
 
-        ohai "#{name} found in:"
-        results.each do |provider, file|
-          puts "  #{provider}: #{file}"
+        with_pager do
+          ohai "#{name} found in:"
+          results.each do |provider, file|
+            puts "  #{provider}: #{file}"
+          end
         end
       end
 
@@ -192,9 +351,11 @@ module Homebrew
         results = all_formula_manpages(formula)
         odie "No man pages found for formula: #{name}" if results.empty?
 
-        ohai "#{name} provides:"
-        results.each do |page_name, file|
-          puts "  #{page_name}: #{file}"
+        with_pager do
+          ohai "#{name} provides:"
+          results.each do |page_name, file|
+            puts "  #{page_name}: #{file}"
+          end
         end
       rescue FormulaUnavailableError
         odie "No available formula with the name \"#{name}\"."
@@ -206,19 +367,9 @@ module Homebrew
         choices = collect_manpages(name)
         odie "No man pages found for: #{name}" if choices.empty?
 
-        choices.each_with_index do |(provider, file), i|
-          puts "  #{i + 1}) #{provider}: #{file}"
+        interactive_select(choices, header: "#{name} found in:") do |provider, file, i|
+          "  #{i + 1}) #{provider}: #{file}"
         end
-
-        $stdout.write "Choose [1-#{choices.length}]: "
-        $stdout.flush
-        input = $stdin.gets
-        odie "No selection made." if input.nil?
-
-        index = input.strip.to_i - 1
-        odie "Invalid selection." if index.negative? || index >= choices.length
-
-        T.must(choices[index]).last
       end
 
       # Interactively selects from all man pages an installed formula provides.
@@ -230,20 +381,9 @@ module Homebrew
         choices = all_formula_manpages(formula)
         odie "No man pages found for formula: #{name}" if choices.empty?
 
-        ohai "#{name} provides:"
-        choices.each_with_index do |(page_name, file), i|
-          puts "  #{i + 1}) #{page_name}: #{file}"
+        interactive_select(choices, header: "#{name} provides:") do |page_name, file, i|
+          "  #{i + 1}) #{page_name}: #{file}"
         end
-
-        $stdout.write "Choose [1-#{choices.length}]: "
-        $stdout.flush
-        input = $stdin.gets
-        odie "No selection made." if input.nil?
-
-        index = input.strip.to_i - 1
-        odie "Invalid selection." if index.negative? || index >= choices.length
-
-        T.must(choices[index]).last
       rescue FormulaUnavailableError
         odie "No available formula with the name \"#{name}\"."
       end

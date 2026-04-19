@@ -31,7 +31,7 @@ jobs:
       # install Homebrew formulae we might need
       - uses: Homebrew/actions/cache-homebrew-prefix@main
         with:
-          install: actionlint reuse pinact zizmor shellcheck shfmt gh gnu-tar subversion curl
+          install: actionlint reuse pinact zizmor shellcheck shfmt gh gnu-tar subversion curl fzf
           workflow-key: copilot-setup-steps
 
       # brew tests doesn't like world writable directories

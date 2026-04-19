@@ -173,7 +173,7 @@ module Homebrew
         bold_header = "\033[1m==> #{header}\033[0m"
         result = Utils.popen_read(
           fzf_path.to_s, "--height=40%", "--layout=reverse", "--border",
-          "--header", bold_header, "--ansi",
+          "--header", bold_header,
           "--prompt", "Use ↑↓ to navigate, Enter to select: ",
           input: lines.join("\n")
         ).strip

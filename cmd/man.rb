@@ -8,6 +8,7 @@
 require "abstract_command"
 require "env_config"
 require "formula"
+require "shellwords"
 require "system_command"
 require "tempfile"
 
@@ -106,9 +107,13 @@ module Homebrew
       sig { returns(String) }
       def pager_cmd
         if Homebrew::EnvConfig.bat?
-          # By the time Ruby runs, bootstrap in `bin/brew` has copied BAT_* → HOMEBREW_BAT_* when HOMEBREW_BAT_* is unset.
-          # EnvConfig.bat_* reads HOMEBREW_BAT_* from ENV; absence means neither HOMEBREW_BAT_* nor BAT_* is present in ENV.
-          # ENV passes this bootstrap-derived state to the subprocess; nil explicitly represents "no value after bootstrap resolution", not user data loss.
+          # By the time Ruby runs, bootstrap in `bin/brew` has copied
+          # BAT_* → HOMEBREW_BAT_* when HOMEBREW_BAT_* is unset.
+          # EnvConfig.bat_* reads HOMEBREW_BAT_* from ENV; absence means
+          # neither HOMEBREW_BAT_* nor BAT_* is present in ENV.
+          # ENV passes this bootstrap-derived state to the subprocess;
+          # nil represents "no value after bootstrap resolution",
+          # not user data loss.
           ENV["BAT_CONFIG_PATH"] = Homebrew::EnvConfig.bat_config_path
           ENV["BAT_THEME"] = Homebrew::EnvConfig.bat_theme
           bat_path = which("bat")
@@ -171,6 +176,9 @@ module Homebrew
         end
 
         bold_header = "\033[1m==> #{header}\033[0m"
+        # fzf processes ANSI color codes in --header even without --ansi (fzf(1));
+        # documented since at least fzf 0.17.5 (2018), so --ansi is redundant here.
+        # --ansi enables processing of ANSI color codes in input.
         result = Utils.popen_read(
           fzf_path.to_s, "--height=40%", "--layout=reverse", "--border",
           "--header", bold_header,
@@ -246,7 +254,7 @@ module Homebrew
         Tempfile.create("brew-man-list") do |f|
           f.write(text)
           f.flush
-          system(pager_cmd, f.path)
+          system(*Shellwords.shellsplit(pager_cmd), f.path)
         end
       end
 

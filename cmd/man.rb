@@ -126,9 +126,16 @@ module Homebrew
       end
 
       # Pipes block output through a pager when stdout is a TTY.
-      sig { params(block: T.proc.void).void }
-      def with_pager(&block)
+      # When +lines+ is given and the output fits in the terminal, the pager
+      # is skipped and the block output goes straight to stdout.
+      sig { params(lines: T.nilable(Integer), block: T.proc.void).void }
+      def with_pager(lines: nil, &block)
         unless $stdout.tty?
+          yield
+          return
+        end
+
+        if lines && lines < Tty.height
           yield
           return
         end
@@ -181,12 +188,21 @@ module Homebrew
         # fzf processes ANSI color codes in --header even without --ansi (fzf(1));
         # documented since at least fzf 0.17.5 (2018), so --ansi is redundant here.
         # --ansi enables processing of ANSI color codes in input.
-        result = Utils.popen_read(
-          fzf_path.to_s, "--height=40%", "--layout=reverse", "--border",
-          "--header", bold_header,
-          "--prompt", "Use ↑↓ to navigate, Enter to select: ",
-          input: lines.join("\n")
-        ).strip
+        #
+        # IO.popen (not Utils.popen_read) is required here because Homebrew's
+        # popen_read uses IO.popen("-") (fork+exec) which does not pipe the
+        # input: data to the child's stdin. fzf needs its candidate list on
+        # stdin, its selection result on stdout, and /dev/tty for the UI.
+        result = IO.popen(
+          [fzf_path.to_s, "--height=40%", "--layout=reverse", "--border",
+           "--header", bold_header,
+           "--prompt", "Use ↑↓ to navigate, Enter to select: "],
+          "r+",
+        ) do |pipe|
+          pipe.write(lines.join("\n"))
+          pipe.close_write
+          pipe.read
+        end.to_s.strip
         odie "No selection made." if result.empty?
 
         # Extract the index from the "N) " prefix
@@ -334,7 +350,7 @@ module Homebrew
       def list_manpages(name)
         results = collect_manpages(name)
 
-        with_pager do
+        with_pager(lines: results.length + 1) do
           ohai "#{name} found in:"
           results.each do |provider, file|
             puts "  #{provider}: #{file}"
@@ -351,7 +367,7 @@ module Homebrew
         results = all_formula_manpages(formula)
         odie "No man pages found for formula: #{name}" if results.empty?
 
-        with_pager do
+        with_pager(lines: results.length + 1) do
           ohai "#{name} provides:"
           results.each do |page_name, file|
             puts "  #{page_name}: #{file}"

@@ -106,6 +106,9 @@ module Homebrew
       sig { returns(String) }
       def pager_cmd
         if Homebrew::EnvConfig.bat?
+          # By the time Ruby runs, bootstrap in `bin/brew` has copied BAT_* → HOMEBREW_BAT_* when HOMEBREW_BAT_* is unset.
+          # EnvConfig.bat_* reads HOMEBREW_BAT_* from ENV; absence means neither HOMEBREW_BAT_* nor BAT_* is present in ENV.
+          # ENV passes this bootstrap-derived state to the subprocess; nil explicitly represents "no value after bootstrap resolution", not user data loss.
           ENV["BAT_CONFIG_PATH"] = Homebrew::EnvConfig.bat_config_path
           ENV["BAT_THEME"] = Homebrew::EnvConfig.bat_theme
           bat_path = which("bat")

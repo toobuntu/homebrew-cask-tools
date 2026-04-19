@@ -106,8 +106,10 @@ module Homebrew
       sig { returns(String) }
       def pager_cmd
         if Homebrew::EnvConfig.bat?
-          ENV["BAT_CONFIG_PATH"] = Homebrew::EnvConfig.bat_config_path
-          ENV["BAT_THEME"] = Homebrew::EnvConfig.bat_theme
+          config_path = Homebrew::EnvConfig.bat_config_path
+          theme = Homebrew::EnvConfig.bat_theme
+          ENV["BAT_CONFIG_PATH"] = config_path if config_path
+          ENV["BAT_THEME"] = theme if theme
           bat_path = which("bat")
           return bat_path.to_s if bat_path
         end

@@ -305,6 +305,10 @@ RSpec.describe Homebrew::Cmd::Man do
   end
 
   describe "pager behavior" do
+    before do
+      allow(Homebrew::EnvConfig).to receive(:bat?).and_return(false)
+    end
+
     it "outputs directly when stdout is not a TTY" do
       allow($stdout).to receive(:tty?).and_return(false)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
@@ -331,9 +335,24 @@ RSpec.describe Homebrew::Cmd::Man do
     it "respects the PAGER environment variable" do
       allow($stdout).to receive(:tty?).and_return(true)
       pager_io = StringIO.new
-      allow(ENV).to receive(:[]).and_call_original
-      allow(ENV).to receive(:[]).with("PAGER").and_return("more")
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("PAGER", nil).and_return("more")
       allow(IO).to receive(:popen).with("more", "w").and_yield(pager_io)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+
+      cmd.send(:list_manpages, "testcmd")
+
+      expect(pager_io.string).to include("system:")
+    end
+
+    it "prefers bat when HOMEBREW_BAT is set" do
+      allow(Homebrew::EnvConfig).to receive_messages(bat?: true, bat_config_path: nil, bat_theme: nil)
+      allow(cmd).to receive(:which).with("bat").and_return(Pathname("/usr/local/bin/bat"))
+      allow($stdout).to receive(:tty?).and_return(true)
+      pager_io = StringIO.new
+      allow(IO).to receive(:popen).with("/usr/local/bin/bat", "w").and_yield(pager_io)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
       ])
@@ -355,6 +374,8 @@ RSpec.describe Homebrew::Cmd::Man do
   end
 
   describe "#interactive_all_formula_manpages" do
+    before { allow(cmd).to receive(:which).with("fzf").and_return(nil) }
+
     it "prompts and returns the selected formula page" do
       manfile = Pathname("/opt/homebrew/opt/libressl/share/man/man1/openssl.1")
       opt_prefix = Pathname("/opt/homebrew/opt/libressl")
@@ -378,6 +399,69 @@ RSpec.describe Homebrew::Cmd::Man do
 
       expect { cmd.send(:interactive_all_formula_manpages, "empty-formula") }
         .to raise_error(SystemExit)
+    end
+  end
+
+  describe "#interactive_select_fzf" do
+    it "delegates to fzf and returns the selected file" do
+      manfile = Pathname("/usr/share/man/man1/testcmd.1")
+      choices = [["system", manfile], ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")]]
+      allow(Utils).to receive(:popen_read).and_return("  1) system: /usr/share/man/man1/testcmd.1")
+
+      result = cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                          fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+        "  #{i + 1}) #{label}: #{file}"
+      end
+
+      expect(result).to eq(manfile)
+    end
+
+    it "dies when fzf returns empty output" do
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      allow(Utils).to receive(:popen_read).and_return("")
+
+      expect do
+        cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                   fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit)
+    end
+  end
+
+  describe "#interactive_select_paged" do
+    it "reads from stdin in non-TTY mode" do
+      manfile = Pathname("/usr/share/man/man1/testcmd.1")
+      choices = [["system", manfile]]
+      allow($stdin).to receive(:gets).and_return("1\n")
+
+      result = cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+        "  #{i + 1}) #{label}: #{file}"
+      end
+
+      expect(result).to eq(manfile)
+    end
+
+    it "dies on invalid selection in non-TTY mode" do
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      allow($stdin).to receive(:gets).and_return("99\n")
+
+      expect do
+        cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit)
+    end
+
+    it "dies on EOF in non-TTY mode" do
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      allow($stdin).to receive(:gets).and_return(nil)
+
+      expect do
+        cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit)
     end
   end
 
@@ -549,6 +633,8 @@ RSpec.describe Homebrew::Cmd::Man do
   end
 
   describe "#interactive_manpage" do
+    before { allow(cmd).to receive(:which).with("fzf").and_return(nil) }
+
     it "dies when no man pages are found" do
       allow(cmd).to receive(:collect_manpages).with("nonexistent").and_return([])
 

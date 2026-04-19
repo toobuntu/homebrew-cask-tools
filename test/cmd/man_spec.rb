@@ -335,8 +335,8 @@ RSpec.describe Homebrew::Cmd::Man do
     it "respects the PAGER environment variable" do
       allow($stdout).to receive(:tty?).and_return(true)
       pager_io = StringIO.new
-      allow(ENV).to receive(:fetch).and_call_original
-      allow(ENV).to receive(:fetch).with("PAGER", nil).and_return("more")
+      allow(ENV).to receive(:[]).and_call_original
+      allow(ENV).to receive(:[]).with("PAGER").and_return("more")
       allow(IO).to receive(:popen).with("more", "w").and_yield(pager_io)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
@@ -348,7 +348,11 @@ RSpec.describe Homebrew::Cmd::Man do
     end
 
     it "prefers bat when HOMEBREW_BAT is set" do
-      allow(Homebrew::EnvConfig).to receive_messages(bat?: true, bat_config_path: nil, bat_theme: nil)
+      allow(Homebrew::EnvConfig).to receive_messages(
+        bat?:            true,
+        bat_config_path: "/custom/bat.conf",
+        bat_theme:       "TwoDark",
+      )
       allow(cmd).to receive(:which).with("bat").and_return(Pathname("/usr/local/bin/bat"))
       allow($stdout).to receive(:tty?).and_return(true)
       pager_io = StringIO.new
@@ -356,10 +360,17 @@ RSpec.describe Homebrew::Cmd::Man do
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
       ])
+      old_bat_config = ENV.fetch("BAT_CONFIG_PATH", nil)
+      old_bat_theme = ENV.fetch("BAT_THEME", nil)
 
       cmd.send(:list_manpages, "testcmd")
 
       expect(pager_io.string).to include("system:")
+      expect(ENV.fetch("BAT_CONFIG_PATH", nil)).to eq("/custom/bat.conf")
+      expect(ENV.fetch("BAT_THEME", nil)).to eq("TwoDark")
+    ensure
+      ENV["BAT_CONFIG_PATH"] = old_bat_config
+      ENV["BAT_THEME"] = old_bat_theme
     end
 
     it "handles EPIPE gracefully when user quits pager early" do
@@ -462,6 +473,65 @@ RSpec.describe Homebrew::Cmd::Man do
           "  #{i + 1}) #{label}: #{file}"
         end
       end.to raise_error(SystemExit)
+    end
+
+    context "when stdout is a TTY" do
+      before { allow($stdout).to receive(:tty?).and_return(true) }
+
+      it "pages the list and reads selection from /dev/tty" do
+        manfile = Pathname("/usr/share/man/man1/testcmd.1")
+        choices = [["system", manfile]]
+        tty_io = StringIO.new("1\n")
+        allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
+        allow(cmd).to receive(:page_list)
+
+        result = cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+
+        expect(result).to eq(manfile)
+      end
+
+      it "re-pages the list when user enters 'l'" do
+        manfile = Pathname("/usr/share/man/man1/testcmd.1")
+        choices = [["system", manfile]]
+        tty_io = StringIO.new("l\n1\n")
+        allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
+        # Initial page + re-page on 'l' = 2 calls
+        expect(cmd).to receive(:page_list).twice
+
+        result = cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+
+        expect(result).to eq(manfile)
+      end
+
+      it "dies on invalid selection via /dev/tty" do
+        choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+        tty_io = StringIO.new("99\n")
+        allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
+        allow(cmd).to receive(:page_list)
+
+        expect do
+          cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+            "  #{i + 1}) #{label}: #{file}"
+          end
+        end.to raise_error(SystemExit)
+      end
+
+      it "dies on EOF from /dev/tty" do
+        choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+        tty_io = StringIO.new
+        allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
+        allow(cmd).to receive(:page_list)
+
+        expect do
+          cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+            "  #{i + 1}) #{label}: #{file}"
+          end
+        end.to raise_error(SystemExit)
+      end
     end
   end
 

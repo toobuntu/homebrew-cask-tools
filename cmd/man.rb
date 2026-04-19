@@ -106,18 +106,13 @@ module Homebrew
       sig { returns(String) }
       def pager_cmd
         if Homebrew::EnvConfig.bat?
-          config_path = Homebrew::EnvConfig.bat_config_path
-          theme = Homebrew::EnvConfig.bat_theme
-          ENV["BAT_CONFIG_PATH"] = config_path if config_path
-          ENV["BAT_THEME"] = theme if theme
+          ENV["BAT_CONFIG_PATH"] = Homebrew::EnvConfig.bat_config_path
+          ENV["BAT_THEME"] = Homebrew::EnvConfig.bat_theme
           bat_path = which("bat")
           return bat_path.to_s if bat_path
         end
 
-        pager = ENV.fetch("PAGER", nil)
-        return pager if pager && !pager.strip.empty?
-
-        "less -R"
+        ENV["PAGER"].presence || "less -R"
       end
 
       # Pipes block output through a pager when stdout is a TTY.
@@ -172,14 +167,17 @@ module Homebrew
           yield(label, file, i)
         end
 
+        bold_header = "\033[1m==> #{header}\033[0m"
         result = Utils.popen_read(
-          fzf_path.to_s, "--reverse", "--header", header, "--prompt", "Select: ",
+          fzf_path.to_s, "--height=40%", "--layout=reverse", "--border",
+          "--header", bold_header, "--ansi",
+          "--prompt", "Use ↑↓ to navigate, Enter to select: ",
           input: lines.join("\n")
         ).strip
         odie "No selection made." if result.empty?
 
         # Extract the index from the "N) " prefix
-        match = result.match(/\A(\d+)\)/)
+        match = result.match(/\A\s*(\d+)\)/)
         odie "Invalid selection." unless match
 
         index = T.must(match[1]).to_i - 1

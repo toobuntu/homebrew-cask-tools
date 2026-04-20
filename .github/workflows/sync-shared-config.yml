@@ -62,6 +62,9 @@ jobs:
           curl -fsSL \
             "https://raw.githubusercontent.com/Homebrew/.github/main/.github/zizmor.yml" \
             -o .github/zizmor.yml
+          { printf '%s\n' \
+              "# This file is synced from \`Homebrew/.github\` by \`.github/workflows/sync-shared-config.yml\`, do not modify it directly."; \
+            cat .github/zizmor.yml; } > /tmp/zizmor.yml && mv /tmp/zizmor.yml .github/zizmor.yml
           curl -fsSL \
             "https://raw.githubusercontent.com/Homebrew/brew/main/.github/actionlint-matcher.json" \
             -o .github/actionlint-matcher.json
@@ -79,6 +82,9 @@ jobs:
           yq -i '(.jobs.copilot-setup-steps.steps[] |
             select(.uses // "" | test("Homebrew/actions/cache-homebrew-prefix@"))).with.install |=
             . + " actionlint reuse pinact zizmor"' "$f"
+          { printf '%s\n' \
+              "# This file is synced from \`Homebrew/brew\` by \`.github/workflows/sync-shared-config.yml\`, do not modify it directly."; \
+            cat "$f"; } > /tmp/copilot-setup-steps.yml && mv /tmp/copilot-setup-steps.yml "$f"
 
       - name: Verify mutations were applied
         run: |

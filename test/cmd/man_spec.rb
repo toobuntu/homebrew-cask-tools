@@ -319,12 +319,42 @@ RSpec.describe Homebrew::Cmd::Man do
         .to output(/testcmd found in:/).to_stdout
     end
 
-    it "pipes output through a pager when stdout is a TTY" do
+    it "skips pager when output fits in the terminal" do
       allow($stdout).to receive(:tty?).and_return(true)
+      allow(Tty).to receive(:height).and_return(40)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+      ])
+
+      expect(IO).not_to receive(:popen)
+
+      expect { cmd.send(:list_manpages, "testcmd") }
+        .to output(/testcmd found in:/).to_stdout
+    end
+
+    it "skips pager when output exactly fills the terminal height" do
+      allow($stdout).to receive(:tty?).and_return(true)
+      # 2 results + 1 header = 3 lines; height = 3 → exact fit, pager skipped
+      allow(Tty).to receive(:height).and_return(3)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
+      ])
+
+      expect(IO).not_to receive(:popen)
+
+      expect { cmd.send(:list_manpages, "testcmd") }
+        .to output(/testcmd found in:/).to_stdout
+    end
+
+    it "pipes output through a pager when output exceeds terminal height" do
+      allow($stdout).to receive(:tty?).and_return(true)
+      allow(Tty).to receive(:height).and_return(2)
       pager_io = StringIO.new
       allow(IO).to receive(:popen).with("less -R", "w").and_yield(pager_io)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
       ])
 
       cmd.send(:list_manpages, "testcmd")
@@ -334,12 +364,14 @@ RSpec.describe Homebrew::Cmd::Man do
 
     it "respects the PAGER environment variable" do
       allow($stdout).to receive(:tty?).and_return(true)
+      allow(Tty).to receive(:height).and_return(2)
       pager_io = StringIO.new
       allow(ENV).to receive(:[]).and_call_original
       allow(ENV).to receive(:[]).with("PAGER").and_return("more")
       allow(IO).to receive(:popen).with("more", "w").and_yield(pager_io)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
       ])
 
       cmd.send(:list_manpages, "testcmd")
@@ -355,10 +387,12 @@ RSpec.describe Homebrew::Cmd::Man do
       )
       allow(cmd).to receive(:which).with("bat").and_return(Pathname("/usr/local/bin/bat"))
       allow($stdout).to receive(:tty?).and_return(true)
+      allow(Tty).to receive(:height).and_return(2)
       pager_io = StringIO.new
       allow(IO).to receive(:popen).with("/usr/local/bin/bat", "w").and_yield(pager_io)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
       ])
       old_bat_config = ENV.fetch("BAT_CONFIG_PATH", nil)
       old_bat_theme = ENV.fetch("BAT_THEME", nil)
@@ -375,9 +409,11 @@ RSpec.describe Homebrew::Cmd::Man do
 
     it "handles EPIPE gracefully when user quits pager early" do
       allow($stdout).to receive(:tty?).and_return(true)
+      allow(Tty).to receive(:height).and_return(2)
       allow(IO).to receive(:popen).with("less -R", "w").and_raise(Errno::EPIPE)
       allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
         ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
       ])
 
       expect { cmd.send(:list_manpages, "testcmd") }.not_to raise_error
@@ -480,7 +516,11 @@ RSpec.describe Homebrew::Cmd::Man do
     it "delegates to fzf and returns the selected file" do
       manfile = Pathname("/usr/share/man/man1/testcmd.1")
       choices = [["system", manfile], ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")]]
-      allow(Utils).to receive(:popen_read).and_return("  1) system: /usr/share/man/man1/testcmd.1")
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("  1) system: /usr/share/man/man1/testcmd.1")
 
       result = cmd.send(:interactive_select_fzf, choices, header:   "test:",
                                                           fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
@@ -492,7 +532,11 @@ RSpec.describe Homebrew::Cmd::Man do
 
     it "dies when fzf returns empty output" do
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
-      allow(Utils).to receive(:popen_read).and_return("")
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("")
 
       expect do
         cmd.send(:interactive_select_fzf, choices, header:   "test:",
@@ -500,6 +544,22 @@ RSpec.describe Homebrew::Cmd::Man do
           "  #{i + 1}) #{label}: #{file}"
         end
       end.to raise_error(SystemExit)
+    end
+
+    it "writes candidate lines to fzf stdin and closes write end" do
+      manfile = Pathname("/usr/share/man/man1/testcmd.1")
+      choices = [["system", manfile]]
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:read).and_return("  1) system: /usr/share/man/man1/testcmd.1")
+
+      expect(pipe).to receive(:write).with("  1) system: /usr/share/man/man1/testcmd.1")
+      expect(pipe).to receive(:close_write)
+
+      cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                 fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+        "  #{i + 1}) #{label}: #{file}"
+      end
     end
   end
 

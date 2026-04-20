@@ -141,7 +141,7 @@ brew man --list [--interactive] <formula>
 
 > `--find` results are shown as `provider: /path/to/manfile`; `--list` results are shown as `page: /path/to/manfile`.
 
-`--interactive` replaces printed results with a numbered prompt; select an entry to open its page.
+`--interactive` uses `fzf` (if installed) for fuzzy interactive selection, or falls back to a numbered prompt when `fzf` is not available. Select an entry to open its page.
 
 - `brew man --find --interactive openssl` — choose which provider's `openssl(1)` to view
 - `brew man --list --interactive libressl` — choose which of libressl's pages to open
@@ -161,7 +161,7 @@ fallback — for example, `brew man libressl` resolves to `openssl(1)` because
 | `--html`, `-H` | Open the page as HTML in a browser; requires `--interactive` when used with `--find` or `--list` (respects `HOMEBREW_BROWSER` or `BROWSER`) |
 | `--find`, `-f` | Find all installed formulae that provide the named man page |
 | `--list`, `-l` | List every man page provided by the named formula |
-| `--interactive`, `-i` | Replaces printed results with a numbered prompt; select an entry to open it (requires `--find` or `--list`) |
+| `--interactive`, `-i` | Uses `fzf` (if installed) for fuzzy interactive selection, or falls back to a numbered prompt; select an entry to open it (requires `--find` or `--list`) |
 | `--debug`, `-d` | Show detailed search steps for troubleshooting |
 
 #### Examples

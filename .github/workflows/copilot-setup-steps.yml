@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 #
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
-# This file is synced from `Homebrew/brew` by `.github/workflows/sync-shared-config.yml`, do not modify it directly.
+
+# This file is synced from `Homebrew/brew` and modified by `.github/workflows/sync-shared-config.yml`, do not modify it directly.
 
 name: Copilot Setup Steps
 

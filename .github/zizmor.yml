@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 #
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
 # This file is synced from `Homebrew/.github` by `.github/workflows/sync-shared-config.yml`, do not modify it directly.
 
 rules:

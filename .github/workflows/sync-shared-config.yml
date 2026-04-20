@@ -63,9 +63,6 @@ jobs:
             "https://raw.githubusercontent.com/Homebrew/.github/main/.github/zizmor.yml" \
             -o .github/zizmor.yml
           { printf '%s\n' \
-              "# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman" \
-              "#" \
-              "# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause" \
               "# This file is synced from \`Homebrew/.github\` by \`.github/workflows/sync-shared-config.yml\`, do not modify it directly." \
               ""; \
             cat .github/zizmor.yml; } > /tmp/zizmor.yml && mv /tmp/zizmor.yml .github/zizmor.yml
@@ -90,10 +87,7 @@ jobs:
             select(.uses // "" | test("Homebrew/actions/cache-homebrew-prefix@"))).with.install |=
             . + " actionlint reuse pinact zizmor fzf"' "$f"
           { printf '%s\n' \
-              "# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman" \
-              "#" \
-              "# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause" \
-              "# This file is synced from \`Homebrew/brew\` by \`.github/workflows/sync-shared-config.yml\`, do not modify it directly." \
+              "# This file is synced from \`Homebrew/brew\` and modified by \`.github/workflows/sync-shared-config.yml\`, do not modify it directly." \
               ""; \
             cat "$f"; } > /tmp/copilot-setup-steps.yml && mv /tmp/copilot-setup-steps.yml "$f"
 
@@ -102,12 +96,14 @@ jobs:
           f=".github/actionlint.yaml"
           yq -i '.config-variables = ["SYNC_APP_CLIENT_ID"]' "$f"
           { printf '%s\n' \
-              "# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman" \
-              "#" \
-              "# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause" \
-              "# This file is synced from \`Homebrew/brew\` by \`.github/workflows/sync-shared-config.yml\`, do not modify it directly." \
+              "# This file is synced from \`Homebrew/brew\` and modified by \`.github/workflows/sync-shared-config.yml\`, do not modify it directly." \
               ""; \
             cat "$f"; } > /tmp/actionlint.yaml && mv /tmp/actionlint.yaml "$f"
+
+      - name: Annotate SPDX headers
+        run: |
+          pip install reuse --quiet
+          bash scripts/annotate.sh
 
       - name: Verify mutations were applied
         run: |

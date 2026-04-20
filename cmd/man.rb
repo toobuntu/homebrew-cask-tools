@@ -135,7 +135,7 @@ module Homebrew
           return
         end
 
-        if lines && lines < Tty.height
+        if lines && lines <= Tty.height
           yield
           return
         end

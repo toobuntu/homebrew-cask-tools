@@ -332,6 +332,21 @@ RSpec.describe Homebrew::Cmd::Man do
         .to output(/testcmd found in:/).to_stdout
     end
 
+    it "skips pager when output exactly fills the terminal height" do
+      allow($stdout).to receive(:tty?).and_return(true)
+      # 2 results + 1 header = 3 lines; height = 3 → exact fit, pager skipped
+      allow(Tty).to receive(:height).and_return(3)
+      allow(cmd).to receive(:collect_manpages).with("testcmd").and_return([
+        ["system", Pathname("/usr/share/man/man1/testcmd.1")],
+        ["pkg", Pathname("/opt/homebrew/opt/pkg/share/man/man1/testcmd.1")],
+      ])
+
+      expect(IO).not_to receive(:popen)
+
+      expect { cmd.send(:list_manpages, "testcmd") }
+        .to output(/testcmd found in:/).to_stdout
+    end
+
     it "pipes output through a pager when output exceeds terminal height" do
       allow($stdout).to receive(:tty?).and_return(true)
       allow(Tty).to receive(:height).and_return(2)

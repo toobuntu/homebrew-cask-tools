@@ -530,7 +530,7 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(result).to eq(manfile)
     end
 
-    it "dies when fzf returns empty output" do
+    it "exits cleanly when fzf returns no selection" do
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
       pipe = instance_double(IO)
       allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
@@ -543,7 +543,7 @@ RSpec.describe Homebrew::Cmd::Man do
                                                    fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
           "  #{i + 1}) #{label}: #{file}"
         end
-      end.to raise_error(SystemExit)
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
     end
 
     it "writes candidate lines to fzf stdin and closes write end" do
@@ -587,7 +587,7 @@ RSpec.describe Homebrew::Cmd::Man do
       end.to raise_error(SystemExit)
     end
 
-    it "dies on EOF in non-TTY mode" do
+    it "exits cleanly on EOF in non-TTY mode" do
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
       allow($stdin).to receive(:gets).and_return(nil)
 
@@ -595,7 +595,7 @@ RSpec.describe Homebrew::Cmd::Man do
         cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
           "  #{i + 1}) #{label}: #{file}"
         end
-      end.to raise_error(SystemExit)
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
     end
 
     context "when stdout is a TTY" do
@@ -643,7 +643,7 @@ RSpec.describe Homebrew::Cmd::Man do
         end.to raise_error(SystemExit)
       end
 
-      it "dies on EOF from /dev/tty" do
+      it "exits cleanly on EOF from /dev/tty" do
         choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
         tty_io = StringIO.new
         allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
@@ -653,7 +653,7 @@ RSpec.describe Homebrew::Cmd::Man do
           cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
             "  #{i + 1}) #{label}: #{file}"
           end
-        end.to raise_error(SystemExit)
+        end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
       end
     end
   end

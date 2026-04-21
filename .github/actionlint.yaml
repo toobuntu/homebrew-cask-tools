@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
+# This file is synced from `Homebrew/brew` and modified by `.github/workflows/sync-shared-config.yml`, do not modify it directly.
+
 self-hosted-runner:
   labels: []
 config-variables:

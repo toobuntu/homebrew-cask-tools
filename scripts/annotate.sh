@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Annotates non-REUSE-compliant files with SPDX copyright and license headers.
-# Requires: reuse (pip install reuse), jq
+
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 #
-# SPDX-FileCopyrightText: Copyright 2026 toobuntu
 # SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+# Annotates non-REUSE-compliant files with SPDX copyright and license headers.
+# Requires: reuse (pipx install reuse), jq
+#
+# This script is used as a base for all repositories belonging to this GitHub user
+# and intentionally contains a superset of all required annotation quirks across those repos.
+# Please keep all quirks in place.
 
 set -euo pipefail
 

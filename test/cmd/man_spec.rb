@@ -587,7 +587,7 @@ RSpec.describe Homebrew::Cmd::Man do
       end.to raise_error(SystemExit)
     end
 
-    it "exits cleanly on EOF in non-TTY mode" do
+    it "exits with error on EOF in non-TTY mode" do
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
       allow($stdin).to receive(:gets).and_return(nil)
 
@@ -595,7 +595,19 @@ RSpec.describe Homebrew::Cmd::Man do
         cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
           "  #{i + 1}) #{label}: #{file}"
         end
-      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it "exits 1 silently on EOF in non-TTY mode when quiet" do
+      quiet_cmd = described_class.new(["some-formula", "--quiet"])
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      allow($stdin).to receive(:gets).and_return(nil)
+
+      expect do
+        quiet_cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
     end
 
     context "when stdout is a TTY" do

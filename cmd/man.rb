@@ -257,7 +257,10 @@ module Homebrew
           $stdout.write "Choose [1-#{choices.length}]: "
           $stdout.flush
           input = $stdin.gets
-          exit 0 if input.nil?
+          if input.nil?
+            odie "brew man: --interactive requires a TTY" unless args.quiet?
+            exit 1
+          end
 
           index = input.strip.to_i - 1
           odie "Invalid selection." if index.negative? || index >= choices.length

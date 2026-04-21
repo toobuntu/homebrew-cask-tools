@@ -9,6 +9,7 @@
 #
 # This script is used as a base for all repositories belonging to this GitHub user
 # and intentionally contains a superset of all required annotation quirks across those repos.
+# Please keep all quirks in place.
 
 set -euo pipefail
 

@@ -146,5 +146,5 @@ jobs:
             gh pr create \
               --head sync-shared-config \
               --title "Synchronize shared configuration" \
-              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github); \`.github/actionlint-matcher.json\`, \`.github/actionlint.yaml\` (with \`BREW_COMMIT_APP_ID\` replaced by \`SYNC_APP_CLIENT_ID\`), and \`.github/workflows/copilot-setup-steps.yml\` (with \`core\`/\`cask\` set to \`false\` and \`actionlint reuse pinact zizmor fzf\` appended to the install list) from [Homebrew/brew](https://github.com/Homebrew/brew)."
+              --body "Automated sync of shared configuration files from upstream Homebrew repositories: \`.github/zizmor.yml\` from [Homebrew/.github](https://github.com/Homebrew/.github); \`.github/actionlint-matcher.json\`, \`.github/actionlint.yaml\` (with \`config-variables\` set to \`[\"SYNC_APP_CLIENT_ID\"]\`), and \`.github/workflows/copilot-setup-steps.yml\` (with \`core\`/\`cask\` set to \`false\` and \`actionlint reuse pinact zizmor fzf\` appended to the install list) from [Homebrew/brew](https://github.com/Homebrew/brew)."
           fi

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+
+SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+-->
+
 # Use pipx to install Python CLI tools in CI
 
 ## Status

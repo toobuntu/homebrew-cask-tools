@@ -102,7 +102,7 @@ jobs:
 
       - name: Annotate SPDX headers
         run: |
-          pip install reuse --quiet
+          pipx install reuse
           bash scripts/annotate.sh
 
       - name: Verify mutations were applied
@@ -128,11 +128,13 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git checkout -b sync-shared-config
+          git switch --create=sync-shared-config
           git add .github/zizmor.yml .github/actionlint-matcher.json .github/actionlint.yaml .github/workflows/copilot-setup-steps.yml
           git commit -m "Synchronize shared configuration from upstream"
+          # Bot-managed sync branch; intentionally overwrite the remote
           git push --force --set-upstream origin sync-shared-config
 
+          # Create PR if no open PR exists for this branch
           if gh api \
               -X GET \
               --header "Accept: application/vnd.github+json" \

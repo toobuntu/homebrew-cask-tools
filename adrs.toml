@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+# adrs configuration. Run `adrs doctor` to check ADR repository health.
+# See https://joshrotenberg.com/adrs/configuration.html
+
+adr_dir = "docs/decisions"
+mode = "ng"
+
+[templates]
+format = "madr"
+variant = "minimal"

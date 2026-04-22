@@ -3,6 +3,10 @@
     "Homebrew": {
       "command": "brew",
       "args": ["mcp-server"]
+    },
+    "adrs": {
+      "command": "adrs",
+      "args": ["mcp", "serve"]
     }
   }
 }

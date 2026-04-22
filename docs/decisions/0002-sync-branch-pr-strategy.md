@@ -1,15 +1,19 @@
+---
+number: 2
+title: Sync branch PR existence strategy
+status: accepted
+date: 2026-04-21
+---
+
 <!--
 SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 
 SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 -->
 
-# ADR 0002: Sync branch PR existence strategy
+# Sync branch PR existence strategy
 
-## Status
-Accepted
-
-## Context
+## Context and Problem Statement
 
 A GitHub Actions workflow synchronizes shared configuration files using a dedicated branch (`sync-shared-config`). The branch is:
 
@@ -22,12 +26,7 @@ Workflow concurrency is configured (via GitHub Actions `concurrency`), ensuring 
 
 Pull requests are not long-lived development artifacts. They represent a view of the current state of the sync branch.
 
-Requirements:
-
-- Ensure an open PR exists for the sync branch when needed
-- Create a PR if none exists
-- Avoid reliance on assumptions about PR uniqueness across GitHub UI/API edge cases
-- Maintain deterministic behavior under serialized workflow execution
+How should the workflow determine whether an open PR already exists for the sync branch, to avoid creating duplicate PRs?
 
 Evaluated approaches:
 
@@ -35,15 +34,14 @@ Evaluated approaches:
 - `gh pr list` → valid but requires parsing for control flow
 - `gh api` (REST pulls endpoint) → explicit set query over PR collection
 
-## Decision
+## Decision Outcome
 
-Use GitHub REST API via `gh api` combined with `jq --exit-status` to determine whether an open PR exists for the sync branch.
+Chosen option: use GitHub REST API via `gh api` combined with `jq --exit-status`, because it provides a direct, boolean-valued set query over the PR collection with reliable exit-code semantics.
 
-PR existence is defined as:
+PR existence is defined as any open pull request where:
 
-- any open pull request where:
-  - `head = <repo_owner>:sync-shared-config`
-  - `state = open`
+- `head = <repo_owner>:sync-shared-config`
+- `state = open`
 
 Control flow:
 
@@ -52,30 +50,18 @@ Control flow:
 - evaluate result as a set using `jq --exit-status 'length == 0'`
 - create PR only when no matching PR exists
 
-## Consequences
+### Consequences
 
-### Positive
+* Good, because explicit and correct set-based PR existence detection.
+* Good, because deterministic under serialized execution (concurrency group prevents races).
+* Good, because works correctly even if multiple PRs exist for a branch.
+* Bad, because requires `jq` and is more verbose than higher-level CLI abstractions.
+* Bad, because couples logic to REST API response shape.
+* Neutral, because workflow concurrency ensures single active execution, simplifying correctness guarantees.
+* Neutral, because PRs are opportunistic artifacts derived from branch state.
+* Neutral, because force-push ensures PR content always reflects latest computed state when present.
 
-- Explicit and correct set-based PR existence detection
-- Deterministic under serialized execution (concurrency group prevents races)
-- Works correctly even if multiple PRs exist for a branch
-- Clear separation of responsibilities:
-  - git: branch state management
-  - GitHub API: PR lifecycle management
-
-### Negative
-
-- Requires `jq`
-- More verbose than higher-level CLI abstractions
-- Couples logic to REST API response shape
-
-### Neutral
-
-- Workflow concurrency ensures single active execution, simplifying correctness guarantees
-- PRs are opportunistic artifacts derived from branch state
-- Force-push ensures PR content always reflects latest computed state when present
-
-## Rationale
+## More Information
 
 Although GitHub CLI (`gh pr view`, `gh pr list`) provides higher-level abstractions, they were rejected due to:
 
@@ -87,8 +73,4 @@ REST API plus `jq --exit-status` provides a direct reduction from a set query to
 
 Workflow concurrency removes the need for more complex coordination strategies (e.g., immutable per-run branches or Dependabot-style PR tracking), since only one execution mutates state at a time.
 
-## Future considerations
-
-This design may be simplified if GitHub CLI introduces a native existence-check command with exit-code semantics (e.g. `gh pr exists`).
-
-If requirements shift toward per-run traceability or independent update streams, an immutable branch-per-run model may be reconsidered. However, given current concurrency guarantees and low-frequency updates, the rolling branch model remains optimal.
+This design may be simplified if GitHub CLI introduces a native existence-check command with exit-code semantics (e.g. `gh pr exists`). If requirements shift toward per-run traceability or independent update streams, an immutable branch-per-run model may be reconsidered. However, given current concurrency guarantees and low-frequency updates, the rolling branch model remains optimal.

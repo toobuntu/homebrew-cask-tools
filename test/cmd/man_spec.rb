@@ -546,6 +546,24 @@ RSpec.describe Homebrew::Cmd::Man do
       end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
     end
 
+    it "prints 'No selection made.' to stdout when --verbose and fzf returns no selection" do
+      verbose_cmd = described_class.new(["some-formula", "--verbose"])
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("")
+
+      expect($stdout).to receive(:puts).with("No selection made.")
+      expect do
+        verbose_cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                           fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+    end
+
     it "writes candidate lines to fzf stdin and closes write end" do
       manfile = Pathname("/usr/share/man/man1/testcmd.1")
       choices = [["system", manfile]]
@@ -663,6 +681,21 @@ RSpec.describe Homebrew::Cmd::Man do
 
         expect do
           cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+            "  #{i + 1}) #{label}: #{file}"
+          end
+        end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      end
+
+      it "prints 'No selection made.' to stdout when --verbose and /dev/tty reaches EOF" do
+        verbose_cmd = described_class.new(["some-formula", "--verbose"])
+        choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+        tty_io = StringIO.new
+        allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
+        allow(verbose_cmd).to receive(:page_list)
+
+        expect($stdout).to receive(:puts).with("No selection made.")
+        expect do
+          verbose_cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
             "  #{i + 1}) #{label}: #{file}"
           end
         end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }

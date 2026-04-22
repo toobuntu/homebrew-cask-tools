@@ -203,7 +203,10 @@ module Homebrew
           pipe.close_write
           pipe.read
         end.to_s.strip
-        exit 0 if result.empty?
+        if result.empty?
+          puts "No selection made." if args.verbose?
+          exit 0
+        end
 
         # Extract the index from the "N) " prefix
         match = result.match(/\A\s*(\d+)\)/)
@@ -238,7 +241,10 @@ module Homebrew
               $stdout.write "Choose [1-#{choices.length}] (or 'l' to re-list): "
               $stdout.flush
               input = tty.gets
-              exit 0 if input.nil?
+              if input.nil?
+                puts "No selection made." if args.verbose?
+                exit 0
+              end
 
               if input.strip.casecmp("l").zero?
                 page_list(list_text)

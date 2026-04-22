@@ -264,8 +264,8 @@ module Homebrew
           $stdout.flush
           input = $stdin.gets
           if input.nil?
-            odie "brew man: --interactive requires a TTY" unless args.quiet?
-            exit 1
+            exit 1 if args.quiet?
+            odie "brew man: --interactive requires a TTY"
           end
 
           index = input.strip.to_i - 1

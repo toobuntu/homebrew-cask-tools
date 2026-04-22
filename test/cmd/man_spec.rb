@@ -620,6 +620,7 @@ RSpec.describe Homebrew::Cmd::Man do
       quiet_cmd = described_class.new(["some-formula", "--quiet"])
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
       allow($stdin).to receive(:gets).and_return(nil)
+      expect($stderr).not_to receive(:puts)
 
       expect do
         quiet_cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|

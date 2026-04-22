@@ -1,3 +1,10 @@
+---
+number: 1
+title: Use pipx to install Python CLI tools in CI
+status: accepted
+date: 2026-04-21
+---
+
 <!--
 SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 
@@ -6,11 +13,7 @@ SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 
 # Use pipx to install Python CLI tools in CI
 
-## Status
-
-Accepted
-
-## Context
+## Context and Problem Statement
 
 GitHub Actions workflows occasionally need Python CLI tools (e.g., `reuse`).
 Three installation mechanisms are available on `ubuntu-latest` runners: apt-get,
@@ -63,16 +66,16 @@ no `pipx ensurepath`, no `actions/setup-python`.
 [install-python]: https://github.com/actions/runner-images/blob/1df4f9740058bffbf8e0ac75516ebf8423b93365/images/ubuntu/scripts/build/install-python.sh
 [etc-environment]: https://github.com/actions/runner-images/blob/1df4f9740058bffbf8e0ac75516ebf8423b93365/images/ubuntu/scripts/helpers/etc-environment.sh#L44-L66
 
-## Decision
+## Decision Outcome
 
 Install Python CLI tools in CI using `pipx install <package>`.
 
 Do not cache single small packages: the install time does not justify the added
 workflow complexity.
 
-## Consequences
+### Consequences
 
-- Workflow steps are a single line: `run: pipx install <package>`.
-- PyPI versions are used directly, avoiding apt-get staleness.
-- This pattern does not extend to non-Python tools, which continue to use
-  Homebrew where appropriate.
+* Good, because workflow steps are a single line: `run: pipx install <package>`.
+* Good, because PyPI versions are used directly, avoiding apt-get staleness.
+* Neutral, because this pattern does not extend to non-Python tools, which
+  continue to use Homebrew where appropriate.

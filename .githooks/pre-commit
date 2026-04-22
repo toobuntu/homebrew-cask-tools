@@ -43,6 +43,16 @@ if [ -n "$workflow_files" ]; then
   fi
 fi
 
+# ADR health check when docs/decisions/ files are staged.
+adr_files=$(staged '^docs/decisions/.*\.md$|^adrs\.toml$')
+if [ -n "$adr_files" ]; then
+  if command -v adrs >/dev/null 2>&1; then
+    adrs doctor
+  else
+    echo "warning: adrs not found — skipping ADR health check (brew install joshrotenberg/brew/adrs)"
+  fi
+fi
+
 # REUSE compliance check.
 if ! reuse lint --quiet; then
   reuse lint

@@ -4,6 +4,11 @@
       "type": "stdio",
       "command": "brew",
       "args": ["mcp-server"]
+    },
+    "adrs": {
+      "type": "stdio",
+      "command": "adrs",
+      "args": ["mcp", "serve"]
     }
   }
 }

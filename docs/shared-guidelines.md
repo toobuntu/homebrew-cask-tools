@@ -51,3 +51,21 @@ files (`.1`, `.1.md`): because the generator overwrites their content, they use 
 sidecars created with `--force-dot-license` rather than inline `#` comment headers.
 
 License texts are committed in `LICENSES/` (populated via `reuse download --all`).
+
+## Architecture decision records
+
+ADRs live in `docs/decisions/` and follow [MADR 4.0.0](https://adr.github.io/madr/)
+format with YAML front matter. Required fields: `number`, `title`, `status`, `date`.
+Omit `decision-makers`, `consulted`, `informed`, and `tags` (not needed for a
+single-maintainer project). SPDX HTML comments belong in the document body, after
+the closing `---` of the YAML front matter.
+
+Use `adrs doctor` to verify ADR health. Install via `brew install joshrotenberg/brew/adrs`.
+The `adrs` MCP server (`adrs mcp serve`) is configured in `.mcp.json` (Claude Code) and
+`.vscode/mcp.json` (VS Code). See `AGENTS.md` § MCP Server Configuration for details.
+
+Section naming for `adrs doctor` to pass without errors:
+- Use `## Context and Problem Statement` (not `## Context`)
+- Use `## Decision Outcome` (not `## Decision`)
+- For consequences, use `## Consequences` as a subsection under `## Decision Outcome`
+  (or as a standalone `### Consequences` inside the Decision Outcome section)

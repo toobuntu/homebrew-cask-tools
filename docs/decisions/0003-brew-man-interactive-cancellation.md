@@ -1,18 +1,19 @@
+---
+number: 3
+title: "`brew man --interactive` cancellation exit behavior"
+status: accepted
+date: 2026-04-21
+---
+
 <!--
 SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 
 SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
 -->
 
-# ADR: `brew man --interactive` Cancellation Exit Behavior
+# `brew man --interactive` cancellation exit behavior
 
-**Date**: 2025  
-**Status**: Accepted — fully implemented  
-**Commits**: `9247639`, `2ae78b2`, correction in subsequent push to PR
-
----
-
-## Context
+## Context and Problem Statement
 
 `brew man --interactive` presents an fzf selector (or a paged TTY fallback) for
 choosing a man page. Three code paths exist where the user makes no selection:
@@ -26,34 +27,37 @@ The original code called `odie "No selection made."` in all three paths, which
 printed `Error: No selection made.` to stderr and exited 1 — treating a
 deliberate user cancellation the same as a hard failure.
 
-A goal was also to surface more relevant diagnostic information under the
-`--verbose` and `--debug` flags, which the original code did not address.
+Cases 1 and 2 are user-initiated dismissals. Case 3 is different: the command
+was invoked in a mode it cannot fulfill (no TTY means interactive selection is
+structurally impossible). What should the exit code and diagnostic output be for
+each path?
 
----
+## Decision Outcome
 
-## Decision
+Chosen option: differentiate user cancellation (exit 0) from environmental
+precondition failure (exit 1), because exit codes should reflect *why* execution
+ended, not merely *that* it ended without a result.
 
-### Exit codes
-
-| Case | Exit code | Rationale |
+| Case | Exit code | Message |
 |---|---|---|
-| fzf Escape / Ctrl+C (empty output) | 0 | User-initiated dismissal; conventional silent exit |
-| TTY EOF (Ctrl+D) | 0 | Functionally equivalent to Escape |
-| Non-TTY nil stdin | 1 | Environmental precondition failure; interactive input was never possible |
+| fzf Escape / Ctrl+C (empty output) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
+| TTY EOF (Ctrl+D) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
+| Non-TTY nil stdin | 1 | `Error: brew man: --interactive requires a TTY` (stderr, suppressed by `--quiet`) |
 
-Cases 1 and 2 are user choice. Case 3 is not — the command was invoked in a
-mode it cannot fulfill, which warrants a non-zero exit.
+### Consequences
 
-### Messaging
+* Good, because users pressing Escape or Ctrl+D see no output — consistent with
+  how interactive Unix tools (fzf, vim, git interactive rebase) behave on
+  cancellation.
+* Good, because `--verbose` users see `No selection made.` on stderr, confirming
+  the command ran and exited cleanly without a selection.
+* Good, because a caller piping or scripting `brew man --interactive` in a
+  non-TTY context receives exit 1 and an error message, suppressible with
+  `--quiet` while still observing the exit code.
+* Neutral, because `--debug` behavior is unchanged; no additional output is
+  emitted for these paths at the debug level.
 
-**Cases 1 and 2 (exit 0):** Emit `No selection made.` to **stderr** when
-`--verbose` is passed. Silent otherwise.
-
-**Case 3 (exit 1):** Emit `Error: brew man: --interactive requires a TTY` to
-stderr unconditionally, suppressible by `--quiet` (via `odie … unless
-args.quiet?; exit 1`).
-
-### Implementation
+## More Information
 
 The correct implementation for Cases 1 and 2 is:
 
@@ -67,41 +71,9 @@ stderr destination, and neutral informational register (see reference table
 below). Forcing a fit onto an existing mixin trades semantic correctness for
 cosmetic idiomaticity — the worse tradeoff.
 
----
+### `Utils::Output::Mixin` method map
 
-## Final implementation state
-
-| Case | Exit code | Message |
-|---|---|---|
-| fzf Escape / Ctrl+C | 0 | `$stderr.puts "No selection made."` if `--verbose` |
-| TTY EOF (Ctrl+D) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
-| Non-TTY nil stdin | 1 | `Error: brew man: --interactive requires a TTY` (stderr, suppressed by `--quiet`) |
-
-`2ae78b2` initially used `puts` (stdout) for Cases 1 and 2. A follow-up
-correction changed these to `$stderr.puts` and updated the corresponding test
-expectations from `expect($stdout)` to `expect($stderr)`.
-
----
-
-## Consequences
-
-- A user who presses Escape or Ctrl+D sees no output — consistent with how
-  interactive Unix tools (fzf, vim, git interactive rebase) behave on
-  cancellation.
-- A user running with `--verbose` sees `No selection made.` on stderr,
-  confirming the command ran and exited cleanly without a selection.
-- A caller piping or scripting `brew man --interactive` in a non-TTY context
-  receives exit 1 and an error message, and can suppress the message with
-  `--quiet` while still observing the exit code.
-- `--debug` behavior is unchanged; no additional output is emitted for these
-  paths at the debug level, since the paths are short and the exit reason is
-  already communicated by the verbose message and/or exit code.
-
----
-
-## Reference: `Utils::Output::Mixin` method map
-
-Source: [`utils/output.rb`](https://github.com/Homebrew/brew/blob/master/Library/Homebrew/utils/output.rb)  
+Source: [`utils/output.rb`](https://github.com/Homebrew/brew/blob/master/Library/Homebrew/utils/output.rb)
 Docs: <https://docs.brew.sh/rubydoc/Utils/Output/Mixin.html>
 
 | Method | Destination | Prefix / format | Flag gate | Exit effect |

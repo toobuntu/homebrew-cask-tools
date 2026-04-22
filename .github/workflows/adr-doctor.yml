@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+
+name: ADR Doctor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/decisions/**"
+      - "adrs.toml"
+      - ".github/workflows/adr-doctor.yml"
+  pull_request:
+    paths:
+      - "docs/decisions/**"
+      - "adrs.toml"
+      - ".github/workflows/adr-doctor.yml"
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+concurrency:
+  group: "adr-doctor-${{ github.ref }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  adr_doctor:
+    name: ADR health check
+    if: github.repository_owner == 'toobuntu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ADRS_VERSION: "0.7.3"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install adrs
+        run: |
+          curl -fsSL \
+            "https://github.com/joshrotenberg/adrs/releases/download/v${ADRS_VERSION}/adrs-x86_64-unknown-linux-gnu.tar.xz" \
+            -o /tmp/adrs.tar.xz
+          tar -xJf /tmp/adrs.tar.xz -C /tmp
+          sudo mv "/tmp/adrs-x86_64-unknown-linux-gnu/adrs" /usr/local/bin/adrs
+          adrs --version
+
+      - name: adrs doctor
+        run: adrs doctor

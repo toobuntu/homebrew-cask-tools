@@ -605,9 +605,11 @@ RSpec.describe Homebrew::Cmd::Man do
       end.to raise_error(SystemExit)
     end
 
-    it "exits with error on EOF in non-TTY mode" do
+    it "exits with error and emits message on EOF in non-TTY mode" do
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
       allow($stdin).to receive(:gets).and_return(nil)
+      expect($stderr).to receive(:puts)
+        .with(a_string_including("brew man: --interactive requires a TTY"))
 
       expect do
         cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|

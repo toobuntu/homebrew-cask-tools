@@ -55,8 +55,8 @@ License texts are committed in `LICENSES/` (populated via `reuse download --all`
 ## Architecture decision records
 
 ADRs live in `docs/decisions/` and follow [MADR 4.0.0](https://adr.github.io/madr/)
-format with YAML front matter. Required fields: `number`, `title`, `status`, `date`.
-Omit `decision-makers`, `consulted`, `informed`, and `tags` (not needed for a
+format with YAML front matter. Required fields: `number`, `title`, `status` (lowercase),
+`date`. Omit `decision-makers`, `consulted`, `informed`, and `tags` (not needed for a
 single-maintainer project). SPDX HTML comments belong in the document body, after
 the closing `---` of the YAML front matter.
 

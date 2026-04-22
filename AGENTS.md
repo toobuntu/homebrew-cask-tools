@@ -51,7 +51,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine`, `--only=cmd/cask-extract`, `--only=cmd/man`, or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
   (requires the cmd/dev-cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 - When modifying `docs/decisions/` or `adrs.toml`: run `adrs doctor` to verify ADR health.
-  `adrs` is not pre-installed in the Copilot sandbox — use bash: `adrs doctor` (or skip if unavailable).
+  `adrs` is not pre-installed in the Copilot sandbox — skip if `command -v adrs` returns empty.
   Install locally with `brew install joshrotenberg/brew/adrs`.
 
 ### Development Flow

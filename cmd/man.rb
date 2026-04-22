@@ -204,7 +204,7 @@ module Homebrew
           pipe.read
         end.to_s.strip
         if result.empty?
-          puts "No selection made." if args.verbose?
+          $stderr.puts "No selection made." if args.verbose?
           exit 0
         end
 
@@ -242,7 +242,7 @@ module Homebrew
               $stdout.flush
               input = tty.gets
               if input.nil?
-                puts "No selection made." if args.verbose?
+                $stderr.puts "No selection made." if args.verbose?
                 exit 0
               end
 

@@ -1,8 +1,14 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+
+SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+-->
+
 # ADR: `brew man --interactive` Cancellation Exit Behavior
 
 **Date**: 2025  
-**Status**: Accepted — partially implemented; one correction pending  
-**Commits**: `9247639`, `2ae78b2`
+**Status**: Accepted — fully implemented  
+**Commits**: `9247639`, `2ae78b2`, correction in subsequent push to PR
 
 ---
 
@@ -63,17 +69,17 @@ cosmetic idiomaticity — the worse tradeoff.
 
 ---
 
-## Current implementation state
+## Final implementation state
 
-| Case | Exit code | Message | Correct? |
-|---|---|---|---|
-| fzf Escape / Ctrl+C | 0 | `puts "No selection made."` if `--verbose` | **No** — stdout; should be stderr |
-| TTY EOF (Ctrl+D) | 0 | `puts "No selection made."` if `--verbose` | **No** — stdout; should be stderr |
-| Non-TTY nil stdin | 1 | `Error: brew man: --interactive requires a TTY` (stderr, suppressed by `--quiet`) | Yes |
+| Case | Exit code | Message |
+|---|---|---|
+| fzf Escape / Ctrl+C | 0 | `$stderr.puts "No selection made."` if `--verbose` |
+| TTY EOF (Ctrl+D) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
+| Non-TTY nil stdin | 1 | `Error: brew man: --interactive requires a TTY` (stderr, suppressed by `--quiet`) |
 
-**Pending correction**: commits `2ae78b2` used `puts` (stdout) for Cases 1 and
-2. These must be changed to `$stderr.puts` and the corresponding test
-expectations updated from `expect($stdout)` to `expect($stderr)`.
+`2ae78b2` initially used `puts` (stdout) for Cases 1 and 2. A follow-up
+correction changed these to `$stderr.puts` and updated the corresponding test
+expectations from `expect($stdout)` to `expect($stderr)`.
 
 ---
 

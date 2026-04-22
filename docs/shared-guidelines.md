@@ -60,9 +60,11 @@ format with YAML front matter. Required fields: `number`, `title`, `status` (low
 single-maintainer project). SPDX HTML comments belong in the document body, after
 the closing `---` of the YAML front matter.
 
-Use `adrs doctor` to verify ADR health. Install via `brew install joshrotenberg/brew/adrs`.
-The `adrs` MCP server (`adrs mcp serve`) is configured in `.mcp.json` (Claude Code) and
-`.vscode/mcp.json` (VS Code). See `AGENTS.md` § MCP Server Configuration for details.
+Use `adrs doctor` to verify ADR health. `adrs` is pre-installed in the Copilot coding agent
+sandbox and available on `PATH`. Install locally via `brew install joshrotenberg/brew/adrs`.
+The `adrs` MCP server (`adrs mcp serve`) is configured in `.mcp.json` (Claude Code),
+`.vscode/mcp.json` (VS Code), and the Copilot coding agent sandbox config.
+See `AGENTS.md` § MCP Server Configuration for details.
 
 Section naming for `adrs doctor` to pass without errors:
 - Use `## Context and Problem Statement` (not `## Context`)

@@ -8,8 +8,6 @@
 adr_dir = "docs/decisions"
 mode = "ng"
 
-# `templates.custom` requires adrs v0.8+ (https://github.com/joshrotenberg/adrs/issues/122).
-# Until then, the custom template at docs/decisions/.adr-template.md is for reference only.
-# The built-in MADR template omits decision-makers/consulted/informed when empty.
 [templates]
 format = "madr"
+variant = "minimal"

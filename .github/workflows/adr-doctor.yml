@@ -25,6 +25,11 @@ concurrency:
   group: "adr-doctor-${{ github.ref }}"
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  HOMEBREW_DEVELOPER: 1
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_ENV_HINTS: 1
+
 permissions: {}
 
 jobs:
@@ -34,21 +39,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      ADRS_VERSION: "0.7.3"
     steps:
+      - name: Set up Homebrew
+        id: setup-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          core: false
+          cask: false
+
+      - uses: Homebrew/actions/cache-homebrew-prefix@main
+        with:
+          install: joshrotenberg/brew/adrs
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-
-      - name: Install adrs
-        run: |
-          curl -fsSL \
-            "https://github.com/joshrotenberg/adrs/releases/download/v${ADRS_VERSION}/adrs-x86_64-unknown-linux-gnu.tar.xz" \
-            -o /tmp/adrs.tar.xz
-          tar -xJf /tmp/adrs.tar.xz -C /tmp
-          sudo mv "/tmp/adrs-x86_64-unknown-linux-gnu/adrs" /usr/local/bin/adrs
-          adrs --version
 
       - name: adrs doctor
         run: adrs doctor

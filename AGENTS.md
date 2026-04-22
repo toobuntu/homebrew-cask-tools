@@ -51,8 +51,7 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `Homebrew/tests` (MCP) with `--only=cmd/purge-quarantine`, `--only=cmd/cask-extract`, `--only=cmd/man`, or `--only=cmd/generate-tap-man-completions` — equivalent to `brew tests --only=cmd/<file>`
   (requires the cmd/dev-cmd and spec to be hardlinked first — use `scripts/run-tests.sh`)
 - When modifying `docs/decisions/` or `adrs.toml`: run `adrs doctor` to verify ADR health.
-  `adrs` is not pre-installed in the Copilot sandbox — skip if `command -v adrs` returns empty.
-  Install locally with `brew install joshrotenberg/brew/adrs`.
+  `adrs` is pre-installed in the Copilot sandbox. Install locally with `brew install joshrotenberg/brew/adrs`.
 
 ### Development Flow
 
@@ -120,10 +119,8 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 - `.github/workflows/sync-shared-config.yml`: Syncs shared configuration files from upstream
   Homebrew repositories. Uses `yq` for YAML mutations with post-mutation assertions.
   Requires a GitHub App token to push workflow files — see `docs/architecture.md` § CI setup.
-- `adrs.toml`: `adrs` configuration — points to `docs/decisions/`, MADR 4.0.0 mode.
+- `adrs.toml`: `adrs` configuration — points to `docs/decisions/`, MADR 4.0.0 mode, `minimal` variant for new ADRs.
   See <https://joshrotenberg.com/adrs/configuration.html>.
-- `docs/decisions/.adr-template.md`: Custom minimal MADR 4.0.0 template (reference for
-  `templates.custom` once `adrs` v0.8+ supports it; see https://github.com/joshrotenberg/adrs/issues/122).
 - `.mcp.json`: Claude Code project-level MCP server config (used when running `claude` locally).
 - `.vscode/mcp.json`: VS Code MCP server config (used in VS Code with Copilot locally).
 - `.github/workflows/copilot-setup-steps.yml`: Setup steps for GitHub Copilot coding agent — installs Homebrew and caches bundler gems.
@@ -138,13 +135,13 @@ Two MCP servers provide tools to AI coding agents: Homebrew and `adrs`.
 | adrs | `.mcp.json` (Claude Code), `.vscode/mcp.json` (VS Code) |
 
 The `adrs` MCP server (`adrs mcp serve`) requires `adrs` to be installed locally
-(`brew install joshrotenberg/brew/adrs`). It is **not** pre-installed in the Copilot
-coding agent sandbox. Use the `adrs doctor` command via bash when in the sandbox.
+(`brew install joshrotenberg/brew/adrs`). It is pre-installed in the Copilot coding agent sandbox.
 
 For the **GitHub Copilot coding agent**, add the following JSON in the repository's
 Copilot settings (Repository Settings → Copilot → Coding agent → MCP configuration).
 `brew` is available (but not on `PATH`) because `.github/workflows/copilot-setup-steps.yml`
-runs `Homebrew/actions/setup-homebrew`.
+runs `Homebrew/actions/setup-homebrew`. `adrs` is on `PATH` as it is installed via
+`Homebrew/actions/cache-homebrew-prefix`.
 
 ```json
 {
@@ -154,14 +151,16 @@ runs `Homebrew/actions/setup-homebrew`.
       "command": "/home/linuxbrew/.linuxbrew/bin/brew",
       "args": ["mcp-server"],
       "tools": ["*"]
+    },
+    "adrs": {
+      "type": "local",
+      "command": "adrs",
+      "args": ["mcp", "serve"],
+      "tools": ["*"]
     }
   }
 }
 ```
-
-The `adrs` MCP server is not included for the Copilot coding agent because `adrs` is not
-pre-installed in the sandbox. Agents should run `adrs doctor` via bash after modifying
-`docs/decisions/` files.
 
 ## Key Guidelines
 

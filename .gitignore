@@ -6,3 +6,6 @@
 # so this hardlink is needed locally but should not be committed.
 cmd/generate-tap-man-completions.rb
 docs/migration-investigation/snapshots/
+
+# Rotation-tagged doc snapshots
+docs/tech-debt.*.md

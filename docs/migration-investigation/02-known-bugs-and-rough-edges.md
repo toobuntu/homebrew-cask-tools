@@ -492,10 +492,10 @@ the current filename.)
   touch `find_cask_in_history`; that helper's git-output
   validation gap remains. Keep in tech-debt.md.
 
-All other items in tech-debt.md (#1, #2, #4-#7, #9-#12)
-are unrelated to the cask-extract AST migration and stay
-where they are. W8.5 will validate each against current
-code.
+All other items in tech-debt.md (everything except #3 and
+#8 above) are unrelated to the cask-extract AST migration
+and stay where they are. W8.5 will validate each against
+current code.
 
 ---
 

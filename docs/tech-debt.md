@@ -240,7 +240,7 @@ artifacts remain skipped.
 
 ### 15. Binary artifacts from casks are never de-quarantined
 
-purge-quarantine's contract is to clear the Gatekeeper limitation so an installed cask can
+`purge-quarantine`'s contract is to clear the Gatekeeper limitation so an installed cask can
 run. Binaries a cask ships fall under that contract, but are currently missed:
 `Cask::Artifact::Binary` is `Symlinked` (not `Moved`), so Tier 2 excludes it, and the
 `Contents/Info.plist` gate in `purge_quarantine_for_cask` skips the staged executable.

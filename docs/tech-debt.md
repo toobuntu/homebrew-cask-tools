@@ -183,3 +183,89 @@ the other, but this is manual and error-prone.
 - Or add CI checks for content drift
 
 **Files:** `AGENTS.md`, `CLAUDE.md`
+
+### 13. Tier 3 hand-parses a fragile, mid-migration metadata schema
+
+Investigating Homebrew/brew#22346 confirmed its absolute-path `target` sibling is
+runtime-only (never persisted; only the relative `target:` kwarg is on disk), and that
+Tier 2 already reads the resolved path in-process via `Cask::CaskLoader.load(token)` +
+`artifact.target`. **Won't-do: do not wire up `brew info` or the JSON sibling. Tier 2 is
+already correct and is not changed by this item.**
+
+Tier 3 remains a necessary distinct tier — it must work from the unambiguous Caskroom
+directory, not from a token, because (a) `CaskLoader.load` needs a *bare* token while users
+may pass a fully-qualified `user/repo/token` to disambiguate a collision, and the qualified
+form raises `TapCaskUnavailableError` once the source tap is gone; and (b) the source tap
+may be absent entirely. Its current implementation is unsound:
+
+- It reads the versioned metadata file, whose schema is mid-migration: `<token>.json`
+  (default/API), `<token>.internal.json` (`HOMEBREW_DEVELOPER`/eventual default; schema is
+  `raw_artifacts` tuples, not `artifacts` hashes), and `<token>.rb` (source installs). The
+  `**/Casks/<token>.json` glob and `data["artifacts"]` parse silently yield `[]` for the
+  latter two.
+- It crashes on `target:`-renamed bundles: `Array(a["app"])` includes the nested
+  `{"target"=>...}` hash; `dir / hash` raises `TypeError`, caught by the method `rescue`,
+  so the tier returns `[]`.
+
+Fix: source Tier 3 from `cask_dir`'s `INSTALL_RECEIPT.json` `uninstall_artifacts` (locally
+written by brew, schema-stable across API/internal-API/source installs, already in the
+`{"app"=>[...]}` / `{"binary"=>[...]}` shape) rather than the versioned cask file. Apply the
+same rename-aware parsing to `candidate_bundle_names`. `config.json` remains the source for
+`install_dirs`.
+
+**Acceptance criteria:**
+- A cask installed under the internal API (only `<token>.internal.json` on disk) resolves
+  via the receipt.
+- `app "Src.app", target: "Dst.app"` resolves to `<appdir>/Dst.app`.
+- `candidate_bundle_names` never emits a non-String element.
+- Tier 3 keys off `cask_dir`, never the (possibly fully-qualified) input token.
+- Verify pkg casks expose `pkgutil` patterns under `uninstall_artifacts`; graceful
+  fall-through when an older receipt lacks the field.
+- Red/green: internal-API fixture, renamed-app fixture.
+
+**Files:** `cmd/purge-quarantine.rb`, `test/cmd/purge-quarantine_spec.rb`. Adjacent to #4;
+Tiers 2 and 5–6 are explicitly out of scope and unchanged.
+
+### 14. Suite artifacts skip nested apps (Info.plist filter)
+
+The downstream `Contents/Info.plist` gate in `purge_quarantine_for_cask` is correct for
+fonts/plain artifacts (not Gatekeeper-gated) but rejects `suite` containers, whose nested
+`.app`s are then never reached. Fix: special-case `Cask::Artifact::Suite` to recurse to its
+`*.app` children rather than dropping the filter.
+
+**Acceptance criteria:** a suite cask de-quarantines each nested `.app`; fonts/plain
+artifacts remain skipped.
+
+**Files:** `cmd/purge-quarantine.rb`, `test/cmd/purge-quarantine_spec.rb`.
+
+### 15. Binary artifacts from casks are never de-quarantined
+
+purge-quarantine's contract is to clear the Gatekeeper limitation so an installed cask can
+run. Binaries a cask ships fall under that contract, but are currently missed:
+`Cask::Artifact::Binary` is `Symlinked` (not `Moved`), so Tier 2 excludes it, and the
+`Contents/Info.plist` gate in `purge_quarantine_for_cask` skips the staged executable.
+
+The trigger is solely the presence of `com.apple.quarantine`/`com.apple.provenance` — not
+notarization or signing state. A quarantined ad-hoc/modified binary is hard-blocked by
+Gatekeeper on first run ("…is damaged and can't be opened"); removing the xattr clears the
+gate. The tool must therefore apply its existing xattr-presence logic to binary artifacts;
+it must NOT attempt to assess signing/notarization (`spctl`/`codesign` are unreliable
+proxies and irrelevant to the action taken).
+
+In-bundle binaries (e.g. `…/App.app/Contents/MacOS/foo`) are already covered by the
+enclosing app's recursive removal; the genuinely uncovered surface is the standalone binary
+staged in the Caskroom and symlinked into `bin`. Idempotent removal makes any overlap
+harmless, so no app-vs-standalone distinction is needed in the code.
+
+**Acceptance criteria:**
+
+- Binary artifacts are included as candidates (in addition to `Moved` bundles).
+- Operate on the real file via `realpath`, not the `bin` symlink; bypass the
+  `Contents/Info.plist` gate for binaries.
+- Decision is xattr-presence only; no `spctl`/`codesign` calls.
+- Update the command description, README, and `BUNDLE_EXTENSIONS` framing to state that
+  cask-shipped binaries are in scope.
+- Red/green: a standalone quarantined binary fixture is cleaned; a binary with no
+  quarantine xattr is a no-op.
+
+**Files:** `cmd/purge-quarantine.rb`, `test/cmd/purge-quarantine_spec.rb`, `README.md`.

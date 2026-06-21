@@ -49,7 +49,7 @@ the requirements should win.
 * **Homebrew via absolute path** — pre-installed Linuxbrew lives
   at `/home/linuxbrew/.linuxbrew/` on `ubuntu-latest` runners, but
   its `bin/` is not on PATH by default. The lightweight pattern
-  (used in `~/devel/claude/desktop/babble/.github/workflows/tests.yml`):
+  (used in toobuntu/babble's `.github/workflows/tests.yml`):
   one `run:` step appending `/home/linuxbrew/.linuxbrew/bin` to
   `$GITHUB_ENV`, followed by one or more `run:` steps invoking
   `/home/linuxbrew/.linuxbrew/bin/brew install <pkg>` directly.
@@ -81,7 +81,7 @@ is doing:
   with the binary immediately on PATH. Zero setup overhead.
 * **Homebrew via absolute path** when the workflow already installs
   non-Python tools via Homebrew (shellcheck, shfmt, ksh93, etc., as
-  in babble's `tests.yml`). The PATH-append step is already there,
+  in toobuntu/babble's `tests.yml`). The PATH-append step is already there,
   and adding `reuse` to the existing `brew install` line is
   essentially free.
 * **`Homebrew/actions/setup-homebrew`** (the full reusable-action
@@ -127,7 +127,7 @@ not justify the added workflow complexity.
   persistent PATH/env wiring for pipx
 * [actions/runner-images issue 10781][issue-10781] — related upstream
   discussion
-* `~/devel/claude/desktop/babble/.github/workflows/tests.yml` — the
+* toobuntu/babble's `.github/workflows/tests.yml` — the
   Homebrew-via-absolute-path pattern in production use. Installs
   shellcheck, shfmt, ksh93 across two jobs.
 

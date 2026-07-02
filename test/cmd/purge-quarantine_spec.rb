@@ -37,7 +37,9 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
 
   describe "#purge_quarantine_for_cask" do
     let(:token)    { "delegated-cask" }
-    let(:cask_dir) { HOMEBREW_CASKROOM/token }
+    # Cask::Caskroom.path, not the HOMEBREW_CASKROOM constant: startup/config.rb
+    # is not loaded in the brew tests environment (cf. test/cmd/list_spec.rb).
+    let(:cask_dir) { Cask::Caskroom.path/token }
 
     after { FileUtils.rm_rf(cask_dir) }
 

@@ -6,6 +6,7 @@
 # frozen_string_literal: true
 
 require "abstract_command"
+require "cask/caskroom"
 require "shellwords"
 require "system_command"
 require_relative "../lib/cask_tools/bundle_discovery"
@@ -43,9 +44,9 @@ module Homebrew
       def purge_quarantine_for_cask(token)
         oh1 "Processing: #{token}" unless args.quiet?
 
-        cask_dir = HOMEBREW_CASKROOM/token
+        cask_dir = Cask::Caskroom.path/token
         unless cask_dir.directory?
-          ofail "#{token} is not a Homebrew-installed cask (not found in #{HOMEBREW_CASKROOM})"
+          ofail "#{token} is not a Homebrew-installed cask (not found in #{Cask::Caskroom.path})"
           return
         end
 

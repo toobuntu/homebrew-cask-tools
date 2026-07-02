@@ -39,6 +39,13 @@ PURGE_SPEC_SRC="${TAP_DIR}/test/cmd/purge-quarantine_spec.rb"
 PURGE_CMD_DST="${HOMEBREW_LIB}/cmd/purge-quarantine.rb"
 PURGE_SPEC_DST="${HOMEBREW_LIB}/test/cmd/purge-quarantine_spec.rb"
 
+# lib/ files must be hardlinked alongside cmd/ files: the hardlinked command's
+# `require_relative "../lib/..."` resolves relative to the hardlink location.
+BDISC_LIB_SRC="${TAP_DIR}/lib/cask_tools/bundle_discovery.rb"
+BDISC_SPEC_SRC="${TAP_DIR}/test/lib/cask_tools/bundle_discovery_spec.rb"
+BDISC_LIB_DST="${HOMEBREW_LIB}/lib/cask_tools/bundle_discovery.rb"
+BDISC_SPEC_DST="${HOMEBREW_LIB}/test/lib/cask_tools/bundle_discovery_spec.rb"
+
 CEXT_CMD_SRC="${TAP_DIR}/cmd/cask-extract.rb"
 CEXT_SPEC_SRC="${TAP_DIR}/test/cmd/cask-extract_spec.rb"
 CEXT_CMD_DST="${HOMEBREW_LIB}/cmd/cask-extract.rb"
@@ -62,6 +69,9 @@ cleanup() {
   rm -f "${CEXT_CMD_DST}" "${CEXT_SPEC_DST}"
   rm -f "${GENTC_CMD_DST}" "${GENTC_SPEC_DST}"
   rm -f "${MAN_CMD_DST}" "${MAN_SPEC_DST}"
+  rm -f "${BDISC_LIB_DST}" "${BDISC_SPEC_DST}"
+  rmdir "${HOMEBREW_LIB}/lib/cask_tools" "${HOMEBREW_LIB}/lib" \
+    "${HOMEBREW_LIB}/test/lib/cask_tools" "${HOMEBREW_LIB}/test/lib" 2>/dev/null || true
   exit "${exit_code}"
 }
 trap cleanup EXIT INT TERM
@@ -81,7 +91,7 @@ cat >&2 <<'WARNING'
 WARNING
 
 # Check that source files exist.
-for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${CEXT_CMD_SRC}" "${CEXT_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}" "${MAN_CMD_SRC}" "${MAN_SPEC_SRC}"
+for src in "${PURGE_CMD_SRC}" "${PURGE_SPEC_SRC}" "${CEXT_CMD_SRC}" "${CEXT_SPEC_SRC}" "${GENTC_CMD_SRC}" "${GENTC_SPEC_SRC}" "${MAN_CMD_SRC}" "${MAN_SPEC_SRC}" "${BDISC_LIB_SRC}" "${BDISC_SPEC_SRC}"
 do
   if [[ ! -f "${src}" ]]
   then
@@ -95,6 +105,7 @@ done
 # File.stat on the spec path relative to HOMEBREW_LIBRARY_PATH; symlinks that
 # point outside that tree fail with ENOENT.
 echo "==> Hardlinking files into Homebrew repository..." >&2
+mkdir -p "${HOMEBREW_LIB}/lib/cask_tools" "${HOMEBREW_LIB}/test/lib/cask_tools"
 pairs=(
   "${PURGE_CMD_SRC}:${PURGE_CMD_DST}"
   "${PURGE_SPEC_SRC}:${PURGE_SPEC_DST}"
@@ -104,6 +115,8 @@ pairs=(
   "${GENTC_SPEC_SRC}:${GENTC_SPEC_DST}"
   "${MAN_CMD_SRC}:${MAN_CMD_DST}"
   "${MAN_SPEC_SRC}:${MAN_SPEC_DST}"
+  "${BDISC_LIB_SRC}:${BDISC_LIB_DST}"
+  "${BDISC_SPEC_SRC}:${BDISC_SPEC_DST}"
 )
 for pair in "${pairs[@]}"
 do
@@ -121,6 +134,8 @@ then
 else
   echo "==> Running: brew tests --only=cmd/purge-quarantine" >&2
   brew tests --only=cmd/purge-quarantine
+  echo "==> Running: brew tests --only=lib/cask_tools/bundle_discovery" >&2
+  brew tests --only=lib/cask_tools/bundle_discovery
   echo "==> Running: brew tests --only=cmd/cask-extract" >&2
   brew tests --only=cmd/cask-extract
   echo "==> Running: brew tests --only=cmd/generate-tap-man-completions" >&2

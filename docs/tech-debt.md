@@ -210,20 +210,21 @@ may be absent entirely. Its current implementation is unsound:
 Fix: source Tier 3 from `cask_dir`'s `INSTALL_RECEIPT.json` `uninstall_artifacts` (locally
 written by brew, schema-stable across API/internal-API/source installs, already in the
 `{"app"=>[...]}` / `{"binary"=>[...]}` shape) rather than the versioned cask file. Apply the
-same rename-aware parsing to `candidate_bundle_names`. `config.json` remains the source for
-`install_dirs`.
+same rename-aware parsing to `BundleDiscovery#candidate_names`. `config.json` remains the
+source for `install_dirs`.
 
 **Acceptance criteria:**
 - A cask installed under the internal API (only `<token>.internal.json` on disk) resolves
   via the receipt.
 - `app "Src.app", target: "Dst.app"` resolves to `<appdir>/Dst.app`.
-- `candidate_bundle_names` never emits a non-String element.
+- `BundleDiscovery#candidate_names` never emits a non-String element.
 - Tier 3 keys off `cask_dir`, never the (possibly fully-qualified) input token.
 - Verify pkg casks expose `pkgutil` patterns under `uninstall_artifacts`; graceful
   fall-through when an older receipt lacks the field.
 - Red/green: internal-API fixture, renamed-app fixture.
 
-**Files:** `cmd/purge-quarantine.rb`, `test/cmd/purge-quarantine_spec.rb`. Adjacent to #4;
+**Files:** `lib/cask_tools/bundle_discovery.rb`,
+`test/lib/cask_tools/bundle_discovery_spec.rb`. Adjacent to #4;
 Tiers 2 and 5–6 are explicitly out of scope and unchanged.
 
 ### 14. Suite artifacts skip nested apps (Info.plist filter)
@@ -236,11 +237,12 @@ fonts/plain artifacts (not Gatekeeper-gated) but rejects `suite` containers, who
 **Acceptance criteria:** a suite cask de-quarantines each nested `.app`; fonts/plain
 artifacts remain skipped.
 
-**Files:** `cmd/purge-quarantine.rb`, `test/cmd/purge-quarantine_spec.rb`.
+**Files:** `cmd/purge-quarantine.rb`, `lib/cask_tools/bundle_discovery.rb`,
+`test/cmd/purge-quarantine_spec.rb`, `test/lib/cask_tools/bundle_discovery_spec.rb`.
 
 ### 15. Binary artifacts from casks are never de-quarantined
 
-purge-quarantine's contract is to clear the Gatekeeper limitation so an installed cask can
+`purge-quarantine`'s contract is to clear the Gatekeeper limitation so an installed cask can
 run. Binaries a cask ships fall under that contract, but are currently missed:
 `Cask::Artifact::Binary` is `Symlinked` (not `Moved`), so Tier 2 excludes it, and the
 `Contents/Info.plist` gate in `purge_quarantine_for_cask` skips the staged executable.
@@ -268,4 +270,6 @@ harmless, so no app-vs-standalone distinction is needed in the code.
 - Red/green: a standalone quarantined binary fixture is cleaned; a binary with no
   quarantine xattr is a no-op.
 
-**Files:** `cmd/purge-quarantine.rb`, `test/cmd/purge-quarantine_spec.rb`, `README.md`.
+**Files:** `cmd/purge-quarantine.rb`, `lib/cask_tools/bundle_discovery.rb`,
+`test/cmd/purge-quarantine_spec.rb`, `test/lib/cask_tools/bundle_discovery_spec.rb`,
+`README.md`.

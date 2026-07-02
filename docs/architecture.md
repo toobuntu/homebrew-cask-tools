@@ -66,8 +66,18 @@ bundled with Ruby 3.3+ (which Homebrew requires), so it adds no dependencies.
 
 ## Tiered bundle discovery
 
-`quarantinable_bundles_for` in `cmd/purge-quarantine.rb` uses seven tiers in
-order, stopping at the first non-empty result:
+`Homebrew::CaskTools::BundleDiscovery#bundles` in
+`lib/cask_tools/bundle_discovery.rb` uses seven tiers in order, stopping at the
+first non-empty result. `cmd/purge-quarantine.rb` constructs
+`BundleDiscovery.new(token, cask_dir)` and consumes `#bundles`; the class is a
+standalone helper so external consumers (e.g. the babble external command, W3
+in the master plan) can reuse the discovery without the quarantine removal.
+
+The namespace is deliberately `Homebrew::CaskTools`, not `Homebrew::Cask`:
+defining `Homebrew::Cask` would shadow the top-level `::Cask` module for all
+brew code written inside `module Homebrew` (Ruby resolves bare `Cask::...`
+references lexically before falling back to `Object`), breaking Homebrew
+internals like `cleanup.rb` and `diagnostic.rb` at runtime.
 
 | Tier | Method | When it works |
 |------|--------|---------------|
@@ -79,9 +89,12 @@ order, stopping at the first non-empty result:
 | 6 | `bundles_from_pkgutil_bom` | `.pkg` file still staged in Caskroom; BOM gives bundle names to search |
 | 7 | `bundles_from_mdfind` | Spotlight has indexed the bundle; last resort |
 
-Tiers 4–7 need **candidate bundle names** (from `candidate_bundle_names`) to
-target their search. This helper extracts names from `.metadata` JSON `app`
-stanzas, `uninstall.delete` paths, and `pkgutil` receipt file lists.
+Tiers 4–7 need **candidate bundle names** (from `#candidate_names`, public and
+memoized per instance) to target their search. This helper extracts names from
+`.metadata` JSON `app` stanzas, `uninstall.delete` paths, and `pkgutil` receipt
+file lists. The lsregister dump is exposed as the class method
+`BundleDiscovery.lsregister_dump` so all instances and consumers share one
+on-disk cache.
 
 ### Tier rationale
 
@@ -136,8 +149,9 @@ The discovery tiers rely on macOS system utilities:
 
 ### Common install directories
 
-`install_dirs(cask_dir)` returns `[configured appdir, /Applications, ~/Applications]`
-(deduped). The configured appdir is read from `.metadata/config.json` if present.
+`BundleDiscovery#install_dirs` returns
+`[configured appdir, /Applications, ~/Applications]` (deduped). The configured
+appdir is read from `.metadata/config.json` if present.
 
 ## Shell completions
 

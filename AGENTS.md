@@ -65,6 +65,17 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
 
 - `cmd/purge-quarantine.rb`: External tap command implementing `brew purge-quarantine`.
   File name has no `brew-` prefix — Homebrew tap commands use this convention.
+  Delegates bundle discovery to `lib/cask_tools/bundle_discovery.rb`.
+- `lib/cask_tools/bundle_discovery.rb`: `Homebrew::CaskTools::BundleDiscovery` — the
+  seven-tier bundle discovery shared helper (see `docs/architecture.md` § Tiered bundle
+  discovery). Public API: `.new(token, cask_dir)`, `#bundles`, `#candidate_names`,
+  `.lsregister_dump`. Consumed by `cmd/purge-quarantine.rb` and designed for reuse by
+  external taps (babble). The namespace is deliberately `Homebrew::CaskTools`, NOT
+  `Homebrew::Cask`: defining `Homebrew::Cask` would shadow the top-level `::Cask` module
+  for all brew code written inside `module Homebrew` and break Homebrew internals at
+  runtime. `lib/` files must be hardlinked into `$(brew --repo)/Library/Homebrew/lib/`
+  for `brew tests` (handled by `scripts/run-tests.sh` and CI) because the hardlinked
+  command's `require_relative "../lib/..."` resolves relative to the hardlink location.
 - `cmd/cask-extract.rb`: External tap command implementing `brew cask-extract`.
   Extracts a cask from Homebrew's git history into a personal tap, optionally adding
   a `postflight` block to remove macOS's quarantine extended attribute.
@@ -82,6 +93,8 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   The `.githooks/post-merge` and `.githooks/post-rewrite` hooks re-create the hardlink
   automatically after `git pull` (set `core.hooksPath = .githooks` once to enable).
 - `test/cmd/purge-quarantine_spec.rb`: RSpec spec for the `purge-quarantine` command.
+- `test/lib/cask_tools/bundle_discovery_spec.rb`: RSpec spec for `BundleDiscovery`
+  (run with `brew tests --only=lib/cask_tools/bundle_discovery`).
 - `test/cmd/cask-extract_spec.rb`: RSpec spec for the `cask-extract` command.
 - `test/cmd/man_spec.rb`: RSpec spec for the `man` command.
 - `test/cmd/generate-tap-man-completions_spec.rb`: RSpec spec for the `generate-tap-man-completions` command.
@@ -102,8 +115,10 @@ the bundler gems are pre-cached. Only fall back to bash if the MCP server is una
   The `--open-pr`, `--no-pull-requests`, and `--no-fork` flags are declared in `cmd_args`
   (visible in `--help`, completions, and man pages) and forwarded to the brew command.
   Cleans up hardlinks on exit. See `docs/architecture.md` § Developer workflow for details.
-- `scripts/run-tests.sh`: Helper script to hardlink tap files into `$(brew --repo)` and run `brew tests`.
-  Accepts an optional `--only=cmd/<file>[:<line>]` argument to run a specific test.
+- `scripts/run-tests.sh`: Helper script to hardlink tap files (`cmd/`, `lib/`, and specs)
+  into `$(brew --repo)` and run `brew tests`.
+  Accepts an optional `--only=<spec-path>[:<line>]` argument to run a specific test
+  (e.g. `--only=cmd/purge-quarantine` or `--only=lib/cask_tools/bundle_discovery`).
 - `scripts/annotate.sh`: Annotates non-REUSE-compliant files with SPDX headers. Run this
   instead of hand-writing SPDX headers.
 - `.githooks/pre-commit`: Pre-commit hook — runs `brew style --fix` (Ruby + shell), actionlint, and REUSE compliance.

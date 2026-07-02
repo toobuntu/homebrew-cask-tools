@@ -203,7 +203,10 @@ module Homebrew
           pipe.close_write
           pipe.read
         end.to_s.strip
-        odie "No selection made." if result.empty?
+        if result.empty?
+          $stderr.puts "No selection made." if args.verbose?
+          exit 0
+        end
 
         # Extract the index from the "N) " prefix
         match = result.match(/\A\s*(\d+)\)/)
@@ -238,7 +241,10 @@ module Homebrew
               $stdout.write "Choose [1-#{choices.length}] (or 'l' to re-list): "
               $stdout.flush
               input = tty.gets
-              odie "No selection made." if input.nil?
+              if input.nil?
+                $stderr.puts "No selection made." if args.verbose?
+                exit 0
+              end
 
               if input.strip.casecmp("l").zero?
                 page_list(list_text)
@@ -257,7 +263,10 @@ module Homebrew
           $stdout.write "Choose [1-#{choices.length}]: "
           $stdout.flush
           input = $stdin.gets
-          odie "No selection made." if input.nil?
+          if input.nil?
+            exit 1 if args.quiet?
+            odie "brew man: --interactive requires a TTY"
+          end
 
           index = input.strip.to_i - 1
           odie "Invalid selection." if index.negative? || index >= choices.length

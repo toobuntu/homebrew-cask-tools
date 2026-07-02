@@ -7,6 +7,7 @@
 
 require "fileutils"
 require_relative "../../cmd/purge-quarantine"
+require "tmpdir"
 
 RSpec.describe Homebrew::Cmd::PurgeQuarantine do
   subject(:cmd) { described_class.new(["some-cask"]) }
@@ -36,12 +37,17 @@ RSpec.describe Homebrew::Cmd::PurgeQuarantine do
   end
 
   describe "#purge_quarantine_for_cask" do
+    let(:tmpdir)   { Pathname(Dir.mktmpdir) }
     let(:token)    { "delegated-cask" }
-    # Cask::Caskroom.path, not the HOMEBREW_CASKROOM constant: startup/config.rb
-    # is not loaded in the brew tests environment (cf. test/cmd/list_spec.rb).
-    let(:cask_dir) { Cask::Caskroom.path/token }
+    let(:cask_dir) { tmpdir/"Caskroom"/token }
 
-    after { FileUtils.rm_rf(cask_dir) }
+    # Stub the Caskroom root into a tmpdir so the spec never touches a real
+    # Caskroom regardless of runner. (The command uses Cask::Caskroom.path,
+    # not the HOMEBREW_CASKROOM constant: startup/config.rb is not loaded in
+    # the brew tests environment — cf. test/cmd/list_spec.rb.)
+    before { allow(Cask::Caskroom).to receive(:path).and_return(tmpdir/"Caskroom") }
+
+    after { FileUtils.rm_rf(tmpdir) }
 
     it "delegates bundle discovery to CaskTools::BundleDiscovery" do
       cask_dir.mkpath

@@ -417,10 +417,12 @@ module Homebrew
         dump.lines.each do |line|
           next unless (m = line.match(/^\s*path:\s+(.+)$/))
 
+          # Cheap string checks first; the directory? stat only runs for the
+          # few dump lines that already match a candidate bundle name.
           path = Pathname(m[1].strip)
-          next unless path.directory?
           next unless BUNDLE_EXTENSIONS.any? { |ext| path.basename.to_s.downcase.end_with?(ext) }
           next unless candidate_names.any? { |name| name.casecmp(path.basename.to_s).zero? }
+          next unless path.directory?
 
           found << path
         end

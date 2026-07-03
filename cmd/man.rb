@@ -170,6 +170,15 @@ module Homebrew
         end
       end
 
+      # The user deliberately made no selection (fzf Escape/Ctrl-C, fzf with
+      # no matching entry, or EOF at the TTY prompt): exit cleanly, with a
+      # notice only under --verbose (see docs/decisions/0003).
+      sig { returns(T.noreturn) }
+      def exit_no_selection
+        $stderr.puts "No selection made." if args.verbose?
+        exit 0
+      end
+
       # Uses fzf for fuzzy interactive selection.
       sig {
         params(
@@ -204,8 +213,15 @@ module Homebrew
           pipe.read
         end.to_s.strip
         if result.empty?
-          $stderr.puts "No selection made." if args.verbose?
-          exit 0
+          # fzf exit statuses (fzf(1)): 0 selection, 1 no match, 2 error,
+          # 130 interrupted (Escape or Ctrl-C). "No match" and "interrupted"
+          # are both the user declining to select; anything else with empty
+          # output is a real fzf failure and must not masquerade as a clean
+          # cancellation.
+          exit_status = Process.last_status&.exitstatus
+          odie "fzf exited with status #{exit_status}." if exit_status && [1, 130].exclude?(exit_status)
+
+          exit_no_selection
         end
 
         # Extract the index from the "N) " prefix
@@ -241,10 +257,7 @@ module Homebrew
               $stdout.write "Choose [1-#{choices.length}] (or 'l' to re-list): "
               $stdout.flush
               input = tty.gets
-              if input.nil?
-                $stderr.puts "No selection made." if args.verbose?
-                exit 0
-              end
+              exit_no_selection if input.nil?
 
               if input.strip.casecmp("l").zero?
                 page_list(list_text)

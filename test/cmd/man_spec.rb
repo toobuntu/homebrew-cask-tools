@@ -537,6 +537,8 @@ RSpec.describe Homebrew::Cmd::Man do
       allow(pipe).to receive(:write)
       allow(pipe).to receive(:close_write)
       allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 130))
 
       expect do
         cmd.send(:interactive_select_fzf, choices, header:   "test:",
@@ -554,6 +556,8 @@ RSpec.describe Homebrew::Cmd::Man do
       allow(pipe).to receive(:write)
       allow(pipe).to receive(:close_write)
       allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 130))
 
       expect($stderr).to receive(:puts).with("No selection made.")
       expect do
@@ -562,6 +566,42 @@ RSpec.describe Homebrew::Cmd::Man do
           "  #{i + 1}) #{label}: #{file}"
         end
       end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+    end
+
+    it "treats fzf 'no match' (exit 1) with empty output as no selection" do
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 1))
+
+      expect do
+        cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                   fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+    end
+
+    it "dies when fzf fails with empty output and a non-cancellation status" do
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 2))
+
+      expect do
+        cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                   fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
     end
 
     it "writes candidate lines to fzf stdin and closes write end" do

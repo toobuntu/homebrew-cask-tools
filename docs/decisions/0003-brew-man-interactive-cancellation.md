@@ -40,9 +40,18 @@ ended, not merely *that* it ended without a result.
 
 | Case | Exit code | Message |
 |---|---|---|
-| fzf Escape / Ctrl+C (empty output) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
+| fzf Escape / Ctrl+C (empty output, fzf exit 130) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
+| fzf no matching entry (empty output, fzf exit 1) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
 | TTY EOF (Ctrl+D) | 0 | `$stderr.puts "No selection made."` if `--verbose` |
 | Non-TTY nil stdin | 1 | `Error: brew man: --interactive requires a TTY` (stderr, suppressed by `--quiet`) |
+| fzf failure (empty output, any other fzf exit status) | 1 | `Error: fzf exited with status <N>.` via `odie` |
+
+The implementation distinguishes these by checking fzf's exit status
+(`Process.last_status`) whenever fzf produced empty output: per fzf(1),
+0 is a selection, 1 is "no match", 2 is an error, and 130 is
+"interrupted with Ctrl-C or Escape". Statuses 1 and 130 are the user
+declining to select; anything else with empty output is a real fzf
+failure and must not masquerade as a clean cancellation.
 
 ### Consequences
 

@@ -530,20 +530,78 @@ RSpec.describe Homebrew::Cmd::Man do
       expect(result).to eq(manfile)
     end
 
-    it "dies when fzf returns empty output" do
+    it "exits cleanly when fzf returns no selection" do
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
       pipe = instance_double(IO)
       allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
       allow(pipe).to receive(:write)
       allow(pipe).to receive(:close_write)
       allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 130))
 
       expect do
         cmd.send(:interactive_select_fzf, choices, header:   "test:",
                                                    fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
           "  #{i + 1}) #{label}: #{file}"
         end
-      end.to raise_error(SystemExit)
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+    end
+
+    it "prints 'No selection made.' to stderr when --verbose and fzf returns no selection" do
+      verbose_cmd = described_class.new(["some-formula", "--verbose"])
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 130))
+
+      expect($stderr).to receive(:puts).with("No selection made.")
+      expect do
+        verbose_cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                           fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+    end
+
+    it "treats fzf 'no match' (exit 1) with empty output as no selection" do
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 1))
+
+      expect do
+        cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                   fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+    end
+
+    it "dies when fzf fails with empty output and a non-cancellation status" do
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      pipe = instance_double(IO)
+      allow(IO).to receive(:popen).with(array_including("/usr/bin/fzf"), "r+").and_yield(pipe)
+      allow(pipe).to receive(:write)
+      allow(pipe).to receive(:close_write)
+      allow(pipe).to receive(:read).and_return("")
+      allow(Process).to receive(:last_status)
+        .and_return(instance_double(Process::Status, exitstatus: 2))
+
+      expect do
+        cmd.send(:interactive_select_fzf, choices, header:   "test:",
+                                                   fzf_path: Pathname("/usr/bin/fzf")) do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
     end
 
     it "writes candidate lines to fzf stdin and closes write end" do
@@ -587,15 +645,30 @@ RSpec.describe Homebrew::Cmd::Man do
       end.to raise_error(SystemExit)
     end
 
-    it "dies on EOF in non-TTY mode" do
+    it "exits with error and emits message on EOF in non-TTY mode" do
       choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
       allow($stdin).to receive(:gets).and_return(nil)
+      expect($stderr).to receive(:puts)
+        .with(a_string_including("brew man: --interactive requires a TTY"))
 
       expect do
         cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
           "  #{i + 1}) #{label}: #{file}"
         end
-      end.to raise_error(SystemExit)
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+
+    it "exits 1 silently on EOF in non-TTY mode when quiet" do
+      quiet_cmd = described_class.new(["some-formula", "--quiet"])
+      choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+      allow($stdin).to receive(:gets).and_return(nil)
+      expect($stderr).not_to receive(:puts)
+
+      expect do
+        quiet_cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+          "  #{i + 1}) #{label}: #{file}"
+        end
+      end.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
     end
 
     context "when stdout is a TTY" do
@@ -643,7 +716,7 @@ RSpec.describe Homebrew::Cmd::Man do
         end.to raise_error(SystemExit)
       end
 
-      it "dies on EOF from /dev/tty" do
+      it "exits cleanly on EOF from /dev/tty" do
         choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
         tty_io = StringIO.new
         allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
@@ -653,7 +726,22 @@ RSpec.describe Homebrew::Cmd::Man do
           cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
             "  #{i + 1}) #{label}: #{file}"
           end
-        end.to raise_error(SystemExit)
+        end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      end
+
+      it "prints 'No selection made.' to stderr when --verbose and /dev/tty reaches EOF" do
+        verbose_cmd = described_class.new(["some-formula", "--verbose"])
+        choices = [["system", Pathname("/usr/share/man/man1/testcmd.1")]]
+        tty_io = StringIO.new
+        allow(File).to receive(:open).with("/dev/tty", "r").and_yield(tty_io)
+        allow(verbose_cmd).to receive(:page_list)
+
+        expect($stderr).to receive(:puts).with("No selection made.")
+        expect do
+          verbose_cmd.send(:interactive_select_paged, choices, header: "test:") do |label, file, i|
+            "  #{i + 1}) #{label}: #{file}"
+          end
+        end.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
       end
     end
   end

@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/InclusiveLanguage.yml) by sync-to-consumers.yml; do
+# not modify it directly.
+
+# Flag a small, curated set of non-inclusive terms. Warning, and curated to
+# avoid false positives: Git's "master" branch ref is NOT flagged (bare "master"
+# is absent below); only the "master/slave" pairing is. Promote/extend per
+# ADR 0014.
+extends: existence
+message: "Consider an inclusive alternative to '%s'."
+level: warning
+ignorecase: true
+tokens:
+  - whitelist
+  - blacklist
+  - master/slave
+  - sanity check
+  - sanity-check

@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/We.yml) by sync-to-consumers.yml; do not modify it
+# directly.
+
+# Flag first-person plural ("we ask", "our cache") in prose and code comments.
+#
+# Comments and docs should describe the code, not narrate a team. This enforces
+# impersonal phrasing: "the cache stores …", not "we store …".
+#
+# "us" is deliberately omitted: with ignorecase it collides with "US"/"U.S."
+# (as in "en_US", "US users"), which is far more common here than the pronoun.
+# Tokens are matched on word boundaries (existence default), so "our" will not
+# fire inside "your"/"hour" and "we" will not fire inside "were"/"week".
+extends: existence
+message: "Avoid the first-person plural '%s'; prefer impersonal phrasing."
+level: error
+ignorecase: true
+tokens:
+  - we
+  - our
+  - ours
+  - ourselves
+  - let's

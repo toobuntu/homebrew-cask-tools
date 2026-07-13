@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation (.pinact.yaml) by
+# sync-to-consumers.yml; do not modify it directly.
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/suzuki-shunsuke/pinact/refs/heads/main/json-schema/pinact.json
+# pinact - https://github.com/suzuki-shunsuke/pinact
+version: 3
+ignore_actions:
+  - name: ^Homebrew/actions/.*
+    ref: ^main$

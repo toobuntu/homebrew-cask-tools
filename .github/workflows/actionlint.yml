@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 #
-# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.github/workflows/actionlint.yml) by sync-to-consumers.yml; do not modify
+# it directly.
 
 name: Actionlint
 
@@ -10,18 +14,9 @@ on:
       - main
   pull_request:
 
-defaults:
-  run:
-    shell: bash -xeuo pipefail {0}
-
 concurrency:
   group: "actionlint-${{ github.ref }}"
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  HOMEBREW_DEVELOPER: 1
-  HOMEBREW_NO_AUTO_UPDATE: 1
-  HOMEBREW_NO_ENV_HINTS: 1
 
 permissions: {}
 
@@ -32,11 +27,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    container:
-      image: ghcr.io/homebrew/brew:main
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
       - name: Set up Homebrew
-        id: setup-homebrew
         uses: Homebrew/actions/setup-homebrew@main
         with:
           core: false
@@ -45,10 +41,6 @@ jobs:
       - uses: Homebrew/actions/cache-homebrew-prefix@main
         with:
           install: actionlint shellcheck zizmor
-
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
 
       - run: zizmor --format sarif . > results.sarif
         env:
@@ -61,10 +53,9 @@ jobs:
           name: results.sarif
           path: results.sarif
 
-      - name: Set up actionlint
+      - name: Set up actionlint matcher
         run: |
-          cp "$(brew --repository)/.github/actionlint-matcher.json" "$HOME"
-          echo "::add-matcher::$HOME/actionlint-matcher.json"
+          echo "::add-matcher::.github/actionlint-matcher.json"
 
       - run: actionlint
 
@@ -76,7 +67,7 @@ jobs:
       !contains(fromJSON('["cancelled", "skipped"]'), needs.workflow_syntax.result) &&
       !github.event.repository.private &&
       github.event_name != 'merge_group'
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write

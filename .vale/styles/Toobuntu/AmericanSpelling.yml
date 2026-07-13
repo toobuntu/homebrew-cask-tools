@@ -1,0 +1,146 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/AmericanSpelling.yml) by sync-to-consumers.yml; do
+# not modify it directly.
+
+# Reject en_GB spellings deterministically.
+#
+# Vale.Spelling only flags tokens absent from its en_US-web dictionary; that
+# dictionary accepts many British forms (synthesise, organise, colour, …) as
+# valid English, so it is a typo-catcher, not a dialect-enforcer. This explicit
+# British -> American map is independent of the dictionary and so reliably
+# fails the build on an en_GB spelling.
+#
+# Keys are regex (case-insensitive); each lists the inflections that differ
+# between dialects. The map is intentionally explicit rather than a blanket
+# -ise/-our/-re rule, which would wrongly flag words that are -ise/-our in BOTH
+# dialects (exercise, advise, comprise, four, your, hour, contour, …). No
+# `action: replace`: a single literal replacement cannot reconstruct the right
+# American inflection from a regex match (synthesises -> synthesizes, not
+# "synthesize"), so the check flags and names the en_US form for a human to
+# apply rather than auto-rewriting.
+extends: substitution
+message: "Use the en_US spelling '%s' (British '%s' is not allowed)."
+level: error
+ignorecase: true
+swap:
+  # -our -> -or
+  'behaviour(?:s|al|ally)?': behavior
+  'colour(?:s|ed|ing|ful|less)?': color
+  'flavour(?:s|ed|ing|ful)?': flavor
+  'favour(?:s|ed|ing|able|ably)?': favor
+  'favourite(?:s|d)?': favorite
+  'honour(?:s|ed|ing|able|ably)?': honor
+  'humour(?:s|ed|ing|ous)?': humor
+  'labour(?:s|ed|ing)?': labor
+  'neighbour(?:s|ing|hood|hoods)?': neighbor
+  'harbour(?:s|ed|ing)?': harbor
+  'rumour(?:s|ed|ing)?': rumor
+  'splendour': splendor
+  'vapour(?:s)?': vapor
+  'vigour': vigor
+  'odour(?:s|less)?': odor
+  'armour(?:s|ed|ing)?': armor
+  'endeavour(?:s|ed|ing)?': endeavor
+  'saviour(?:s)?': savior
+  # -re -> -er
+  'centre(?:s|d)?': center
+  'fibre(?:s)?': fiber
+  'litre(?:s)?': liter
+  'metre(?:s)?': meter
+  'theatre(?:s)?': theater
+  'calibre(?:s)?': caliber
+  'sombre': somber
+  'spectre(?:s)?': specter
+  'lustre': luster
+  'manoeuvre(?:s|d)?': maneuver
+  'manoeuvring': maneuvering
+  # -ise/-yse verbs -> -ize/-yze (explicit; never a blanket suffix rule)
+  'organis(?:e|es|ed|ing|er|ers)': organize
+  'organisation(?:s|al)?': organization
+  'recognis(?:e|es|ed|ing|able)': recognize
+  'realis(?:e|es|ed|ing|ation)': realize
+  'analys(?:e|ed|ing|er|ers)': analyze
+  'paralys(?:e|es|ed|ing)': paralyze
+  'catalys(?:e|es|ed|ing)': catalyze
+  'customis(?:e|es|ed|ing|able|ation)': customize
+  'optimis(?:e|es|ed|ing|ation|ations|er|ers)': optimize
+  'normalis(?:e|es|ed|ing|ation)': normalize
+  'standardis(?:e|es|ed|ing|ation)': standardize
+  'summaris(?:e|es|ed|ing)': summarize
+  'synchronis(?:e|es|ed|ing|ation)': synchronize
+  'initialis(?:e|es|ed|ing|ation)': initialize
+  'serialis(?:e|es|ed|ing|ation)': serialize
+  'deserialis(?:e|es|ed|ing|ation)': deserialize
+  'finalis(?:e|es|ed|ing)': finalize
+  'prioritis(?:e|es|ed|ing|ation)': prioritize
+  'categoris(?:e|es|ed|ing|ation)': categorize
+  'minimis(?:e|es|ed|ing)': minimize
+  'maximis(?:e|es|ed|ing)': maximize
+  'utilis(?:e|es|ed|ing|ation)': utilize
+  'capitalis(?:e|es|ed|ing|ation)': capitalize
+  'synthesis(?:e|es|ed|ing|er|ers)': synthesize
+  'characteris(?:e|es|ed|ing|ation)': characterize
+  'authoris(?:e|es|ed|ing|ation)': authorize
+  'apologis(?:e|es|ed|ing)': apologize
+  'emphasis(?:e|es|ed|ing)': emphasize
+  'specialis(?:e|es|ed|ing|ation)': specialize
+  'generalis(?:e|es|ed|ing|ation)': generalize
+  'visualis(?:e|es|ed|ing|ation)': visualize
+  'modernis(?:e|es|ed|ing|ation)': modernize
+  'itemis(?:e|es|ed|ing)': itemize
+  'memoris(?:e|es|ed|ing)': memorize
+  'mobilis(?:e|es|ed|ing|ation)': mobilize
+  'stabilis(?:e|es|ed|ing|ation)': stabilize
+  'sanitis(?:e|es|ed|ing)': sanitize
+  'tokenis(?:e|es|ed|ing|ation)': tokenize
+  'centralis(?:e|es|ed|ing|ation)': centralize
+  'localis(?:e|es|ed|ing|ation)': localize
+  'parameteris(?:e|es|ed|ing|ation)': parameterize
+  'familiaris(?:e|es|ed|ing)': familiarize
+  'amortis(?:e|es|ed|ing)': amortize
+  # -ence/-ense nouns
+  'licence(?:s|d)?': license
+  'defence(?:s)?': defense
+  'offence(?:s)?': offense
+  'pretence(?:s)?': pretense
+  # practise (verb) -> practice
+  'practis(?:e|es|ed|ing)': practice
+  # doubled-l -> single-l (per inflected form, for an accurate suggestion)
+  'labelled': labeled
+  'labelling': labeling
+  'modelled': modeled
+  'modelling': modeling
+  'cancelled': canceled
+  'cancelling': canceling
+  'travelled': traveled
+  'travelling': traveling
+  'signalled': signaled
+  'signalling': signaling
+  'levelled': leveled
+  'levelling': leveling
+  'marshalled': marshaled
+  'marshalling': marshaling
+  'totalled': totaled
+  'totalling': totaling
+  'fuelled': fueled
+  'fuelling': fueling
+  'dialled': dialed
+  'dialling': dialing
+  # miscellaneous
+  'programme(?:s|d)?': program
+  'cheque(?:s)?': check
+  'catalogue(?:s|d)?': catalog
+  'cataloguing': cataloging
+  'aluminium': aluminum
+  'whilst': while
+  'amongst': among
+  'enquir(?:e|es|ed|ing|y)': inquire
+  'acknowledgement(?:s)?': acknowledgment
+  'judgement(?:s)?': judgment
+  'learnt': learned
+  'spelt': spelled
+  'ageing': aging

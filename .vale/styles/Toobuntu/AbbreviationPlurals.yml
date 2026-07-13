@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/AbbreviationPlurals.yml) by sync-to-consumers.yml;
+# do not modify it directly.
+
+# Flag apostrophe-pluralized abbreviations: write "PRs"/"APIs", never
+# "PR's"/"API's".
+#
+# Possessives are correct and must pass ("the PR's base", "the PR's old base"):
+# the sequence fires only when an acronym + "'s" is followed by something that
+# is neither a noun nor an adjective (POS tags). A possessive is followed by a
+# noun phrase (a noun, optionally led by adjectives), so it passes; a plural
+# misuse ("PR's were merged", "several PR's.") is followed by a verb,
+# conjunction, or punctuation, so it is flagged. Adapted from Elastic's
+# vale-rules (Elastic.PluralAbbreviations), which uses warning because its
+# noun-only test false-positives on possessive+adjective; the added adjective
+# tags (JJ*) let didan enforce this at error without flagging legitimate
+# possessives.
+extends: sequence
+message: "Pluralize an abbreviation without an apostrophe (e.g. PRs, not PR's)."
+link: https://www.elastic.co/docs/contribute-docs/style-guide/grammar-spelling#making-abbreviations-plural
+level: error
+tokens:
+  - pattern: '\b[A-Z]{2,}'
+  - pattern: "'s"
+  - tag: 'NN|NNS|NNP|NNPS|JJ|JJR|JJS'
+    negate: true

@@ -1,57 +1,287 @@
 #!/bin/sh
-# Pre-commit hook: lints staged Ruby, shell, and workflow files; checks REUSE compliance.
-# Enable with: git config core.hooksPath .githooks
-
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 #
-# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation (.githooks/pre-commit)
+# by sync-to-consumers.yml; do not modify it directly.
+
+# Canonical pre-commit hook -- repo-agnostic base (repo-foundation lineage).
+# Install: git config core.hooksPath .githooks
+#
+# Project- and language-specific checks live in .githooks/pre-commit.d/
+# plugins (run below), not in this base, so the base can be synced verbatim
+# to every consumer.
 
 set -e
 
-staged() { git diff --cached --name-only --diff-filter=ACM | grep -E "$1" || true; }
+# staged() emits matching staged paths newline-delimited; its consumer
+# reads them with `IFS= read -r` (whitespace-safe, though not proof against
+# the pathological case of a newline embedded in a path). staged_z() emits
+# the same set NUL-delimited for consumers that pipe into `xargs -0`.
+# has_files() reports whether any path matches, for gating tools that take
+# no path arguments (e.g. zizmor, which scans the working tree itself).
+#
+# Diff filter ACMRT (Added, Copied, Modified, Renamed, Type-changed) — the
+# same set scripts/lint-perms.sh uses. Renames matter to the content checks,
+# not only to the perms check: git reports a rename carrying a moderate edit
+# (>=50% similarity) as R, not M, so a plain ACM filter would skip a
+# renamed-and-edited file and let the edit — a bidi character, a formatting
+# break, a stripped SPDX header — past the hook at its new path. Including R
+# re-checks it there. The only cost is re-checking the occasional pure
+# (content-identical) rename, which is cheap and always passes. D (deleted)
+# and U (unmerged) are excluded: no present blob to check.
+staged() { git diff --cached --name-only --diff-filter=ACMRT | /usr/bin/grep -E "$1" || true; }
+staged_z() {
+  git diff --cached --name-only --diff-filter=ACMRT -z |
+    /usr/bin/grep --extended-regexp --null-data "$1" || true
+}
+has_files() { [ "$(staged_z "$1" | wc -c)" -gt 0 ]; }
 
-# Lint staged Ruby files with brew style and re-stage any auto-fixed files.
-ruby_files=$(staged '\.rb$')
-if [ -n "$ruby_files" ]; then
-  brew style --fix --changed
-  printf '%s\n' "$ruby_files" | xargs -r git add
+# Portability (for reviewers): this hook uses two BSD/macOS options that some
+# linters still flag as "GNU-only." Both are in the macOS base system on every
+# supported release, so do not "port them away":
+#   grep -z / --null-data : apple-oss-distributions/grep commit da7a17f
+#     (grep-6.1, 2021-10-06); man-page-documented since macOS 12 Monterey.
+#   xargs -r              : apple-oss-distributions/shell_cmds commit eb0d59c
+#     (shell_cmds-216.40.4, 2021-10-06) -> macOS 11.0.1 Big Sur.
+#   xargs --no-run-if-empty (the long form of -r): shell_cmds commit e256b9a
+#     (shell_cmds-302.0.1, 2023-09-22)  -> macOS 14.0 Sonoma.
+# Refs: github.com/apple-oss-distributions/{grep,shell_cmds},
+# opensource.apple.com/releases, https://man.freebsd.org/ (macOS selected).
+
+# Block direct commits to main.
+branch=$(git branch --show-current)
+if [ "$branch" = "main" ]; then
+  printf 'error: direct commits to main are not allowed. Create a feature branch.\n' >&2
+  exit 1
 fi
 
-# Lint staged shell files with brew style (shfmt + shellcheck); re-stage any auto-fixed files.
-# Also run ksh -n for syntax checking if ksh is available (standard on macOS).
-shell_files=$(staged '\.(sh)$|^\.githooks/')
-if [ -n "$shell_files" ]; then
-  printf '%s\n' "$shell_files" | xargs brew style --fix
-  printf '%s\n' "$shell_files" | xargs -r git add
-  if command -v ksh >/dev/null 2>&1; then
-    printf '%s\n' "$shell_files" | xargs ksh -n
+# --- Per-repo extension hooks ---
+# A consuming repo adds its own pre-commit logic via drop-in scripts in
+# .githooks/pre-commit.d/, run here (each in a subprocess) in sorted order
+# -- the Unix /etc/cron.d convention. Prefix names with a 2-digit number for
+# ordering (10-go, 20-foo). Names follow Debian run-parts' default rule:
+# entirely [A-Za-z0-9_-] (no dot, no extension); a name with a dot is skipped,
+# so a dot suffix (10-go.off, *.disabled, *.sample) disables a plugin.
+# scripts/lint-perms.sh enforces the execute bit on the same name set. Run
+# early so anything a plugin stages is visible to the canonical checks below
+# (perms, bidi, REUSE), which then verify the result.
+if [ -d .githooks/pre-commit.d ]; then
+  for hook in .githooks/pre-commit.d/*; do
+    [ -f "$hook" ] || continue
+    # run-parts classicalre: run only names matching ^[A-Za-z0-9_-]+$.
+    # grep, not a `case` glob: the POSIX negated bracket [!...] is broken
+    # in macOS /bin/sh (bash 3.2 matches it against everything), and the
+    # [^...] form is not portable to dash. grep -E under LC_ALL=C is the
+    # same regex run-parts compiles and behaves identically everywhere.
+    printf '%s\n' "${hook##*/}" |
+      LC_ALL=C /usr/bin/grep --extended-regexp --quiet '^[A-Za-z0-9_-]+$' ||
+      continue
+    [ -x "$hook" ] || continue
+    "$hook" || exit $?
+  done
+fi
+
+# --- Execute-bit check on shipped scripts ---
+# Policy + implementation live in scripts/lint-perms.sh; the CI
+# lint-perms job calls the same script with --tracked.
+if [ ! -x scripts/lint-perms.sh ]; then
+  printf 'error: scripts/lint-perms.sh missing or not executable\n' >&2
+  printf '  Required for the executable-bit policy check.\n' >&2
+  printf '  Fix: chmod 755 scripts/lint-perms.sh && \\\n' >&2
+  printf '       git update-index --chmod=+x scripts/lint-perms.sh\n' >&2
+  exit 1
+fi
+scripts/lint-perms.sh --staged
+
+# --- Invisible Unicode check (CVE-2021-42574 — Trojan Source) ---
+# Per Red Hat Security Bulletin RHSB-2021-007:
+#   grep -r $'[\u061C\u200E\u200F\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069]' .
+# That list is extended here with U+200B/200C/200D (zero-width chars) and
+# U+FEFF (project policy: no BOM). The bracket expression is built with POSIX
+# `printf '\NNN'` octal byte escapes, so the hook does not depend on bash
+# 4.2 or ksh93 $'\u' expansion and survives Apple removing bundled
+# scripting runtimes (see Apple Catalina release notes).
+#
+# Per-file opt-out: a `bidi-allow: U+XXXX,U+YYYY` annotation anywhere in
+# the file declares which codepoints it is allowed to contain. Reviewable
+# in PR diff and grep-able (`grep -r bidi-allow:`). Use sparingly — every
+# exemption widens the attack surface and must be justified.
+#
+# Rationale, codepoint coverage, and alternatives considered (org-wide ADR,
+# canonical in repo-foundation):
+# https://github.com/toobuntu/repo-foundation/blob/main/docs/decisions/0006-trojan-source-detection-strategy.md
+#
+# NOTE: this stanza intentionally still uses staged() (newline-delimited)
+# because of its per-file `git show` + bidi-allow parsing loop. Converting
+# it to NUL transport is a larger refactor tracked as a follow-up; today
+# it is whitespace-safe (IFS= read -r) but vulnerable to embedded newlines
+# in paths.
+
+# Codepoint table: "U+XXXX:OOO_OOO_OOO" where OOO are the UTF-8 octal
+# bytes joined with backslashes for direct use as a printf format string.
+# Single source of truth. Default and per-file patterns are derived here.
+_bidi_table='U+061C:\330\234
+U+200B:\342\200\213
+U+200C:\342\200\214
+U+200D:\342\200\215
+U+200E:\342\200\216
+U+200F:\342\200\217
+U+202A:\342\200\252
+U+202B:\342\200\253
+U+202C:\342\200\254
+U+202D:\342\200\255
+U+202E:\342\200\256
+U+2066:\342\201\246
+U+2067:\342\201\247
+U+2068:\342\201\250
+U+2069:\342\201\251
+U+FEFF:\357\273\277'
+
+# Build a UTF-8 bracket pattern from the table, optionally excluding
+# codepoints listed in the first argument (comma-separated U+XXXX).
+# Empty exclude list → full pattern. Returns 1 if every codepoint is
+# excluded (no pattern to build).
+build_pattern() {
+  _exclude_csv="${1:-}"
+  _fmt=""
+  _saved_ifs=$IFS
+  IFS='
+'
+  for _row in $_bidi_table; do
+    _cp="${_row%%:*}"
+    _esc="${_row#*:}"
+    case ",$_exclude_csv," in
+    *",$_cp,"*) continue ;;
+    esac
+    _fmt="$_fmt$_esc"
+  done
+  IFS=$_saved_ifs
+  [ -z "$_fmt" ] && return 1
+  # printf interprets the octal escapes; output is the bracket expression
+  # containing raw UTF-8 bytes for the codepoints to match.
+  # shellcheck disable=SC2059  # intentional dynamic format string
+  printf "[$_fmt]"
+}
+
+# Read the staged blob and extract the first bidi-allow annotation found.
+# Output: comma-separated U+XXXX list, or empty if no annotation.
+# Annotation may appear anywhere in the file (not restricted to top).
+# Malformed tokens (non-U+XXXX) are silently ignored: build_pattern's
+# table lookup discards anything not present in _bidi_table.
+read_bidi_allow() {
+  git show ":$1" 2> /dev/null |
+    sed -n 's/.*bidi-allow:[[:space:]]*\([^[:space:]]*\).*/\1/p' |
+    head -n 1
+}
+
+all_staged=$(staged '.')
+if [ -n "$all_staged" ]; then
+  default_pattern=$(build_pattern "")
+  bidi_found=""
+  while IFS= read -r _bfile; do
+    [ -z "$_bfile" ] && continue
+    _allow=$(read_bidi_allow "$_bfile")
+    if [ -n "$_allow" ]; then
+      _pattern=$(build_pattern "$_allow") || continue
+    else
+      _pattern="$default_pattern"
+    fi
+    # `git show ":$file"` prints the staged blob (not the working tree).
+    # `--binary-files=without-match` skips blobs grep classifies as binary.
+    # `LC_ALL=en_US.UTF-8` ensures grep interprets the bracket expression
+    #  as Unicode characters.
+    if git show ":$_bfile" 2> /dev/null |
+      LC_ALL=en_US.UTF-8 /usr/bin/grep \
+        --binary-files=without-match \
+        --extended-regexp --quiet "$_pattern"; then
+      bidi_found="${bidi_found:+$bidi_found
+}$_bfile"
+    fi
+  done << _BIDI_EOF_
+$all_staged
+_BIDI_EOF_
+  if [ -n "$bidi_found" ]; then
+    printf 'error: invisible Unicode character(s) in staged files:\n' >&2
+    printf '%s\n' "$bidi_found" | while IFS= read -r _bf; do
+      printf '  %s\n' "$_bf" >&2
+    done
+    printf '\nA file may opt out of specific codepoints with an in-file\n' >&2
+    printf 'annotation, e.g.:  // bidi-allow: U+200E,U+200F\n' >&2
+    printf 'See https://github.com/toobuntu/repo-foundation/blob/main/docs/decisions/0006-trojan-source-detection-strategy.md\n' >&2
+    exit 1
   fi
 fi
 
-# Lint staged workflow files with actionlint and zizmor if available.
-workflow_files=$(staged '\.github/workflows/.*\.yml$')
-if [ -n "$workflow_files" ]; then
-  if command -v actionlint >/dev/null 2>&1; then
-    printf '%s\n' "$workflow_files" | xargs actionlint
+# Language/toolchain checks (Go vet, clang-format/clang-tidy, etc.) are not
+# in this canonical base -- they live in .githooks/pre-commit.d/ plugins so
+# the base stays repo-agnostic.
+
+# --- Lint staged workflow files with actionlint and zizmor ---
+# actionlint takes file arguments (xargs -0 -r); zizmor scans the working
+# tree and takes none, so has_files gates whether to run it at all.
+if has_files '\.github/workflows/.*\.ya?ml$'; then
+  if command -v actionlint > /dev/null 2>&1; then
+    staged_z '\.github/workflows/.*\.ya?ml$' | xargs -0 -r actionlint
   else
-    echo "warning: actionlint not found — skipping workflow lint (brew install actionlint)"
+    printf "warning: actionlint not found — skipping workflow lint (brew install actionlint)\n" >&2
   fi
-  if command -v zizmor >/dev/null 2>&1; then
-    zizmor .
+  if command -v zizmor > /dev/null 2>&1; then
+    if zizmor --quiet .; then
+      :
+    else
+      status=$?
+      printf "hint: try auto-fix (zizmor --fix .)\n" >&2
+      exit "$status"
+    fi
   else
-    echo "warning: zizmor not found — skipping workflow security scan (brew install zizmor)"
+    printf "warning: zizmor not found — skipping workflow security scan (brew install zizmor)\n" >&2
   fi
 fi
 
-# REUSE compliance check.
-if ! reuse lint --quiet; then
-  reuse lint
-  cat >&2 <<'HINT'
+# --- REUSE compliance on staged files ---
+# lint-file (reuse-tool 5.x+) scopes the check to the listed paths;
+# --no-multiprocessing avoids a macOS Seatbelt sandbox failure and is
+# faster for the small file sets typical of a commit. Full rationale,
+# the upstream sandbox-issue links, and the hook-vs-CI split are in
+# ADR 0005 (https://github.com/toobuntu/repo-foundation/blob/main/docs/decisions/0005-reuse-lint-hook-strategy.md).
+#
+# lint-file reads the WORKING-TREE content of the listed paths (plus any
+# REUSE.toml / .license context), not the staged blob. A path staged clean but
+# dirty in the working tree is therefore checked as it sits on disk. Stashing
+# unstaged changes to pin the exact staged content is deliberately avoided --
+# fragile in shell; CI's whole-tree lint-reuse job is the backstop.
+#
+# REUSE_LINT_SKIP=1 disables this stanza. It is an internal test seam so
+# hook specs can exercise the other checks (notably the Unicode scanner)
+# against throwaway repos that carry no SPDX headers or LICENSES/ dir,
+# where reuse would otherwise reject every fixture. Not documented for
+# contributors, and not a way to bypass REUSE on a real commit -- CI's
+# lint-reuse job (whole tree) has no such escape hatch.
+#
+# Note: lint-file honors REUSE.toml declarations -- a directory-level
+# REUSE.toml covers its globbed paths without a LICENSES/ dir present --
+# so consumers that adopt REUSE.toml are still checked correctly here.
+if [ -z "${REUSE_LINT_SKIP:-}" ]; then
+  if command -v reuse > /dev/null 2>&1; then
+    if ! staged_z '.' |
+      xargs -0 -r reuse --no-multiprocessing lint-file --quiet; then
+      # Re-run without --quiet to surface the report. `|| true` keeps
+      # set -e from killing the hook on this bare pipeline (reuse exits
+      # non-zero by definition in this branch) before the hint and the
+      # explicit exit below can run.
+      staged_z '.' | xargs -0 -r reuse --no-multiprocessing lint-file || true
+      cat >&2 << 'HINT'
 
 To annotate unannotated files, run:
 
   scripts/annotate.sh
 
 HINT
-  exit 1
+      exit 1
+    fi
+  else
+    printf "warning: reuse not found — skipping REUSE compliance check (brew install reuse)\n" >&2
+  fi
 fi

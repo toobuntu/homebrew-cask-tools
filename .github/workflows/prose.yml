@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.github/workflows/prose.yml) by sync-to-consumers.yml; do not modify it
+# directly.
+
+name: prose
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions: {}
+
+jobs:
+  vale:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # Install Vale from the runner's pre-installed Homebrew (ADR 0014). brew
+      # is on the runner but not on PATH, so invoke it by absolute path and add
+      # its bin to GITHUB_PATH for the lint step.
+      - name: Install Vale
+        run: |
+          /home/linuxbrew/.linuxbrew/bin/brew install vale
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+
+      # A bare `vale` exits non-zero on any error-level alert under
+      # MinAlertLevel = error, so the exit code is a sufficient gate — no
+      # reviewdog, no reporter, no GITHUB_TOKEN (ADR 0014). The style and vocab
+      # are committed under .vale/styles/, so no `vale sync` is needed.
+      - name: Run Vale
+        run: vale .

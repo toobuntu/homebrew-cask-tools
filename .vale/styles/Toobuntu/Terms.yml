@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/Terms.yml) by sync-to-consumers.yml; do not modify
+# it directly.
+
+# Canonical casing for common product and technology names. Each key is a
+# wrong-cased form; the value is the house spelling. ignorecase is OFF so the
+# correct form never matches itself, and an all-lowercase identifier inside a
+# URL or package name (github.com, javascript: scheme) is left alone — only the
+# prose miscasings below are flagged. Warning first; promote after a clean pass
+# (ADR 0014). Seeded from Homebrew's Terms plus toobuntu additions.
+extends: substitution
+message: "Use '%s', not '%s'."
+level: warning
+ignorecase: false
+action:
+  name: replace
+swap:
+  'Github': GitHub
+  'GitHUB': GitHub
+  'Gitlab': GitLab
+  'Javascript': JavaScript
+  'Typescript': TypeScript
+  'MacOS': macOS
+  'Mac OS': macOS
+  'OSX': macOS
+  'Rubocop': RuboCop
+  'HomeBrew': Homebrew
+  'Objective C': Objective-C
+  'ObjectiveC': Objective-C

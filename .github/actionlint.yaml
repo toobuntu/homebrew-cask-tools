@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 #
-# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-# This file is synced from `Homebrew/brew` and modified by `.github/workflows/sync-shared-config.yml`, do not modify it directly.
+# This file is synced from toobuntu/repo-foundation
+# (.github/actionlint.yaml) by sync-to-consumers.yml; do not modify it
+# directly.
 
 self-hosted-runner:
   # Labels of self-hosted or not-yet-known-upstream runner in array of strings.
@@ -12,3 +14,6 @@ self-hosted-runner:
 # Empty array means no configuration variable is allowed.
 config-variables:
   - SYNC_APP_CLIENT_ID
+  - SYNC_BOT_SIGN
+  - SYNC_BOT_NAME
+  - SYNC_BOT_EMAIL

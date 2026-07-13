@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/Acronyms.yml) by sync-to-consumers.yml; do not
+# modify it directly.
+
+# Define-on-first-use for acronyms: flag an all-caps acronym that is used
+# without ever being spelled out, e.g. "Continuous Integration (CI)". The
+# `exceptions` list holds established acronyms that need no definition; without
+# it the rule flags every acronym and is unusably noisy (vale-styles-evaluation.md).
+# Warning until the corpus and the exception list settle, then promote (ADR 0014).
+# Extend `exceptions` rather than relaxing the rule.
+extends: conditional
+message: "'%s' has no definition."
+level: warning
+scope: text
+ignorecase: false
+# Usage: a bare acronym. Definition: a spelled-out phrase followed by the
+# acronym in parentheses.
+first: '\b([A-Z]{3,})\b'
+second: '(?:\b[A-Z][a-z]+[\s-]?)+\(([A-Z]{3,})\)'
+exceptions:
+  - API
+  - APIs
+  - ASCII
+  - AST
+  - BSD
+  - CLI
+  - CPU
+  - CSS
+  - CSV
+  - CVE
+  - CVEs
+  - DNS
+  - DST
+  - ERB
+  - GNU
+  - GPL
+  - GPU
+  - HTML
+  - HTTP
+  - HTTPS
+  - IANA
+  - IDE
+  - JSON
+  - JXA
+  - LCD
+  - MADR
+  - MIT
+  - NUL
+  - OSS
+  - POSIX
+  - RAM
+  - REST
+  - RFC
+  - RSS
+  - SDK
+  - SHA
+  - SHAs
+  - SPDX
+  - SQL
+  - SSH
+  - TLS
+  - TODO
+  - TOML
+  - URI
+  - URIs
+  - URL
+  - URLs
+  - UTC
+  - UTF
+  - UUID
+  - XML
+  - YAML

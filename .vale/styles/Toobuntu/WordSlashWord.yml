@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/WordSlashWord.yml) by sync-to-consumers.yml; do not
+# modify it directly.
+
+# Flag "and/or" specifically — pick "and", pick "or", or rephrase. Scoped to
+# this one construct; the general x/y slash form is left alone because it is
+# usually legitimate (TCP/IP, read/write, input/output).
+extends: existence
+message: "Avoid '%s'; use 'and', 'or', or rephrase."
+level: warning
+ignorecase: true
+tokens:
+  - and/or

@@ -1,0 +1,104 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.github/workflows/lint.yml) by sync-to-consumers.yml; do not modify it
+# directly.
+
+# Universal lint and security gates, canonical in toobuntu/repo-foundation and
+# synced byte-for-byte to every consumer. The per-language build/test jobs are
+# NOT here — those live in each repo's own ci.yml (see
+# provides/github/workflows/ci.template.yml). The jobs below assume only the
+# shared scripts that ship alongside this workflow (scripts/lint-unicode.sh,
+# scripts/lint-perms.sh), so they run identically in any repo.
+
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions: {}
+
+jobs:
+  reuse:
+    # REUSE 3.0 compliance: every file carries a recognized SPDX expression
+    # (inline, a .license sidecar, or REUSE.toml). Runs in CI as well as the
+    # pre-commit hook so it cannot be bypassed with --no-verify.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # PIN-PENDING: pinact replaces the v6 ref with a SHA + comment on the
+      # next `pinact run --verify --update`. v6 tracks the latest reuse-tool
+      # 6.x release; do not downgrade.
+      - name: Run reuse lint
+        uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6.0.0
+
+  lint-unicode:
+    # CI backstop for the pre-commit hook: detects CVE-2021-42574 (Trojan
+    # Source) plus enforces UTF-8 without BOM. Single source of truth for the
+    # scan logic is scripts/lint-unicode.sh (python3 here; the same script runs
+    # locally and the pre-commit hook applies the same policy to staged blobs).
+    # Rationale: https://github.com/toobuntu/repo-foundation/blob/main/docs/decisions/0006-trojan-source-detection-strategy.md
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check for invisible Unicode characters and validate UTF-8 encoding
+        run: scripts/lint-unicode.sh
+
+  lint-perms:
+    # Single source of truth for the scope and check logic is
+    # scripts/lint-perms.sh; .githooks/pre-commit invokes the same script with
+    # --staged. This job runs it with --tracked over the whole tree, catching a
+    # missing execute bit (e.g. a hook committed 100644) that would otherwise
+    # ship silently.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Verify execute bit on shipped scripts
+        env:
+          LINT_PERMS_FORMAT: ci
+        run: |
+          if [ ! -x ./scripts/lint-perms.sh ]; then
+            echo "::error file=scripts/lint-perms.sh::missing or not executable in the checkout"
+            exit 1
+          fi
+          ./scripts/lint-perms.sh --tracked
+
+  lint-adrs:
+    # Structural lint for MADR 4.0 ADRs. Skips cleanly in repos that have no
+    # docs/decisions/ tree yet.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Run adrs doctor
+        run: |
+          if [ ! -d docs/decisions ]; then
+            echo "No docs/decisions directory; skipping adrs doctor."
+            exit 0
+          fi
+          /home/linuxbrew/.linuxbrew/bin/brew install adrs
+          /home/linuxbrew/.linuxbrew/bin/adrs doctor

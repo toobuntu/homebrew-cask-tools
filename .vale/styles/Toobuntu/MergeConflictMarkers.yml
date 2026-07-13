@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.vale/styles/Toobuntu/MergeConflictMarkers.yml) by sync-to-consumers.yml;
+# do not modify it directly.
+
+# Flag a leftover Git merge-conflict marker. A 7-character run of < or > at the
+# start of a line is never valid prose or code; it always means an unresolved
+# conflict got committed. The ======= divider is intentionally NOT matched: a
+# 7-equals line is also a valid Markdown setext heading underline, and a real
+# conflict always carries the unambiguous <<<<<<< / >>>>>>> pair anyway, so the
+# angle-bracket markers catch every genuine conflict with zero false positives.
+extends: existence
+message: "Unresolved Git merge-conflict marker left in the file."
+level: error
+raw:
+  - '(?m)^(?:<{7}|>{7})(?:\s|$)'

@@ -1,0 +1,39 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (provides/githooks/pre-commit.d/30-brew) by sync-to-consumers.yml; do not
+# modify it directly.
+
+set -e
+
+staged() { git diff --cached --name-only --diff-filter=ACMRT | /usr/bin/grep --extended-regexp "$1" || true; }
+
+# Echo the args that do NOT carry the repo-foundation sync header.
+exclude_synced() {
+  [ "$#" -gt 0 ] || return 0
+  /usr/bin/grep --files-without-match "do not modify it directly" "$@" 2> /dev/null || true
+}
+
+# brew style --fix on the consumer's own staged Ruby; re-stage auto-fixes.
+ruby_files=$(staged '\.rb$')
+if [ -n "$ruby_files" ]; then
+  brew style --fix --changed
+  printf '%s\n' "$ruby_files" | xargs -r git add
+fi
+
+# brew style --fix on the consumer's own staged shell — never on synced scripts.
+shell_files=$(staged '\.(sh|bash|ksh)$')
+if [ -n "$shell_files" ]; then
+  # shellcheck disable=SC2086  # newline-delimited list, like the base hook's staged()
+  own_shell=$(exclude_synced $shell_files)
+  if [ -n "$own_shell" ]; then
+    printf '%s\n' "$own_shell" | xargs -r brew style --fix
+    printf '%s\n' "$own_shell" | xargs -r git add
+    if command -v ksh > /dev/null 2>&1; then
+      printf '%s\n' "$own_shell" | xargs -r ksh -n
+    fi
+  fi
+fi

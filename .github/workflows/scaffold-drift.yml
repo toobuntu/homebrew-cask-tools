@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# This file is synced from toobuntu/repo-foundation
+# (.github/workflows/scaffold-drift.yml) by sync-to-consumers.yml; do not
+# modify it directly.
+
+name: scaffold-drift
+
+# Scheduled half of the scaffold-staleness check (ADR 0015). It runs
+# scripts/foundation-doctor.sh — the same check available locally as
+# `foundation doctor` — and opens or updates an issue when a per-repo scaffold
+# workflow has gone stale. Age-based nudge, not a diff.
+
+on:
+  schedule:
+    - cron: '17 4 1 * *' # 04:17 UTC on the 1st of each month
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  drift:
+    if: github.repository_owner == 'toobuntu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          # foundation-doctor reads each scaffold's last-commit time, so the
+          # check needs full history, not a shallow clone.
+          fetch-depth: 0
+
+      - name: Check scaffold freshness
+        id: doctor
+        run: |
+          if scripts/foundation-doctor.sh > doctor.out 2>&1; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+          cat doctor.out
+
+      - name: Open or update the drift issue
+        if: steps.doctor.outputs.stale == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Scaffold drift: reconcile per-repo workflows"
+          body="$(cat doctor.out)
+
+          This issue is filed by the scheduled scaffold-drift workflow (ADR 0015).
+          Reconcile the listed scaffolds against current upstream guidance, then
+          touch them so the age resets."
+          existing=$(gh issue list --state open --search "$title in:title" \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

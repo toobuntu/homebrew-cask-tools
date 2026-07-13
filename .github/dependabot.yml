@@ -1,22 +1,24 @@
 # SPDX-FileCopyrightText: Copyright 2026 Todd Schulman
 #
-# SPDX-License-Identifier: GPL-3.0-or-later OR BSD-2-Clause
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+# This file is synced from toobuntu/repo-foundation
+# (.github/actions/sync/dependabot.template.yml) by sync-to-consumers.yml;
+# do not modify it directly.
+
+---
 version: 2
 updates:
-  - package-ecosystem: github-actions
-    directories:
-      - "/"
-    schedule:
-      interval: weekly
-      day: friday
-      time: "08:00"
-      timezone: Etc/UTC
-    groups:
-      github-actions:
-        patterns:
-          - "*"
-    allow:
-      - dependency-type: all
-    cooldown:
-      default-days: 7
+- package-ecosystem: github-actions
+  directory: "/"
+  schedule:
+    interval: weekly
+    day: monday
+  groups:
+    github-actions:
+      patterns:
+      - "*"
+  allow:
+  - dependency-type: all
+  cooldown:
+    default-days: 7
